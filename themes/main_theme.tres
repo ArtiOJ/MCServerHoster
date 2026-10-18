@@ -465,6 +465,99 @@ color = Color(0.18, 0.208, 0.259, 1)
 grow_begin = 0.0
 grow_end = 0.0
 
+[sub_resource type="StyleBoxFlat" id="Style_fold_title"]
+bg_color = Color(0.114, 0.133, 0.169, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.208, 0.259, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+content_margin_left = 14.0
+content_margin_top = 10.0
+content_margin_right = 14.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="Style_fold_title_hover"]
+bg_color = Color(0.149, 0.173, 0.216, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.231, 0.267, 0.333, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+content_margin_left = 14.0
+content_margin_top = 10.0
+content_margin_right = 14.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="Style_fold_title_collapsed"]
+bg_color = Color(0.114, 0.133, 0.169, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.208, 0.259, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 14.0
+content_margin_top = 10.0
+content_margin_right = 14.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="Style_fold_title_collapsed_hover"]
+bg_color = Color(0.149, 0.173, 0.216, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.231, 0.267, 0.333, 1)
+corner_radius_top_left = 8
+corner_radius_top_right = 8
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 14.0
+content_margin_top = 10.0
+content_margin_right = 14.0
+content_margin_bottom = 10.0
+
+[sub_resource type="StyleBoxFlat" id="Style_fold_panel"]
+bg_color = Color(0.098, 0.114, 0.141, 1)
+border_width_left = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.18, 0.208, 0.259, 1)
+corner_radius_bottom_right = 8
+corner_radius_bottom_left = 8
+content_margin_left = 16.0
+content_margin_top = 10.0
+content_margin_right = 16.0
+content_margin_bottom = 14.0
+
+[sub_resource type="StyleBoxFlat" id="Style_warn_badge"]
+bg_color = Color(0.949, 0.722, 0.294, 0.18)
+corner_radius_top_left = 10
+corner_radius_top_right = 10
+corner_radius_bottom_right = 10
+corner_radius_bottom_left = 10
+content_margin_left = 8.0
+content_margin_top = 2.0
+content_margin_right = 8.0
+content_margin_bottom = 2.0
+
+[sub_resource type="StyleBoxFlat" id="Style_tag"]
+bg_color = Color(0.353, 0.663, 0.949, 0.14)
+corner_radius_top_left = 4
+corner_radius_top_right = 4
+corner_radius_bottom_right = 4
+corner_radius_bottom_left = 4
+content_margin_left = 6.0
+content_margin_right = 6.0
+
 [resource]
 default_font_size = 14
 AcceptDialog/styles/panel = SubResource("Style_dialog_panel")
@@ -557,6 +650,16 @@ DangerButton/styles/hover = SubResource("Style_danger_hover")
 DangerButton/styles/pressed = SubResource("Style_danger_hover")
 DangerButton/styles/hover_pressed = SubResource("Style_danger_hover")
 DangerButton/styles/disabled = SubResource("Style_btn_disabled")
+FoldableContainer/colors/font_color = Color(0.902, 0.914, 0.937, 1)
+FoldableContainer/colors/hover_font_color = Color(1, 1, 1, 1)
+FoldableContainer/colors/collapsed_font_color = Color(0.82, 0.84, 0.87, 1)
+FoldableContainer/font_sizes/font_size = 15
+FoldableContainer/styles/title_panel = SubResource("Style_fold_title")
+FoldableContainer/styles/title_hover_panel = SubResource("Style_fold_title_hover")
+FoldableContainer/styles/title_collapsed_panel = SubResource("Style_fold_title_collapsed")
+FoldableContainer/styles/title_collapsed_hover_panel = SubResource("Style_fold_title_collapsed_hover")
+FoldableContainer/styles/panel = SubResource("Style_fold_panel")
+FoldableContainer/styles/focus = SubResource("Style_empty")
 HSeparator/constants/separation = 12
 HSeparator/styles/separator = SubResource("Style_separator")
 HSlider/styles/slider = SubResource("Style_slider")
@@ -649,10 +752,18 @@ TabContainer/styles/tab_unselected = SubResource("Style_tab_unselected")
 TabContainer/styles/tab_hovered = SubResource("Style_tab_hovered")
 TabContainer/styles/tab_focus = SubResource("Style_empty")
 TabContainer/styles/tabbar_background = SubResource("Style_tabbar_bg")
+SourceTag/base_type = &"Label"
+SourceTag/colors/font_color = Color(0.48, 0.74, 0.97, 1)
+SourceTag/font_sizes/font_size = 11
+SourceTag/styles/normal = SubResource("Style_tag")
 TitleLabel/base_type = &"Label"
 TitleLabel/colors/font_color = Color(1, 1, 1, 1)
 TitleLabel/font_sizes/font_size = 22
 ToastPanel/base_type = &"PanelContainer"
+WarnBadge/base_type = &"Label"
+WarnBadge/colors/font_color = Color(0.949, 0.722, 0.294, 1)
+WarnBadge/font_sizes/font_size = 12
+WarnBadge/styles/normal = SubResource("Style_warn_badge")
 ToastPanel/styles/panel = SubResource("Style_toast")
 TooltipPanel/styles/panel = SubResource("Style_tooltip")
 Tree/colors/font_color = Color(0.82, 0.84, 0.87, 1)

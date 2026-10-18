@@ -6,8 +6,10 @@ enum Level { INFO, WARN, ERROR, OTHER, COMMAND, SYSTEM }
 
 static var _re_level := RegEx.create_from_string("^\\[(\\d{2}:\\d{2}:\\d{2})(?: [\\w\\- /#]+?)? ?(INFO|WARN|ERROR|FATAL)\\]")
 static var _re_done := RegEx.create_from_string("Done \\(([\\d.,]+)s\\)! For help")
-static var _re_join := RegEx.create_from_string("\\]: ([A-Za-z0-9_.]{1,16}) joined the game")
-static var _re_leave := RegEx.create_from_string("\\]: ([A-Za-z0-9_.]{1,16}) left the game")
+# Newer versions prefix broadcast messages with "System chat: ".
+static var _re_join := RegEx.create_from_string("\\]: (?:System chat: )?([A-Za-z0-9_.]{1,16}) joined the game")
+static var _re_leave := RegEx.create_from_string("\\]: (?:System chat: )?([A-Za-z0-9_.]{1,16}) left the game")
+static var _re_gamerule := RegEx.create_from_string("currently set to:? *(\\S+)")
 static var _re_list := RegEx.create_from_string("There are (\\d+) (?:of a max of|/) ?(\\d+) players online:?(.*)")
 static var _re_tps := RegEx.create_from_string("TPS from last [^:]*:\\s*\\*?([\\d.]+)")
 
@@ -67,3 +69,10 @@ static func parse_list(text: String) -> Dictionary:
 static func parse_tps(text: String) -> float:
 	var m := _re_tps.search(Ansi.strip(text))
 	return m.get_string(1).to_float() if m != null else -1.0
+
+
+## Parses the reply to `gamerule <name>` ("Gamerule pvp is currently set to: true" or
+## "Game rule pvp is currently set to true"). Returns "" when not found.
+static func parse_gamerule(text: String) -> String:
+	var m := _re_gamerule.search(Ansi.strip(text))
+	return m.get_string(1) if m != null else ""

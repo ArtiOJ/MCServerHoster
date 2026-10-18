@@ -106,3 +106,16 @@ static func shell_quote(arg: String) -> String:
 		if arg.contains(c):
 			return "'" + arg.replace("'", "'\\''") + "'"
 	return arg
+
+
+## Compares dotted Minecraft versions numerically ("1.21.10" > "1.21.9", "26.1" > "1.21.11").
+## Pre-release suffixes ("-rc1") are ignored. Returns -1, 0 or 1.
+static func compare_versions(a: String, b: String) -> int:
+	var pa := a.get_slice("-", 0).split(".")
+	var pb := b.get_slice("-", 0).split(".")
+	for i in maxi(pa.size(), pb.size()):
+		var x := pa[i].to_int() if i < pa.size() else 0
+		var y := pb[i].to_int() if i < pb.size() else 0
+		if x != y:
+			return 1 if x > y else -1
+	return 0

@@ -23,7 +23,7 @@ func _init() -> void:
 	_cgroup_v2 = FileAccess.file_exists("/sys/fs/cgroup/cgroup.controllers")
 
 
-func build_launch_command(config: ServerConfig, java_executable: String) -> Dictionary:
+func build_launch_command(config: ServerConfig, java_executable: String, working_dir := "") -> Dictionary:
 	var argv := PackedStringArray()
 	var use_quota := config.cpu_quota_pct > 0 and supports_cpu_quota()
 	var use_cap := config.memory_hard_cap and supports_memory_cap()
@@ -35,7 +35,7 @@ func build_launch_command(config: ServerConfig, java_executable: String) -> Dict
 			argv.append_array(["-p", "MemoryMax=%dM" % config.hard_cap_mb()])
 		argv.append("--")
 	# OS.execute_with_pipe() has no working-directory parameter, so `env -C` sets it.
-	argv.append_array([_env, "-C", config.directory])
+	argv.append_array([_env, "-C", working_dir if working_dir != "" else config.directory])
 	if config.cpu_affinity.strip_edges() != "" and supports_affinity():
 		argv.append_array([_taskset, "-c", config.cpu_affinity.strip_edges()])
 	if config.nice_level > 0 and supports_priority():
@@ -44,6 +44,19 @@ func build_launch_command(config: ServerConfig, java_executable: String) -> Dict
 	argv.append_array(config.build_jvm_args())
 	argv.append_array(config.build_server_args())
 	return {"path": argv[0], "args": argv.slice(1)}
+
+
+## `cp --reflink=auto` makes copies near-instant on copy-on-write filesystems (btrfs, XFS).
+func copy_tree(src: String, dst: String) -> Error:
+	if DirAccess.dir_exists_absolute(dst) or FileAccess.file_exists(dst):
+		return ERR_ALREADY_EXISTS
+	DirAccess.make_dir_recursive_absolute(dst.get_base_dir())
+	var output: Array = []
+	if OS.execute("cp", ["-a", "--reflink=auto", "--", src, dst], output, true) == 0:
+		return OK
+	push_warning("cp failed (%s); falling back to a portable copy" % str(output))
+	FileOps.remove_path(dst)
+	return FileOps.copy_tree_portable(src, dst)
 
 
 func supports_cpu_quota() -> bool:

@@ -81,6 +81,16 @@ const AIKAR_LARGE_HEAP := {
 @export var stop_timeout_sec := 60
 @export var schedules: Array[ScheduleEntry] = []
 
+@export_group("Game rules")
+## Game rule changes waiting to be applied on the next start (catalog id -> value).
+@export var pending_gamerules := {}
+## Last game rule values seen on the running server (catalog id -> value).
+@export var known_gamerules := {}
+
+@export_group("Temporary run")
+## Folder of a temporary copy that is running or waiting for a keep/discard decision ("" = none).
+@export var temp_run_dir := ""
+
 @export_group("Backups")
 @export var backup_retention := 10
 @export var backup_full := false
@@ -90,8 +100,8 @@ func meta_dir() -> String:
 	return directory.path_join(META_DIR)
 
 
-func jar_path() -> String:
-	return directory.path_join(jar_file)
+func jar_path(dir := "") -> String:
+	return (dir if dir != "" else directory).path_join(jar_file)
 
 
 func properties_path() -> String:
@@ -157,6 +167,8 @@ func to_dict() -> Dictionary:
 		"restart_window_sec": restart_window_sec, "stop_timeout_sec": stop_timeout_sec,
 		"schedules": sched,
 		"backup_retention": backup_retention, "backup_full": backup_full,
+		"pending_gamerules": pending_gamerules, "known_gamerules": known_gamerules,
+		"temp_run_dir": temp_run_dir,
 	}
 
 
@@ -200,7 +212,32 @@ static func from_dict(d: Dictionary, dir: String) -> ServerConfig:
 	c.schedules = sched
 	c.backup_retention = maxi(int(d.get("backup_retention", 10)), 0)
 	c.backup_full = bool(d.get("backup_full", false))
+	c.pending_gamerules = _string_dict(d.get("pending_gamerules", {}))
+	c.known_gamerules = _string_dict(d.get("known_gamerules", {}))
+	c.temp_run_dir = str(d.get("temp_run_dir", ""))
 	return c
+
+
+static func _string_dict(value: Variant) -> Dictionary:
+	var out := {}
+	if value is Dictionary:
+		for k in value:
+			out[str(k)] = str(value[k])
+	return out
+
+
+## Writes the keys the manager owns (ports, RCON) into server.properties in [param dir]
+## (defaults to the server folder).
+func write_managed_properties(dir := "") -> Error:
+	var path := (dir if dir != "" else directory).path_join("server.properties")
+	var props := ServerProperties.load_file(path)
+	props.set_value("server-port", port)
+	props.set_value("query.port", port)
+	props.set_value("enable-rcon", true)
+	props.set_value("rcon.port", rcon_port)
+	props.set_value("rcon.password", rcon_password)
+	props.set_value("broadcast-rcon-to-ops", false)
+	return props.save_file(path)
 
 
 func save() -> Error:

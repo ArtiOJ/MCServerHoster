@@ -35,7 +35,6 @@ window/energy_saving/keep_screen_on=false
 [gui]
 
 theme/custom="res://themes/main_theme.tres"
-common/snap_controls_to_pixels=true
 
 [input]
 
@@ -62,6 +61,6 @@ server_next={
 
 [rendering]
 
+rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
-rendering_device/driver.windows="d3d12"

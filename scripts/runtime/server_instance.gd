@@ -10,6 +10,8 @@ signal stats_updated
 signal players_changed
 signal config_changed
 signal update_available_changed
+## A temporary copy stopped for good; the UI asks whether to keep or discard its changes.
+signal temporary_run_ended
 
 enum State { STOPPED, STARTING, RUNNING, STOPPING, CRASHED, INSTALLING }
 
@@ -62,6 +64,7 @@ func _ready() -> void:
 	process.exited.connect(_on_process_exited)
 	monitor.sampled.connect(func(_c: float, _r: int) -> void: stats_updated.emit())
 	rcon.authenticated.connect(_query_status)
+	rcon.authenticated.connect(refresh_gamerules)
 	_stop_timeout.timeout.connect(_on_stop_timeout)
 	_restart_delay.timeout.connect(_on_restart_delay_timeout)
 	_query_timer.wait_time = QUERY_INTERVAL_SEC
@@ -102,7 +105,17 @@ func uptime_seconds() -> int:
 
 
 func get_properties() -> ServerProperties:
-	return ServerProperties.load_file(config.properties_path())
+	return ServerProperties.load_file(working_directory().path_join("server.properties"))
+
+
+## True while a temporary copy is running or waiting for a keep/discard decision.
+func is_temporary() -> bool:
+	return config.temp_run_dir != ""
+
+
+## Folder the server process runs in: the temporary copy during a test run, else the server folder.
+func working_directory() -> String:
+	return config.temp_run_dir if is_temporary() else config.directory
 
 
 func connect_address() -> String:
@@ -116,7 +129,7 @@ func connect_address() -> String:
 func start_problem() -> String:
 	if orphan_pid > 0:
 		return "A leftover server process from a previous session is still running (PID %d). Stop it first." % orphan_pid
-	if not FileAccess.file_exists(config.jar_path()):
+	if not FileAccess.file_exists(config.jar_path(working_directory())):
 		return "Server jar is missing (%s). Reinstall or update Paper for this server." % config.jar_file
 	if not config.eula_accepted:
 		return "The Minecraft EULA has not been accepted for this server."
@@ -135,9 +148,16 @@ func start_problem() -> String:
 
 # --- Lifecycle ---------------------------------------------------------------
 
-func start() -> Error:
+## Starts the server. With a temporary copy pending, [param temporary] must be true to
+## resume it; a normal start is refused until the copy is kept or discarded.
+func start(temporary := false) -> Error:
 	if is_busy():
 		return ERR_ALREADY_IN_USE
+	if is_temporary() and not temporary:
+		var msg := "A temporary copy of this server is waiting for a decision. Keep or discard it first (⋮ menu), or resume the temporary run."
+		log_system(msg, LogParser.Level.WARN)
+		Notifier.warn("%s: %s" % [config.display_name, msg])
+		return ERR_UNAVAILABLE
 	_restart_delay.stop()
 	var problem := start_problem()
 	if problem != "":
@@ -146,8 +166,9 @@ func start() -> Error:
 		return FAILED
 	_prepare_files()
 	var java := JavaRuntimes.resolve_for(config)
-	var cmd := PlatformBackend.get_current().build_launch_command(config, java.executable)
-	log_system("Starting %s (Paper %s #%d, %s)…" % [config.display_name, config.mc_version, config.paper_build, java.display_name()])
+	var cmd := PlatformBackend.get_current().build_launch_command(config, java.executable, working_directory())
+	var label := " as a TEMPORARY COPY" if is_temporary() else ""
+	log_system("Starting %s%s (Paper %s #%d, %s)…" % [config.display_name, label, config.mc_version, config.paper_build, java.display_name()])
 	var err := process.launch(cmd.path, cmd.args)
 	if err != OK:
 		log_system("Failed to launch process: %s" % error_string(err), LogParser.Level.ERROR)
@@ -176,9 +197,12 @@ func stop() -> void:
 			_stop_timeout.start(config.stop_timeout_sec)
 		State.CRASHED:
 			# Cancels a pending automatic restart.
+			var was_pending := not _restart_delay.is_stopped()
 			_restart_delay.stop()
 			_crash_times.clear()
 			_set_state(State.STOPPED)
+			if was_pending and is_temporary():
+				temporary_run_ended.emit()
 
 
 func restart() -> void:
@@ -187,7 +211,7 @@ func restart() -> void:
 			_restart_after_stop = true
 			stop()
 		State.STOPPED, State.CRASHED:
-			start()
+			start(is_temporary())
 
 
 func kill() -> void:
@@ -275,6 +299,119 @@ func install_build(version: String, build: Dictionary, version_info: Dictionary,
 	return {"ok": true}
 
 
+# --- Temporary runs --------------------------------------------------------------
+
+## Copies the server folder to a throwaway location and starts that copy. The server
+## shows as running normally; when it stops, [signal temporary_run_ended] lets the UI ask
+## whether to keep or discard what changed. Resumes an existing pending copy if there is one.
+func start_temporary() -> Error:
+	if is_busy():
+		return ERR_ALREADY_IN_USE
+	if not is_temporary():
+		if orphan_pid > 0:
+			return start()  # Reports the leftover process.
+		var dir := AppSettings.servers_root.path_join("_temp").path_join("%s-%s" % [config.id, Fmt.file_stamp(int(Time.get_unix_time_from_system()))])
+		_set_state(State.INSTALLING)
+		log_system("Creating a temporary copy of the server for a test run…")
+		var src := config.directory
+		var err: Error = await FileOps.run_async(self, func() -> Error: return FileOps.copy_tree(src, dir))
+		_set_state(State.STOPPED)
+		if err != OK:
+			FileOps.remove_path(dir)
+			log_system("Could not create the temporary copy: %s" % error_string(err), LogParser.Level.ERROR)
+			Notifier.error("%s: could not create a temporary copy (%s)." % [config.display_name, error_string(err)])
+			return err
+		# The copy only needs the game files; the manager's metadata stays with the real server.
+		FileOps.remove_path(dir.path_join(ServerConfig.META_DIR))
+		config.temp_run_dir = dir
+		config.save()
+		log_system("Temporary copy ready: %s" % dir)
+		state_changed.emit(state)
+	return start(true)
+
+
+## Ends a pending temporary run. [param keep] replaces the server's files with the copy
+## (the previous files go to the system trash); otherwise the copy is deleted.
+func finish_temporary(keep: bool) -> Error:
+	if not is_temporary():
+		return ERR_DOES_NOT_EXIST
+	if process.is_running() or state == State.INSTALLING:
+		return ERR_BUSY
+	var temp := config.temp_run_dir
+	var original := config.directory
+	_set_state(State.INSTALLING)
+	var err := OK
+	if keep and DirAccess.dir_exists_absolute(temp):
+		log_system("Keeping the changes from the temporary run…")
+		var aside := "%s.before-temp-%s" % [original, Fmt.file_stamp(int(Time.get_unix_time_from_system()))]
+		err = DirAccess.rename_absolute(original, aside)
+		if err == OK:
+			err = DirAccess.rename_absolute(temp, original)
+			if err != OK:
+				# Different filesystems: fall back to copying.
+				err = await FileOps.run_async(self, func() -> Error: return FileOps.copy_tree(temp, original))
+				if err == OK:
+					await FileOps.run_async(self, func() -> Error: return FileOps.remove_tree(temp))
+			if err == OK:
+				DirAccess.rename_absolute(aside.path_join(ServerConfig.META_DIR), original.path_join(ServerConfig.META_DIR))
+				OS.move_to_trash(aside)
+			else:
+				FileOps.remove_path(original)
+				DirAccess.rename_absolute(aside, original)
+	elif DirAccess.dir_exists_absolute(temp):
+		log_system("Discarding the temporary copy…")
+		err = await FileOps.run_async(self, func() -> Error: return FileOps.remove_tree(temp))
+	if err != OK:
+		_set_state(State.STOPPED)
+		log_system("Could not finish the temporary run: %s" % error_string(err), LogParser.Level.ERROR)
+		return err
+	config.temp_run_dir = ""
+	save_config()
+	log_system("Temporary run %s." % ("kept — the server now has the copy's files" if keep else "discarded — the server is unchanged"))
+	_set_state(State.STOPPED)
+	max_players = get_properties().get_int("max-players", max_players)
+	return OK
+
+
+# --- Game rules ------------------------------------------------------------------
+
+## Applies queued game rule changes. Online: immediately through the console; offline: on next start.
+func apply_pending_gamerules() -> void:
+	if not is_online() or config.pending_gamerules.is_empty():
+		return
+	for id in config.pending_gamerules:
+		var entry := SettingsCatalog.get_entry(id)
+		if entry.is_empty() or not SettingsCatalog.applies_to(entry, config.mc_version):
+			continue
+		var value: String = config.pending_gamerules[id]
+		for cmd in SettingsCatalog.rule_commands(entry, value, config.mc_version):
+			send_command(cmd, false)
+		config.known_gamerules[id] = value
+	log_system("Applied %d game rule change(s)." % config.pending_gamerules.size())
+	config.pending_gamerules.clear()
+	config.save()
+	config_changed.emit()
+
+
+## Reads the current value of every game rule over RCON into [member ServerConfig.known_gamerules].
+func refresh_gamerules() -> void:
+	if not rcon.is_ready():
+		return
+	var changed := false
+	for entry in SettingsCatalog.for_version(config.mc_version):
+		if entry.source != "gamerule" or config.pending_gamerules.has(entry.id):
+			continue
+		var value := LogParser.parse_gamerule(await rcon.execute("gamerule " + SettingsCatalog.rule_name(entry, config.mc_version)))
+		if value != "" and config.known_gamerules.get(entry.id, "") != value:
+			config.known_gamerules[entry.id] = value
+			changed = true
+		if not rcon.is_ready():
+			break
+	if changed:
+		config.save()
+		config_changed.emit()
+
+
 func mark_installing(on: bool) -> void:
 	_set_state(State.INSTALLING if on else State.STOPPED)
 
@@ -338,6 +475,7 @@ func _on_started() -> void:
 	if config.rcon_port > 0 and config.rcon_password != "":
 		rcon.connect_to("127.0.0.1", config.rcon_port, config.rcon_password)
 	_query_timer.start()
+	apply_pending_gamerules()
 
 
 func _on_process_exited(code: int) -> void:
@@ -356,12 +494,17 @@ func _on_process_exited(code: int) -> void:
 		_set_state(State.STOPPED)
 		if _restart_after_stop:
 			_restart_after_stop = false
-			start()
+			start(is_temporary())
+			return
+		if is_temporary():
+			temporary_run_ended.emit()
 		return
 	log_system("Server process exited unexpectedly (exit code %d)." % code, LogParser.Level.ERROR)
 	_set_state(State.CRASHED)
 	Notifier.error("%s crashed (exit code %d)." % [config.display_name, code])
 	_maybe_auto_restart()
+	if is_temporary() and _restart_delay.is_stopped():
+		temporary_run_ended.emit()
 
 
 func _maybe_auto_restart() -> void:
@@ -382,7 +525,7 @@ func _maybe_auto_restart() -> void:
 
 func _on_restart_delay_timeout() -> void:
 	if state == State.CRASHED:
-		start()
+		start(is_temporary())
 
 
 func _on_stop_timeout() -> void:
@@ -417,16 +560,9 @@ func _prepare_files() -> void:
 		config.rcon_port = ServerManager.allocate_rcon_port(config.id)
 	if config.rcon_password.length() < 16:
 		config.rcon_password = Fmt.random_token(24)
-	var props := get_properties()
-	props.set_value("server-port", config.port)
-	props.set_value("query.port", config.port)
-	props.set_value("enable-rcon", true)
-	props.set_value("rcon.port", config.rcon_port)
-	props.set_value("rcon.password", config.rcon_password)
-	props.set_value("broadcast-rcon-to-ops", false)
-	props.save_file(config.properties_path())
+	config.write_managed_properties(working_directory())
 	if config.eula_accepted:
-		var f := FileAccess.open(config.directory.path_join("eula.txt"), FileAccess.WRITE)
+		var f := FileAccess.open(working_directory().path_join("eula.txt"), FileAccess.WRITE)
 		if f != null:
 			f.store_string("# Accepted in Server Manager (https://aka.ms/MinecraftEULA)\neula=true\n")
 	config.save()
@@ -450,9 +586,9 @@ func stop_orphan() -> void:
 	log_system("Stopping server left over from a previous session (PID %d)…" % orphan_pid)
 	PlatformBackend.get_current().terminate(orphan_pid)
 	var deadline := Time.get_ticks_msec() + config.stop_timeout_sec * 1000
-	while PlatformBackend.get_current().process_cwd(orphan_pid) == config.directory and Time.get_ticks_msec() < deadline:
+	while PlatformBackend.get_current().process_cwd(orphan_pid) == working_directory() and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.5).timeout
-	if PlatformBackend.get_current().process_cwd(orphan_pid) == config.directory:
+	if PlatformBackend.get_current().process_cwd(orphan_pid) == working_directory():
 		OS.kill(orphan_pid)
 	orphan_pid = -1
 	_remove_pid_file()
@@ -466,7 +602,7 @@ func find_orphan_pid() -> int:
 	if not FileAccess.file_exists(path):
 		return -1
 	var pid := FileAccess.get_file_as_string(path).strip_edges().to_int()
-	if pid > 0 and PlatformBackend.get_current().process_cwd(pid) == config.directory:
+	if pid > 0 and PlatformBackend.get_current().process_cwd(pid) == working_directory():
 		return pid
 	_remove_pid_file()
 	return -1

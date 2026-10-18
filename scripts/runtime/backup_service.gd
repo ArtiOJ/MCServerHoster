@@ -52,6 +52,26 @@ func list_backups() -> Array[Dictionary]:
 	return out
 
 
+## Pauses autosave and flushes all worlds to disk so files can be copied consistently.
+## Returns true when the server was online (call [method resume_saving] afterwards).
+func pause_saving() -> bool:
+	if not instance.is_online():
+		return false
+	instance.log_system("Pausing autosave and flushing the world to disk…")
+	_world_saved = false
+	instance.send_command("save-off", false)
+	instance.send_command("save-all flush", false)
+	var deadline := Time.get_ticks_msec() + SAVE_TIMEOUT_MS
+	while not _world_saved and Time.get_ticks_msec() < deadline and instance.is_online():
+		await get_tree().create_timer(0.2).timeout
+	return true
+
+
+func resume_saving() -> void:
+	if instance.is_online():
+		instance.send_command("save-on", false)
+
+
 func on_console_line(plain: String) -> void:
 	if LogParser.is_world_saved(plain):
 		_world_saved = true
@@ -67,20 +87,12 @@ func create_backup(full: bool) -> String:
 	var out_path := backup_dir().path_join("%s_%s.zip" % [stamp, "full" if full else "world"])
 	DirAccess.make_dir_recursive_absolute(backup_dir())
 
-	var was_online := instance.is_online()
-	if was_online:
-		instance.log_system("Backup: pausing autosave and flushing the world to disk…")
-		_world_saved = false
-		instance.send_command("save-off", false)
-		instance.send_command("save-all flush", false)
-		var deadline := Time.get_ticks_msec() + SAVE_TIMEOUT_MS
-		while not _world_saved and Time.get_ticks_msec() < deadline and instance.is_online():
-			await get_tree().create_timer(0.2).timeout
+	var was_online := await pause_saving()
 
 	var roots := PackedStringArray([""]) if full else world_dirs()
 	_progress = 0.0
 	_thread = Thread.new()
-	_thread.start(_zip_worker.bind(instance.config.directory, roots, out_path))
+	_thread.start(_zip_worker.bind(instance.working_directory(), roots, out_path))
 	while _thread.is_alive():
 		await get_tree().create_timer(0.15).timeout
 		_mutex.lock()
@@ -90,8 +102,8 @@ func create_backup(full: bool) -> String:
 	var err: String = _thread.wait_to_finish()
 	_thread = null
 
-	if was_online and instance.is_online():
-		instance.send_command("save-on", false)
+	if was_online:
+		resume_saving()
 
 	if err != "":
 		DirAccess.remove_absolute(out_path)
@@ -128,13 +140,13 @@ func restore_backup(path: String) -> Error:
 			top_dirs[first] = true
 	reader.close()
 	for d in top_dirs:
-		var abs_dir := instance.config.directory.path_join(d)
+		var abs_dir := instance.working_directory().path_join(d)
 		if DirAccess.dir_exists_absolute(abs_dir):
 			OS.move_to_trash(abs_dir)
 
 	_progress = 0.0
 	_thread = Thread.new()
-	_thread.start(_unzip_worker.bind(path, instance.config.directory))
+	_thread.start(_unzip_worker.bind(path, instance.working_directory()))
 	while _thread.is_alive():
 		await get_tree().create_timer(0.15).timeout
 		_mutex.lock()
@@ -167,10 +179,10 @@ func _prune() -> void:
 
 
 func world_dirs() -> PackedStringArray:
-	var level := ServerProperties.load_file(instance.config.properties_path()).get_value("level-name", "world")
+	var level := instance.get_properties().get_value("level-name", "world")
 	var out := PackedStringArray()
 	for d in [level, level + "_nether", level + "_the_end"]:
-		if DirAccess.dir_exists_absolute(instance.config.directory.path_join(d)):
+		if DirAccess.dir_exists_absolute(instance.working_directory().path_join(d)):
 			out.append(d)
 	return out
 

@@ -14,7 +14,7 @@ static func get_current() -> PlatformBackend:
 
 
 ## Returns {"path": String, "args": PackedStringArray} ready for OS.execute_with_pipe().
-func build_launch_command(config: ServerConfig, java_executable: String) -> Dictionary:
+func build_launch_command(config: ServerConfig, java_executable: String, _working_dir := "") -> Dictionary:
 	var args := config.build_jvm_args()
 	args.append_array(config.build_server_args())
 	return {"path": java_executable, "args": args}
@@ -34,6 +34,11 @@ func supports_affinity() -> bool:
 
 func supports_priority() -> bool:
 	return false
+
+
+## Copies a directory tree to a new location. Thread-safe.
+func copy_tree(src: String, dst: String) -> Error:
+	return FileOps.copy_tree_portable(src, dst)
 
 
 ## Asks a process to shut down (SIGTERM on POSIX).

@@ -6,6 +6,8 @@ extends Node
 signal server_added(instance: ServerInstance)
 signal server_removed(server_id: String)
 signal server_state_changed(instance: ServerInstance)
+## Relayed from instances: a temporary run stopped and needs a keep/discard decision.
+signal temporary_run_ended(instance: ServerInstance)
 
 const INSTANCE_SCENE := preload("res://scenes/runtime/server_instance.tscn")
 const FIRST_GAME_PORT := 25565
@@ -89,12 +91,7 @@ func create_server(spec: Dictionary, on_progress := Callable()) -> Dictionary:
 		if on_progress.is_valid():
 			on_progress.call(stage, fraction)
 
-	var base_id := Fmt.slugify(spec.name)
-	var id := base_id
-	var n := 2
-	while get_instance(id) != null or DirAccess.dir_exists_absolute(AppSettings.servers_root.path_join(id)):
-		id = "%s-%d" % [base_id, n]
-		n += 1
+	var id := unique_id(spec.name)
 	var dir := AppSettings.servers_root.path_join(id)
 	report.call("Creating server folder…", 0.02)
 	var err := DirAccess.make_dir_recursive_absolute(dir)
@@ -136,13 +133,14 @@ func create_server(spec: Dictionary, on_progress := Callable()) -> Dictionary:
 	var overrides: Dictionary = spec.get("properties", {})
 	for key in overrides:
 		props.set_value(key, overrides[key])
-	props.set_value("server-port", cfg.port)
-	props.set_value("query.port", cfg.port)
-	props.set_value("enable-rcon", true)
-	props.set_value("rcon.port", cfg.rcon_port)
-	props.set_value("rcon.password", cfg.rcon_password)
-	props.set_value("broadcast-rcon-to-ops", false)
 	props.save_file(cfg.properties_path())
+	# Remaining catalog settings (Paper/Spigot/Bukkit YAML, game rules) from the wizard.
+	var settings := ServerSettings.open(cfg)
+	var extra: Dictionary = spec.get("settings", {})
+	for setting_id in extra:
+		settings.set_by_id(setting_id, str(extra[setting_id]))
+	settings.save()
+	cfg.write_managed_properties()
 	var eula := FileAccess.open(dir.path_join("eula.txt"), FileAccess.WRITE)
 	eula.store_string("# Accepted in Server Manager (https://aka.ms/MinecraftEULA)\neula=true\n")
 	eula.close()
@@ -155,6 +153,69 @@ func create_server(spec: Dictionary, on_progress := Callable()) -> Dictionary:
 	var inst := _register(cfg)
 	inst.log_system("Server created: Paper %s build #%d in %s" % [cfg.mc_version, cfg.paper_build, dir])
 	report.call("Done", 1.0)
+	return {"ok": true, "instance": inst}
+
+
+## Folder-safe id derived from [param display_name] that no server or folder uses yet.
+func unique_id(display_name: String) -> String:
+	var base_id := Fmt.slugify(display_name)
+	var id := base_id
+	var n := 2
+	while get_instance(id) != null or DirAccess.dir_exists_absolute(AppSettings.servers_root.path_join(id)):
+		id = "%s-%d" % [base_id, n]
+		n += 1
+	return id
+
+
+## Copies an existing server into a new, independent server with its own ports.
+## Worlds are flushed first when the source is running. [param on_status] receives (text).
+func duplicate_server(source: ServerInstance, display_name: String, copy_worlds := true, copy_plugins := true, on_status := Callable()) -> Dictionary:
+	var report := func(text: String) -> void:
+		if on_status.is_valid():
+			on_status.call(text)
+	if source.state == ServerInstance.State.INSTALLING:
+		return {"ok": false, "error": "%s is busy." % source.config.display_name}
+	var id := unique_id(display_name)
+	var dir := AppSettings.servers_root.path_join(id)
+	var src := source.working_directory()
+	report.call("Copying files…")
+	var was_online: bool = await source.backups.pause_saving()
+	var err: Error = await FileOps.run_async(self, func() -> Error: return FileOps.copy_tree(src, dir))
+	if was_online:
+		source.backups.resume_saving()
+	if err != OK:
+		FileOps.remove_path(dir)
+		return {"ok": false, "error": "Copy failed: %s" % error_string(err)}
+
+	report.call("Configuring the copy…")
+	for leftover in [ServerConfig.META_DIR.path_join("server.pid"), ServerConfig.META_DIR.path_join("jars"), "logs"]:
+		FileOps.remove_path(dir.path_join(leftover))
+	if not copy_worlds:
+		for world in source.backups.world_dirs():
+			FileOps.remove_path(dir.path_join(world))
+	if not copy_plugins:
+		FileOps.remove_path(dir.path_join("plugins"))
+	var cfg := ServerConfig.from_dict(source.config.to_dict(), dir)
+	cfg.id = id
+	cfg.display_name = display_name
+	cfg.color = Color.from_hsv(fmod(source.config.color.h + 0.12, 1.0), source.config.color.s, source.config.color.v)
+	cfg.created_unix = int(Time.get_unix_time_from_system())
+	cfg.auto_start = false
+	cfg.temp_run_dir = ""
+	cfg.port = allocate_game_port()
+	cfg.rcon_port = allocate_rcon_port()
+	cfg.rcon_password = Fmt.random_token(24)
+	if not copy_worlds:
+		cfg.known_gamerules.clear()
+	cfg.write_managed_properties()
+	err = cfg.save()
+	if err != OK:
+		FileOps.remove_path(dir)
+		return {"ok": false, "error": "Cannot save the copy's config: %s" % error_string(err)}
+	AppSettings.register_server_dir(dir)
+	var inst := _register(cfg)
+	inst.log_system("Duplicated from %s (%s, %s)." % [source.config.display_name,
+			"with worlds" if copy_worlds else "without worlds", "with plugins" if copy_plugins else "without plugins"])
 	return {"ok": true, "instance": inst}
 
 
@@ -183,6 +244,8 @@ func delete_server(server_id: String, delete_files := true, use_trash := true, d
 		return ERR_BUSY
 	var dir := inst.config.directory
 	var backup_dir := inst.backups.backup_dir()
+	if inst.is_temporary():
+		FileOps.remove_path(inst.config.temp_run_dir)
 	if delete_files and DirAccess.dir_exists_absolute(dir):
 		var err := OS.move_to_trash(dir) if use_trash else _remove_dir_recursive(dir)
 		if err != OK:
@@ -237,6 +300,7 @@ func _register(cfg: ServerConfig) -> ServerInstance:
 	inst.setup(cfg)
 	add_child(inst)
 	inst.state_changed.connect(func(_s: ServerInstance.State) -> void: server_state_changed.emit(inst))
+	inst.temporary_run_ended.connect(func() -> void: temporary_run_ended.emit(inst))
 	_instances.append(inst)
 	server_added.emit(inst)
 	return inst
@@ -246,22 +310,9 @@ func _auto_start() -> void:
 	if not AppSettings.autostart_enabled:
 		return
 	for inst in _instances:
-		if inst.config.auto_start and inst.orphan_pid <= 0:
+		if inst.config.auto_start and inst.orphan_pid <= 0 and not inst.is_temporary():
 			inst.start()
 
 
 static func _remove_dir_recursive(path: String) -> Error:
-	var dir := DirAccess.open(path)
-	if dir == null:
-		return DirAccess.get_open_error()
-	dir.include_hidden = true
-	for f in dir.get_files():
-		dir.remove(f)
-	for d in dir.get_directories():
-		var sub := path.path_join(d)
-		# Never follow symlinks out of the folder being deleted.
-		if dir.is_link(d):
-			dir.remove(d)
-		else:
-			_remove_dir_recursive(sub)
-	return DirAccess.remove_absolute(path)
+	return FileOps.remove_tree(path)
