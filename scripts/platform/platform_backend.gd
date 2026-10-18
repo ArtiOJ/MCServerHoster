@@ -66,6 +66,11 @@ func is_pid_alive(pid: int) -> bool:
 	return pid > 0 and OS.is_process_running(pid)
 
 
+## Executable path of a running process, or "" if unknown.
+func process_executable(_pid: int) -> String:
+	return ""
+
+
 ## PID of a Java process whose working directory is [param dir], or -1.
 func find_java_in_dir(_dir: String) -> int:
 	return -1

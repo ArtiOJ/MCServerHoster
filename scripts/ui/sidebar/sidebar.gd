@@ -5,6 +5,7 @@ extends PanelContainer
 signal dashboard_selected
 signal server_selected(server_id: String)
 signal new_server_requested
+signal import_server_requested
 signal settings_requested
 
 const ITEM_SCENE := preload("res://scenes/sidebar/server_list_item.tscn")
@@ -15,6 +16,7 @@ var _group := ButtonGroup.new()
 @onready var _list: VBoxContainer = %ServerList
 @onready var _empty_label: Label = %EmptyLabel
 @onready var _new_button: Button = %NewServerButton
+@onready var _import_button: Button = %ImportServerButton
 @onready var _settings_button: Button = %SettingsButton
 @onready var _summary_label: Label = %SummaryLabel
 
@@ -23,6 +25,7 @@ func _ready() -> void:
 	_dashboard_button.button_group = _group
 	_dashboard_button.pressed.connect(func() -> void: dashboard_selected.emit())
 	_new_button.pressed.connect(func() -> void: new_server_requested.emit())
+	_import_button.pressed.connect(func() -> void: import_server_requested.emit())
 	_settings_button.pressed.connect(func() -> void: settings_requested.emit())
 	ServerManager.server_added.connect(_add_item)
 	ServerManager.server_removed.connect(_remove_item)

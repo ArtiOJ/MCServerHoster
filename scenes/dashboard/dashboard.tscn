@@ -11,6 +11,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/stop.svg" id="9"]
 [ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="10"]
 [ext_resource type="Texture2D" path="res://assets/logo.svg" id="11"]
+[ext_resource type="Texture2D" path="res://assets/icons/upload.svg" id="12"]
 
 [node name="Dashboard" type="MarginContainer"]
 anchors_preset = 15
@@ -144,13 +145,24 @@ text = "Create your first Paper server. The manager downloads the right build, p
 horizontal_alignment = 1
 autowrap_mode = 3
 
-[node name="CreateButton" type="Button" parent="Scroll/VBox/EmptyState/VBox"]
-unique_name_in_owner = true
+[node name="EmptyButtons" type="HBoxContainer" parent="Scroll/VBox/EmptyState/VBox"]
 layout_mode = 2
 size_flags_horizontal = 4
+theme_override_constants/separation = 10
+
+[node name="CreateButton" type="Button" parent="Scroll/VBox/EmptyState/VBox/EmptyButtons"]
+unique_name_in_owner = true
+layout_mode = 2
 theme_type_variation = &"AccentButton"
 text = "Create a server"
 icon = ExtResource("10")
+
+[node name="ImportButton" type="Button" parent="Scroll/VBox/EmptyState/VBox/EmptyButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Add a server you already have from any folder"
+text = "Import an existing server"
+icon = ExtResource("12")
 
 [node name="Cards" type="HFlowContainer" parent="Scroll/VBox"]
 unique_name_in_owner = true

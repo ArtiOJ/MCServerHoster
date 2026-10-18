@@ -154,6 +154,11 @@ func process_age_seconds(pid: int) -> int:
 	return int(uptime - rest[19].to_int() / CLK_TCK)
 
 
+func process_executable(pid: int) -> String:
+	var dir := DirAccess.open("/proc/%d" % pid)
+	return dir.read_link("/proc/%d/exe" % pid) if dir != null else ""
+
+
 func process_cwd(pid: int) -> String:
 	var dir := DirAccess.open("/proc/%d" % pid)
 	if dir == null:

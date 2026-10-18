@@ -183,6 +183,16 @@ func _run(rule: EventRule, pre_warned := false) -> void:
 				instance.send_command("say " + rule.text.strip_edges(), false)
 		EventRule.Action.BACKUP_WORLD, EventRule.Action.BACKUP_FULL:
 			instance.backups.create_backup(rule.action == EventRule.Action.BACKUP_FULL)
+		EventRule.Action.NOTIFY:
+			var message := expand_placeholders(rule.text.strip_edges(), instance)
+			if message == "":
+				message = rule.describe()
+			Notifier.notify(message, Notifier.Level.INFO, Notifier.Category.EVENT, instance.config.display_name)
+
+
+## Replaces {server} and {players} in event texts.
+static func expand_placeholders(text: String, inst: ServerInstance) -> String:
+	return text.replace("{server}", inst.config.display_name).replace("{players}", str(inst.players.size()))
 
 
 static func _verb(rule: EventRule) -> String:

@@ -17,11 +17,20 @@ var _temp_queue: Array[ServerInstance] = []
 @onready var _quit_dialog: QuitDialog = %QuitDialog
 @onready var _duplicate_dialog: DuplicateServerDialog = %DuplicateServerDialog
 @onready var _temp_dialog: TempRunDialog = %TempRunDialog
+@onready var _import_server_dialog: ImportServerDialog = %ImportServerDialog
+@onready var _import_world_dialog: ImportWorldDialog = %ImportWorldDialog
 @onready var _tray: StatusIndicator = %TrayIcon
 @onready var _tray_menu: PopupMenu = %TrayMenu
 
 
 func _ready() -> void:
+	if AppSettings.other_instance_pid > 0:
+		var message := "Server Manager is already running (PID %d). Switch to that window instead." % AppSettings.other_instance_pid
+		printerr(message)
+		if DisplayServer.get_name() != "headless":
+			OS.alert(message, "Server Manager")
+		get_tree().quit()
+		return
 	get_tree().auto_accept_quit = false
 	get_window().min_size = Vector2i(1100, 680)
 	PowerManager.shutting_down.connect(_on_system_shutdown)
@@ -35,11 +44,15 @@ func _ready() -> void:
 	_sidebar.settings_requested.connect(_settings_dialog.open)
 	_dashboard.server_open_requested.connect(show_server)
 	_dashboard.new_server_requested.connect(_wizard.open)
+	_sidebar.import_server_requested.connect(_import_server_dialog.open.bind(""))
+	_dashboard.import_server_requested.connect(_import_server_dialog.open.bind(""))
+	_import_server_dialog.imported.connect(func(inst: ServerInstance) -> void: show_server(inst.config.id))
 	_wizard.server_created.connect(func(inst: ServerInstance) -> void: show_server(inst.config.id))
 	_server_view.update_requested.connect(_update_dialog.open)
 	_server_view.delete_requested.connect(_delete_dialog.open)
 	_server_view.duplicate_requested.connect(_duplicate_dialog.open)
 	_server_view.temp_decision_requested.connect(_temp_dialog.open)
+	_server_view.import_world_requested.connect(func(inst: ServerInstance) -> void: _import_world_dialog.open(inst))
 	_duplicate_dialog.duplicated.connect(func(inst: ServerInstance) -> void: show_server(inst.config.id))
 	ServerManager.temporary_run_ended.connect(_on_temporary_run_ended)
 	_temp_dialog.visibility_changed.connect(_show_next_temp_decision)
@@ -139,10 +152,46 @@ func _show_next_temp_decision() -> void:
 
 
 func _on_files_dropped(files: PackedStringArray) -> void:
+	if _open_server_import_for(files):
+		return
+	if _open_world_import_for(files):
+		return
 	if _current_id == "":
 		Notifier.warn("Open a server first, then drop plugin .jar files onto the window to install them.")
 		return
 	_server_view.handle_files_dropped(files)
+
+
+## A dropped folder that looks like a server (server.properties or a jar, but not a bare
+## world with level.dat at its top) opens the import dialog. Returns true if handled.
+func _open_server_import_for(files: PackedStringArray) -> bool:
+	for path in files:
+		if not DirAccess.dir_exists_absolute(path) or FileAccess.file_exists(path.path_join("level.dat")):
+			continue
+		var has_jar := Array(DirAccess.get_files_at(path)).any(func(f: String) -> bool: return f.ends_with(".jar"))
+		if FileAccess.file_exists(path.path_join("server.properties")) or has_jar:
+			_import_server_dialog.open(path)
+			return true
+	return false
+
+
+## A dropped .zip or world folder (level.dat at its top or one level down) opens the
+## world import dialog for the current server. Returns true if handled.
+func _open_world_import_for(files: PackedStringArray) -> bool:
+	for path in files:
+		var is_world := path.get_extension().to_lower() in ["zip", "mcworld"]
+		if DirAccess.dir_exists_absolute(path):
+			is_world = FileAccess.file_exists(path.path_join("level.dat")) or Array(DirAccess.get_directories_at(path)).any(
+					func(d: String) -> bool: return FileAccess.file_exists(path.path_join(d).path_join("level.dat")))
+		if not is_world:
+			continue
+		var inst := ServerManager.get_instance(_current_id)
+		if inst == null:
+			Notifier.warn("Open a server first, then drop the world onto the window (or use \"Start from an existing world\" when creating a server).")
+		else:
+			_import_world_dialog.open(inst, path)
+		return true
+	return false
 
 
 # --- Quitting & tray ----------------------------------------------------------
@@ -186,6 +235,7 @@ func _stop_all_and_quit() -> void:
 ## Quits without stopping servers; they are re-attached on the next launch.
 func _quit_leaving_servers() -> void:
 	_quitting = true
+	NetworkService.keep_mappings_on_exit = true
 	for inst in ServerManager.get_instances():
 		if inst.is_process_alive():
 			inst.log_system("Server Manager closed; the server keeps running and will be re-attached on next launch.")

@@ -36,3 +36,11 @@ func test_list_and_tps() -> void:
 	var empty := LogParser.parse_list("There are 0 of a max of 10 players online: ")
 	check_eq(empty.names.size(), 0, "no names")
 	check_eq(LogParser.parse_tps("§6TPS from last 1m, 5m, 15m: §a*20.0, §a19.98, §a19.9"), 20.0, "tps")
+
+
+func test_failure_hints() -> void:
+	check(LogParser.failure_hint("[19:49:44 WARN]: **** FAILED TO BIND TO PORT!", 25565).contains("25565"), "bind failure")
+	check(LogParser.failure_hint("Error: LinkageError ... UnsupportedClassVersionError: io/papermc/paperclip/Main").contains("Java"), "wrong java")
+	check(LogParser.failure_hint("java.lang.OutOfMemoryError: Java heap space").contains("memory"), "oom")
+	check_eq(LogParser.failure_hint("[12:00:00 INFO]: Done (1.0s)!"), "", "normal line")
+	check(LogParser.exit_code_hint(137).contains("killed"), "exit 137")

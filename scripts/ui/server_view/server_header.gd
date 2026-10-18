@@ -6,8 +6,9 @@ signal update_requested
 signal delete_requested
 signal duplicate_requested
 signal temp_decision_requested
+signal import_world_requested
 
-enum MenuItem { OPEN_FOLDER, COPY_ADDRESS, UPDATE, CHECK_UPDATES, STOP_ORPHAN, CLEAR_CONSOLE, DELETE, DUPLICATE, TEMP_DECISION }
+enum MenuItem { OPEN_FOLDER, COPY_ADDRESS, UPDATE, CHECK_UPDATES, STOP_ORPHAN, CLEAR_CONSOLE, DELETE, DUPLICATE, TEMP_DECISION, IMPORT_WORLD }
 enum StartItem { START, START_TEMPORARY }
 
 const TEMP_START_TOOLTIP := "Run a throwaway copy of this server for testing. It shows as this server while running; when it stops you choose whether to keep or discard what changed."
@@ -97,6 +98,7 @@ func _refresh() -> void:
 	popup.set_item_disabled(popup.get_item_index(MenuItem.DELETE), alive or installing)
 	popup.set_item_disabled(popup.get_item_index(MenuItem.STOP_ORPHAN), instance.orphan_pid <= 0)
 	popup.set_item_disabled(popup.get_item_index(MenuItem.DUPLICATE), installing)
+	popup.set_item_disabled(popup.get_item_index(MenuItem.IMPORT_WORLD), installing)
 	popup.set_item_disabled(popup.get_item_index(MenuItem.TEMP_DECISION), not instance.is_temporary() or alive or installing)
 
 
@@ -136,3 +138,5 @@ func _on_menu(id: int) -> void:
 			duplicate_requested.emit()
 		MenuItem.TEMP_DECISION:
 			temp_decision_requested.emit()
+		MenuItem.IMPORT_WORLD:
+			import_world_requested.emit()

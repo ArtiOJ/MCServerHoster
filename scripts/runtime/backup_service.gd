@@ -83,7 +83,7 @@ func on_console_line(plain: String) -> void:
 ## path, or "" on failure.
 func create_backup(full: bool, source_dir := "", tag := "") -> String:
 	if busy:
-		Notifier.warn("A backup of %s is already running." % instance.config.display_name)
+		Notifier.warn("A backup of %s is already running." % instance.config.display_name, Notifier.Category.BACKUP, instance.config.display_name)
 		return ""
 	_set_busy(true)
 	var base := source_dir if source_dir != "" else instance.working_directory()
@@ -113,13 +113,13 @@ func create_backup(full: bool, source_dir := "", tag := "") -> String:
 	if err != "":
 		DirAccess.remove_absolute(out_path)
 		instance.log_system("Backup failed: " + err, LogParser.Level.ERROR)
-		Notifier.error("Backup of %s failed: %s" % [instance.config.display_name, err])
+		Notifier.error("Backup of %s failed: %s" % [instance.config.display_name, err], Notifier.Category.BACKUP, instance.config.display_name)
 		_set_busy(false)
 		return ""
 
 	_prune()
 	instance.log_system("Backup created: " + out_path.get_file())
-	Notifier.success("Backup of %s created." % instance.config.display_name)
+	Notifier.success("Backup of %s created." % instance.config.display_name, Notifier.Category.BACKUP, instance.config.display_name)
 	_set_busy(false)
 	backups_changed.emit()
 	return out_path

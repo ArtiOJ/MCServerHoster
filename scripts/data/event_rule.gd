@@ -7,7 +7,8 @@ enum Trigger {
 	TIME, INTERVAL, APP_STARTED, SERVER_ONLINE, SERVER_STOPPED, SERVER_CRASHED,
 	PLAYER_JOINED, PLAYER_LEFT, SERVER_EMPTY, PLAYERS_AT_LEAST, TPS_BELOW, SYSTEM_SLEEP, SYSTEM_WAKE,
 }
-enum Action { START, STOP, RESTART, COMMAND, BROADCAST, BACKUP_WORLD, BACKUP_FULL }
+## New actions are appended so saved rules keep their meaning.
+enum Action { START, STOP, RESTART, COMMAND, BROADCAST, BACKUP_WORLD, BACKUP_FULL, NOTIFY }
 enum StateFilter { ANY, ONLINE, OFFLINE }
 
 const TRIGGER_NAMES: PackedStringArray = [
@@ -17,7 +18,7 @@ const TRIGGER_NAMES: PackedStringArray = [
 ]
 const ACTION_NAMES: PackedStringArray = [
 	"Start server", "Stop server", "Restart server", "Run command", "Broadcast message",
-	"Back up worlds", "Full backup",
+	"Back up worlds", "Full backup", "Notify me",
 ]
 const STATE_FILTER_NAMES: PackedStringArray = ["Any state", "Only while online", "Only while offline"]
 ## Godot weekday order (Time.get_datetime_dict_*: 0 = Sunday).
@@ -93,6 +94,8 @@ func describe_action() -> String:
 			return "run \"/%s\"" % text.strip_edges().trim_prefix("/")
 		Action.BROADCAST:
 			return "say \"%s\"" % text.strip_edges()
+		Action.NOTIFY:
+			return "notify \"%s\"" % text.strip_edges()
 	var s := ACTION_NAMES[action].to_lower()
 	if delay_seconds > 0:
 		s += " after %s" % Fmt.duration(delay_seconds)
@@ -219,6 +222,7 @@ static func templates() -> Array:
 		["Start when Server Manager opens", {"trigger": Trigger.APP_STARTED, "action": Action.START}],
 		["Back up every 6 hours", {"trigger": Trigger.INTERVAL, "interval_minutes": 360, "action": Action.BACKUP_WORLD}],
 		["Welcome joining players", {"trigger": Trigger.PLAYER_JOINED, "action": Action.BROADCAST, "text": "Welcome!"}],
+		["Notify when a player joins", {"trigger": Trigger.PLAYER_JOINED, "action": Action.NOTIFY, "text": "Someone joined {server} ({players} online)"}],
 		["Restart when lagging", {"trigger": Trigger.TPS_BELOW, "threshold": 12.0, "action": Action.RESTART}],
 		["Back up before sleep", {"trigger": Trigger.SYSTEM_SLEEP, "action": Action.BACKUP_WORLD}],
 		["Custom event", {}],

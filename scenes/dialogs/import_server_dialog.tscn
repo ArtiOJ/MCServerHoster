@@ -1,0 +1,268 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/dialogs/import_server_dialog.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="2"]
+
+[node name="ImportServerDialog" type="ConfirmationDialog"]
+title = "Import an existing server"
+size = Vector2i(700, 680)
+min_size = Vector2i(640, 560)
+ok_button_text = "Import"
+dialog_hide_on_ok = false
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 684.0
+offset_bottom = 624.0
+theme_override_constants/separation = 12
+
+[node name="FolderRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FolderLabel" type="Label" parent="VBox/FolderRow"]
+layout_mode = 2
+text = "Folder"
+
+[node name="FolderEdit" type="LineEdit" parent="VBox/FolderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "The server folder: the one containing server.properties and the server jar."
+placeholder_text = "Choose the folder that contains the server jar"
+
+[node name="BrowseButton" type="Button" parent="VBox/FolderRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Browse…"
+icon = ExtResource("2")
+
+[node name="AnalysisCard" type="PanelContainer" parent="VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/AnalysisCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SoftwareLabel" type="Label" parent="VBox/AnalysisCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "No folder selected"
+
+[node name="Details" type="GridContainer" parent="VBox/AnalysisCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/h_separation = 24
+theme_override_constants/v_separation = 6
+columns = 2
+
+[node name="VersionKey" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Version"
+
+[node name="VersionValue" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+
+[node name="JarKey" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Server jar"
+
+[node name="JarValue" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+text_overrun_behavior = 3
+
+[node name="WorldsKey" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Worlds"
+
+[node name="WorldsValue" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+text_overrun_behavior = 3
+
+[node name="PluginsKey" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Plugins"
+
+[node name="PluginsValue" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="StatusKey" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Status"
+
+[node name="StatusValue" type="Label" parent="VBox/AnalysisCard/VBox/Details"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="Notice" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="NoticeLabel" type="Label" parent="VBox/Notice"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(620, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="Options" type="GridContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="NameLabel" type="Label" parent="VBox/Options"]
+layout_mode = 2
+text = "Name"
+
+[node name="NameEdit" type="LineEdit" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+max_length = 40
+
+[node name="ModeLabel" type="Label" parent="VBox/Options"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Manage in place: the server stays where it is; only a .manager folder is added. Ports and RCON are written to server.properties when the manager starts it.
+Copy: the whole folder is copied into the servers folder and the original is left untouched."
+text = "Location"
+
+[node name="ModeOption" type="OptionButton" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Manage in place: the server stays where it is; only a .manager folder is added. Ports and RCON are written to server.properties when the manager starts it.
+Copy: the whole folder is copied into the servers folder and the original is left untouched."
+selected = 0
+item_count = 2
+popup/item_0/text = "Manage in place"
+popup/item_0/id = 0
+popup/item_1/text = "Copy into the servers folder"
+popup/item_1/id = 1
+
+[node name="PortLabel" type="Label" parent="VBox/Options"]
+layout_mode = 2
+text = "Port"
+
+[node name="PortRow" type="HBoxContainer" parent="VBox/Options"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PortSpin" type="SpinBox" parent="VBox/Options/PortRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+min_value = 1024.0
+max_value = 65535.0
+value = 25565.0
+
+[node name="PortStatus" type="Label" parent="VBox/Options/PortRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="RamLabel" type="Label" parent="VBox/Options"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Java heap (-Xmx). Taken from the folder's start script when it has one."
+text = "Memory"
+
+[node name="RamSpin" type="SpinBox" parent="VBox/Options"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Java heap (-Xmx). Taken from the folder's start script when it has one."
+min_value = 512.0
+max_value = 65536.0
+step = 256.0
+value = 4096.0
+suffix = "MB"
+
+[node name="PaperLabel" type="Label" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Download the official Paper build for the same Minecraft version and use it instead. Worlds and Bukkit plugins keep working; the old jar is kept in .manager/jars."
+text = "Switch to Paper"
+
+[node name="PaperCheck" type="CheckButton" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Download the official Paper build for the same Minecraft version and use it instead. Worlds and Bukkit plugins keep working; the old jar is kept in .manager/jars."
+button_pressed = true
+
+[node name="EulaLabel" type="Label" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "EULA"
+
+[node name="EulaRow" type="HBoxContainer" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="EulaCheck" type="CheckBox" parent="VBox/Options/EulaRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "This folder has not accepted the Minecraft EULA yet. The manager writes eula=true only after you agree."
+text = "I agree to the Minecraft EULA"
+
+[node name="EulaLink" type="LinkButton" parent="VBox/Options/EulaRow"]
+layout_mode = 2
+size_flags_vertical = 4
+text = "Read it"
+uri = "https://aka.ms/MinecraftEULA"
+
+[node name="ModeHint" type="Label" parent="VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(620, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="Progress" type="ProgressBar" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="StatusLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(620, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="FolderDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Choose the server folder"
+size = Vector2i(820, 520)
+ok_button_text = "Select Current Folder"
+file_mode = 2
+access = 2
+use_native_dialog = true

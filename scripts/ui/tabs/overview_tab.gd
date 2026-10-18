@@ -39,12 +39,14 @@ func _on_bound() -> void:
 	watch(instance.players_changed, _refresh_players)
 	watch(instance.config_changed, _refresh_all)
 	watch(instance.update_available_changed, _refresh_all)
+	watch(NetworkService.status_changed, _refresh_all)
 	_refresh_all()
 
 
 func _refresh_all() -> void:
 	var cfg := instance.config
-	_address_value.text = instance.connect_address()
+	var public := NetworkService.public_address(cfg.port)
+	_address_value.text = instance.connect_address() + ("   ·   from the internet: %s" % public if public != "" else "")
 	_version_value.text = "Paper %s, build #%d (%s)" % [cfg.mc_version, cfg.paper_build, cfg.build_channel.to_lower()]
 	var java := JavaRuntimes.resolve_for(cfg)
 	_java_value.text = java.display_name() if java != null else "Not found — Java %d+ required" % cfg.java_min_version

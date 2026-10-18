@@ -26,6 +26,9 @@ var _created: ServerInstance
 var _more_rows: Array[PropertyRow] = []
 var _more_sections := {}
 var _more_version := "-"
+## Analysis of the optional starting world (WorldImporter.analyze), or {}.
+var _world := {}
+var _world_serial := 0
 
 @onready var _step_label: Label = %StepLabel
 @onready var _title_label: Label = %PageTitle
@@ -54,6 +57,12 @@ var _more_version := "-"
 @onready var _cancel_button: Button = %CancelButton
 @onready var _back_button: Button = %BackButton
 @onready var _next_button: Button = %NextButton
+@onready var _world_zip_button: Button = %WorldZipButton
+@onready var _world_folder_button: Button = %WorldFolderButton
+@onready var _world_clear_button: Button = %WorldClearButton
+@onready var _world_info: Label = %WorldInfo
+@onready var _world_zip_dialog: FileDialog = %WorldZipDialog
+@onready var _world_folder_dialog: FileDialog = %WorldFolderDialog
 
 
 func _ready() -> void:
@@ -69,6 +78,11 @@ func _ready() -> void:
 	_port_spin.value_changed.connect(func(_v: float) -> void: _check_port())
 	_eula_check.toggled.connect(func(_on: bool) -> void: _update_nav())
 	_more_search.text_changed.connect(func(_t: String) -> void: _filter_more())
+	_world_zip_button.pressed.connect(func() -> void: _world_zip_dialog.popup_centered())
+	_world_folder_button.pressed.connect(func() -> void: _world_folder_dialog.popup_centered())
+	_world_zip_dialog.file_selected.connect(_choose_world)
+	_world_folder_dialog.dir_selected.connect(_choose_world)
+	_world_clear_button.pressed.connect(_clear_world)
 	var host_mb := PlatformBackend.get_current().host_memory_bytes() / 1048576
 	_ram_field.max_value = maxi(1024, (host_mb / 256) * 256)
 
@@ -92,6 +106,7 @@ func open() -> void:
 	_more_search.text = ""
 	_more_settings.folded = true
 	_install_error.visible = false
+	_clear_world()
 	_set_page(Page.BASICS)
 	popup_centered()
 	_name_edit.grab_focus.call_deferred()
@@ -127,7 +142,7 @@ func _update_nav() -> void:
 		Page.BASICS:
 			can_next = _name_edit.text.strip_edges().length() in range(1, 41)
 		Page.VERSION:
-			can_next = not _build.is_empty()
+			can_next = not _build.is_empty() and _world_problem() == ""
 		Page.RESOURCES:
 			can_next = ServerManager.port_owner(int(_port_spin.value)) == null
 		Page.REVIEW:
@@ -168,6 +183,7 @@ func _on_back() -> void:
 func _on_cancel() -> void:
 	if _installing:
 		return
+	_clear_world()
 	hide()
 	if _created != null:
 		server_created.emit(_created)
@@ -209,6 +225,8 @@ func _populate_versions() -> void:
 		_version_list.select(select_idx)
 		_version_list.ensure_current_is_visible()
 		_on_version_selected(select_idx)
+	if _world.get("ok", false) and previous == "":
+		_select_version(str(_world.version))
 
 
 func _selected_version() -> String:
@@ -246,6 +264,11 @@ func _on_version_selected(idx: int) -> void:
 		lines.append("⚠ This version no longer receives fixes or security updates from PaperMC.")
 	if _build.channel != "STABLE":
 		lines.append("⚠ This is an experimental (%s) build. Expect bugs and back up often." % str(_build.channel).to_lower())
+	var world_problem := _world_problem()
+	if world_problem != "":
+		lines.append("✕ " + world_problem)
+	elif _world.get("ok", false) and str(_world.version) != "" and Fmt.compare_versions(str(_world.version), version) < 0:
+		lines.append("⚠ The world (saved in %s) will be upgraded to %s on first start." % [_world.version, version])
 	_version_details.text = "\n".join(lines)
 	_update_nav()
 
@@ -284,6 +307,8 @@ func _summary_text() -> String:
 	])
 	if extra > 0:
 		lines.append("%d additional setting%s changed" % [extra, "" if extra == 1 else "s"])
+	if _world.get("ok", false):
+		lines.append("Starting world:  %s (Minecraft %s) — its game mode and difficulty are applied" % [_world_title(), _world.version if _world.version != "" else "unknown"])
 	lines.append("Folder:  %s" % AppSettings.servers_root.path_join(Fmt.slugify(_name_edit.text)))
 	return "\n".join(lines)
 
@@ -395,13 +420,100 @@ func _install() -> void:
 		_created = res.instance
 		_created.config.auto_start = _auto_start_check.button_pressed
 		_created.save_config()
+		var world_ok := await _import_world_into(_created)
 		_install_status.text = "%s is ready." % _created.config.display_name
 		_install_progress.value = 100.0
 		Notifier.success("Created %s." % _created.config.display_name)
-		if _start_now_check.button_pressed:
+		if _start_now_check.button_pressed and world_ok:
 			_created.start()
 	else:
 		_install_status.text = "Installation failed."
 		_install_error.text = res.error
 		_install_error.visible = true
 	_update_nav()
+
+
+# --- Starting world ---------------------------------------------------------
+
+func _choose_world(path: String) -> void:
+	_world_serial += 1
+	var serial := _world_serial
+	WorldImporter.cleanup(_world)
+	_world = {}
+	_world_info.text = "Reading the world…"
+	_world_info.tooltip_text = path
+	var result: Dictionary = await WorldImporter.analyze(self, path, "")
+	if serial != _world_serial:
+		WorldImporter.cleanup(result)
+		return
+	if not result.ok:
+		WorldImporter.cleanup(result)
+		_world_info.text = "✕ " + result.error
+		_world_clear_button.visible = true
+		return
+	_world = result
+	var dims := ", ".join(result.dimensions) if not result.dimensions.is_empty() else "no terrain yet"
+	_world_info.text = "%s — Minecraft %s (%s)" % [_world_title(), result.version if result.version != "" else "unknown", dims]
+	_world_info.tooltip_text = "%s\n%s" % [path, "\n".join(result.warnings)]
+	_world_clear_button.visible = true
+	var world_name := WorldImporter.display_name(result)
+	if _name_edit.text.strip_edges() == _suggest_name() and world_name.to_lower() != "world":
+		_name_edit.text = world_name.left(40)
+		_on_name_changed(_name_edit.text)
+	if result.version != "":
+		_select_version(str(result.version))
+	_update_nav()
+
+
+func _clear_world() -> void:
+	_world_serial += 1
+	WorldImporter.cleanup(_world)
+	_world = {}
+	_world_info.text = "New world"
+	_world_info.tooltip_text = ""
+	_world_clear_button.visible = false
+	_update_nav()
+
+
+func _world_title() -> String:
+	return WorldImporter.display_name(_world)
+
+
+## Selects [param version] on the Version page if Paper offers it.
+func _select_version(version: String) -> void:
+	for i in _version_list.item_count:
+		if str(_version_list.get_item_metadata(i)) == version:
+			_version_list.select(i)
+			_version_list.ensure_current_is_visible()
+			_on_version_selected(i)
+			return
+
+
+## Why the chosen starting world can't run on the selected version, or "".
+func _world_problem() -> String:
+	if not _world.get("ok", false):
+		return ""
+	var version := _selected_version()
+	if version == "" or str(_world.version) == "":
+		return ""
+	if Fmt.compare_versions(str(_world.version), version) > 0:
+		return "The starting world was saved in Minecraft %s; pick %s or newer." % [_world.version, _world.version]
+	if _world.layout == WorldImporter.Layout.DIMENSIONS and Fmt.compare_versions(version, "26.1") < 0:
+		return "The starting world uses the Minecraft 26+ format; pick a 26.x version."
+	return ""
+
+
+## Imports the starting world (if any) into a freshly created server. Returns false if it failed.
+func _import_world_into(inst: ServerInstance) -> bool:
+	if not _world.get("ok", false):
+		return true
+	_install_status.text = "Importing the world…"
+	var result: Dictionary = await WorldImporter.import_into(inst, _world, WorldImporter.Mode.REPLACE, true,
+			func(text: String) -> void: _install_status.text = text)
+	WorldImporter.cleanup(_world)
+	_world = {}
+	if not result.ok:
+		_install_error.text = "The server was created, but importing the world failed: %s" % result.error
+		_install_error.visible = true
+		return false
+	return true

@@ -157,7 +157,8 @@ func _wake(reason: String) -> void:
 	if _server == null:
 		return
 	instance.log_system("Waking up: %s." % reason)
-	Notifier.info("%s: %s — starting." % [instance.config.display_name, reason])
+	Notifier.info("%s — starting %s." % [reason.substr(0, 1).to_upper() + reason.substr(1), instance.config.display_name],
+			Notifier.Category.WAKE, instance.config.display_name)
 	wake_requested.emit(reason)
 	# Defer so the disconnect message is flushed before the port is released.
 	_start_server.call_deferred()

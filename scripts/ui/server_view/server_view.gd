@@ -7,6 +7,7 @@ signal update_requested(instance: ServerInstance)
 signal delete_requested(instance: ServerInstance)
 signal duplicate_requested(instance: ServerInstance)
 signal temp_decision_requested(instance: ServerInstance)
+signal import_world_requested(instance: ServerInstance)
 
 const TAB_ICONS: Array[Texture2D] = [
 	preload("res://assets/icons/activity.svg"),
@@ -17,6 +18,7 @@ const TAB_ICONS: Array[Texture2D] = [
 	preload("res://assets/icons/users.svg"),
 	preload("res://assets/icons/puzzle.svg"),
 	preload("res://assets/icons/archive.svg"),
+	preload("res://assets/icons/globe.svg"),
 ]
 
 var instance: ServerInstance
@@ -34,6 +36,7 @@ func _ready() -> void:
 	_header.delete_requested.connect(func() -> void: delete_requested.emit(instance))
 	_header.duplicate_requested.connect(func() -> void: duplicate_requested.emit(instance))
 	_header.temp_decision_requested.connect(func() -> void: temp_decision_requested.emit(instance))
+	_header.import_world_requested.connect(func() -> void: import_world_requested.emit(instance))
 
 
 func show_instance(inst: ServerInstance) -> void:

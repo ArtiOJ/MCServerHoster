@@ -1,0 +1,233 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/dialogs/import_world_dialog.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/archive.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/stop.svg" id="4"]
+
+[node name="ImportWorldDialog" type="ConfirmationDialog"]
+title = "Import world"
+size = Vector2i(640, 560)
+min_size = Vector2i(600, 480)
+ok_button_text = "Import"
+dialog_hide_on_ok = false
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 624.0
+offset_bottom = 504.0
+theme_override_constants/separation = 12
+
+[node name="Intro" type="Label" parent="VBox"]
+custom_minimum_size = Vector2(580, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Import a Java Edition world: a downloaded map (.zip), a singleplayer save folder, or another server's world. Nether and End are converted to the layout this server expects."
+autowrap_mode = 3
+
+[node name="SourceRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ChooseZipButton" type="Button" parent="VBox/SourceRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Pick a world or map archive (.zip). It may contain the world folder at any depth."
+text = "Choose .zip…"
+icon = ExtResource("2")
+
+[node name="ChooseFolderButton" type="Button" parent="VBox/SourceRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Pick a world folder (the one containing level.dat), e.g. from .minecraft/saves, or a folder that contains it."
+text = "Choose folder…"
+icon = ExtResource("3")
+
+[node name="SourceLabel" type="Label" parent="VBox/SourceRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text = "No world chosen"
+text_overrun_behavior = 3
+
+[node name="RunningNotice" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Row" type="HBoxContainer" parent="VBox/RunningNotice"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Label" type="Label" parent="VBox/RunningNotice/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "The server is running. Stop it before importing a world."
+autowrap_mode = 3
+
+[node name="StopButton" type="Button" parent="VBox/RunningNotice/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+text = "Stop server"
+icon = ExtResource("4")
+
+[node name="AnalysisCard" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/AnalysisCard"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WorldName" type="Label" parent="VBox/AnalysisCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "World"
+text_overrun_behavior = 3
+
+[node name="Grid" type="GridContainer" parent="VBox/AnalysisCard/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 20
+theme_override_constants/v_separation = 6
+columns = 2
+
+[node name="VersionKey" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Saved in"
+
+[node name="VersionValue" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+
+[node name="LayoutKey" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Format"
+
+[node name="LayoutValue" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="DimensionsKey" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Dimensions"
+
+[node name="DimensionsValue" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="SettingsKey" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Game mode"
+
+[node name="SettingsValue" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="SizeKey" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Size"
+
+[node name="SizeValue" type="Label" parent="VBox/AnalysisCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="Warnings" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="WarningsLabel" type="Label" parent="VBox/Warnings"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="Options" type="GridContainer" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="ModeLabel" type="Label" parent="VBox/Options"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Replace: the current world is backed up to this server's Backups, then deleted and replaced.
+Add: the world is added next to the current one and the server switches to it (the old world stays on disk)."
+text = "Import as"
+
+[node name="ModeOption" type="OptionButton" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Replace: the current world is backed up to this server's Backups, then deleted and replaced.
+Add: the world is added next to the current one and the server switches to it (the old world stays on disk)."
+selected = 0
+item_count = 2
+popup/item_0/text = "Replace current world"
+popup/item_0/id = 0
+popup/item_1/text = "Add as new world and switch to it"
+popup/item_1/id = 1
+
+[node name="ApplyLabel" type="Label" parent="VBox/Options"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Set the server's game mode, difficulty and hardcore setting to the ones saved in the map (useful for adventure maps)."
+text = "Use map settings"
+
+[node name="ApplyCheck" type="CheckButton" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Set the server's game mode, difficulty and hardcore setting to the ones saved in the map (useful for adventure maps)."
+
+[node name="Progress" type="ProgressBar" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+indeterminate = true
+
+[node name="StatusLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(580, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="ZipDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Choose a world archive"
+size = Vector2i(820, 520)
+ok_button_text = "Open"
+file_mode = 0
+access = 2
+filters = PackedStringArray("*.zip ; World archives", "*.mcworld ; Bedrock worlds (not supported)")
+use_native_dialog = true
+
+[node name="FolderDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Choose a world folder"
+size = Vector2i(820, 520)
+ok_button_text = "Select Current Folder"
+file_mode = 2
+access = 2
+use_native_dialog = true

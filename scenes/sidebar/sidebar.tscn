@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/dashboard.svg" id="3"]
 [ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="4"]
 [ext_resource type="Texture2D" path="res://assets/icons/settings.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/upload.svg" id="6"]
 
 [node name="Sidebar" type="PanelContainer"]
 custom_minimum_size = Vector2(264, 0)
@@ -88,6 +89,13 @@ theme_type_variation = &"AccentButton"
 tooltip_text = "Create a new Paper server (Ctrl+N)"
 text = "New Server"
 icon = ExtResource("4")
+
+[node name="ImportServerButton" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Add a server you already have (Paper, Spigot, vanilla…) from any folder"
+text = "Import Server"
+icon = ExtResource("6")
 
 [node name="SettingsButton" type="Button" parent="VBox"]
 unique_name_in_owner = true

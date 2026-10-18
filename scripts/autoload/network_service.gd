@@ -1,0 +1,420 @@
+extends Node
+## Internet-facing networking for all servers: UPnP port forwarding, the public IP
+## address, NAT/firewall diagnosis and an on-demand reachability test.
+##
+## UPnP talks to the router with blocking calls, so every router operation runs on a
+## worker thread, one at a time. Forwarding is reconciled declaratively: the wanted
+## set (servers with UPnP enabled that are running or asleep) is compared with the
+## active mappings and the difference is applied. The RCON port is never forwarded.
+## Third-party lookups (api.ipify.org, api.mcsrvstat.us) only happen when the user
+## asks for them (opening the Network tab, Refresh, Test from the internet).
+
+signal status_changed
+signal reachability_finished(server_id: String, result: Dictionary)
+
+enum UpnpState { UNKNOWN, DISCOVERING, AVAILABLE, UNAVAILABLE }
+
+## Router lease for a forward; renewed well before it expires.
+const LEASE_SEC := 86400
+const USER_AGENT := "GodotServerManager/0.1 (local Minecraft server manager)"
+const IPIFY_URL := "https://api.ipify.org?format=json"
+const MCSRVSTAT_URL := "https://api.mcsrvstat.us/3/%s:%d"
+## Minimum time between automatic retries of a failed router discovery.
+const REDISCOVER_MS := 60000
+
+var upnp_state: UpnpState = UpnpState.UNKNOWN
+var upnp_error := ""
+## The router's own internet address as reported over UPnP ("" if unknown).
+var upnp_external_ip := ""
+var public_ip := ""
+## Where [member public_ip] came from: "router (UPnP)" or "api.ipify.org".
+var public_ip_source := ""
+var public_ip_error := ""
+var looking_up_public_ip := false
+## Set by the app right before "Quit, leave servers running" so forwards of running servers survive.
+var keep_mappings_on_exit := false
+## Active forwards: port -> {"server_id": String, "desc": String}
+var mappings := {}
+## Last forwarding problem per server id.
+var mapping_errors := {}
+
+var _backend := UpnpBackend.new()
+var _desired := {}
+var _failed_ports := {}
+var _renew_ports := {}
+var _working := false
+var _last_discover_msec := -REDISCOVER_MS
+var _firewall := {}
+
+@onready var _renew_timer: Timer = %RenewTimer
+
+
+func _ready() -> void:
+	_renew_timer.timeout.connect(_renew)
+	ServerManager.server_added.connect(_watch_instance)
+	ServerManager.server_removed.connect(func(_id: String) -> void: sync())
+	ServerManager.server_state_changed.connect(func(_i: ServerInstance) -> void: sync())
+	for inst in ServerManager.get_instances():
+		_watch_instance(inst)
+	sync.call_deferred()
+
+
+func _exit_tree() -> void:
+	# Remove forwards on exit, except for servers deliberately left running. Skipped while a
+	# worker thread is using the router (it would race); leases expire on their own.
+	if _working or upnp_state != UpnpState.AVAILABLE:
+		return
+	for port in mappings.keys():
+		var inst := ServerManager.get_instance(str(mappings[port].server_id))
+		if keep_mappings_on_exit and inst != null and inst.is_process_alive():
+			continue
+		_backend.delete_mapping(port)
+
+
+## Replaces the router backend (tests use a mock).
+func set_backend(backend: UpnpBackend) -> void:
+	_backend = backend
+	upnp_state = UpnpState.UNKNOWN
+	upnp_external_ip = ""
+	mappings.clear()
+	mapping_errors.clear()
+	_failed_ports.clear()
+	_last_discover_msec = -REDISCOVER_MS
+
+
+# --- Forwarding ---------------------------------------------------------------
+
+## A server's port should be forwarded while it is reachable: running, or asleep with
+## start-on-connect listening for players.
+static func mapping_wanted(enabled: bool, alive: bool, asleep: bool) -> bool:
+	return enabled and (alive or asleep)
+
+
+## port -> {"server_id", "desc"} for every server that should be forwarded right now.
+func desired_mappings() -> Dictionary:
+	var out := {}
+	for inst in ServerManager.get_instances():
+		if mapping_wanted(inst.config.upnp_enabled, inst.is_process_alive(), inst.is_asleep()):
+			out[inst.config.port] = {"server_id": inst.config.id, "desc": "Server Manager: " + inst.config.display_name}
+	return out
+
+
+## Re-evaluates forwarding. Discovers the router the first time it is needed.
+func sync() -> void:
+	apply_desired(desired_mappings())
+
+
+## Reconciles active forwards with [param desired] (port -> {server_id, desc}).
+func apply_desired(desired: Dictionary) -> void:
+	_desired = desired
+	if _desired.is_empty() and mappings.is_empty():
+		return
+	if upnp_state == UpnpState.UNKNOWN:
+		discover()
+		return
+	if upnp_state == UpnpState.AVAILABLE:
+		_work()
+
+
+## Looks for the router (on a worker thread). Safe to call repeatedly.
+func discover() -> void:
+	if upnp_state == UpnpState.DISCOVERING or _working:
+		return
+	upnp_state = UpnpState.DISCOVERING
+	_last_discover_msec = Time.get_ticks_msec()
+	status_changed.emit()
+	var backend := _backend
+	var result: Dictionary = await FileOps.run_async(self, func() -> Dictionary: return backend.discover())
+	if result.ok:
+		upnp_state = UpnpState.AVAILABLE
+		upnp_error = ""
+		upnp_external_ip = str(result.external_ip)
+		_renew_timer.start(LEASE_SEC / 4.0)
+		if classify_ip(upnp_external_ip) == "public" and (public_ip == "" or public_ip_source == "router (UPnP)"):
+			public_ip = upnp_external_ip
+			public_ip_source = "router (UPnP)"
+	else:
+		upnp_state = UpnpState.UNAVAILABLE
+		upnp_error = str(result.error)
+	status_changed.emit()
+	if upnp_state == UpnpState.AVAILABLE:
+		_work()
+
+
+## Called when the Network tab is shown: discover if never tried, or retry a failed attempt.
+func ensure_discovered() -> void:
+	if upnp_state == UpnpState.UNKNOWN or (upnp_state == UpnpState.UNAVAILABLE and Time.get_ticks_msec() - _last_discover_msec > REDISCOVER_MS):
+		discover()
+
+
+## Forgets failed forwards for [param server_id] so the next sync tries again.
+func retry(server_id: String) -> void:
+	mapping_errors.erase(server_id)
+	for port in _failed_ports.keys():
+		if _failed_ports[port] == server_id:
+			_failed_ports.erase(port)
+	if upnp_state == UpnpState.UNAVAILABLE:
+		upnp_state = UpnpState.UNKNOWN
+	sync()
+
+
+func is_forwarded(server_id: String) -> bool:
+	for port in mappings:
+		if mappings[port].server_id == server_id:
+			return true
+	return false
+
+
+## Next router operation needed to match the wanted state, or {}.
+func _next_action() -> Dictionary:
+	for port in mappings:
+		if not _desired.has(port) or _desired[port].desc != mappings[port].desc:
+			return {"op": "delete", "port": port}
+	for port in _desired:
+		if _failed_ports.has(port):
+			continue
+		if not mappings.has(port) or _renew_ports.has(port):
+			return {"op": "add", "port": port, "desc": _desired[port].desc, "server_id": _desired[port].server_id}
+	return {}
+
+
+func _work() -> void:
+	if _working:
+		return
+	_working = true
+	while upnp_state == UpnpState.AVAILABLE:
+		var action := _next_action()
+		if action.is_empty():
+			break
+		var backend := _backend
+		var port: int = action.port
+		if action.op == "add":
+			var desc: String = action.desc
+			var code: int = await FileOps.run_async(self, func() -> int: return backend.add_mapping(port, desc, LEASE_SEC))
+			_renew_ports.erase(port)
+			if code == UPNP.UPNP_RESULT_SUCCESS:
+				mappings[port] = {"server_id": action.server_id, "desc": desc}
+				mapping_errors.erase(action.server_id)
+			else:
+				_failed_ports[port] = action.server_id
+				mapping_errors[action.server_id] = "The router did not forward port %d: %s." % [port, UpnpBackend.result_text(code)]
+		else:
+			await FileOps.run_async(self, func() -> int: return backend.delete_mapping(port))
+			mappings.erase(port)
+		status_changed.emit()
+	_working = false
+
+
+func _renew() -> void:
+	for port in mappings:
+		_renew_ports[port] = true
+	_failed_ports.clear()
+	sync()
+
+
+func _watch_instance(inst: ServerInstance) -> void:
+	inst.config_changed.connect(sync)
+
+
+# --- Public address ---------------------------------------------------------------
+
+## Looks up the public IP (router first, then api.ipify.org). Only call on user request.
+func refresh_public_ip() -> void:
+	if looking_up_public_ip:
+		return
+	if classify_ip(upnp_external_ip) == "public":
+		public_ip = upnp_external_ip
+		public_ip_source = "router (UPnP)"
+		public_ip_error = ""
+		status_changed.emit()
+		return
+	looking_up_public_ip = true
+	status_changed.emit()
+	var res := await _get_json(IPIFY_URL)
+	looking_up_public_ip = false
+	if res.ok and res.data is Dictionary and str(res.data.get("ip", "")) != "":
+		public_ip = str(res.data.ip)
+		public_ip_source = "api.ipify.org"
+		public_ip_error = ""
+	else:
+		public_ip_error = str(res.get("error", "Unexpected answer from api.ipify.org."))
+	status_changed.emit()
+
+
+## "ip:port" as players outside your network would type it ("" if the public IP is unknown).
+func public_address(port: int) -> String:
+	if public_ip == "":
+		return ""
+	return public_ip if port == 25565 else "%s:%d" % [public_ip, port]
+
+
+## Classifies an IPv4 address: "public", "private", "cgnat", "loopback", "link-local", "ipv6" or "invalid".
+static func classify_ip(ip: String) -> String:
+	ip = ip.strip_edges()
+	if ip.contains(":"):
+		return "ipv6"
+	var parts := ip.split(".")
+	if parts.size() != 4:
+		return "invalid"
+	var o: Array[int] = []
+	for p in parts:
+		if not p.is_valid_int() or p.to_int() < 0 or p.to_int() > 255:
+			return "invalid"
+		o.append(p.to_int())
+	if o[0] == 10 or (o[0] == 172 and o[1] >= 16 and o[1] <= 31) or (o[0] == 192 and o[1] == 168):
+		return "private"
+	if o[0] == 100 and o[1] >= 64 and o[1] <= 127:
+		return "cgnat"
+	if o[0] == 127:
+		return "loopback"
+	if o[0] == 169 and o[1] == 254:
+		return "link-local"
+	if o[0] == 0 or o[0] >= 224:
+		return "invalid"
+	return "public"
+
+
+# --- Diagnosis ---------------------------------------------------------------------
+
+## {"kind": "ok" | "cgnat" | "double_nat" | "unknown", "text": String}
+func nat_diagnosis() -> Dictionary:
+	return diagnose_nat(upnp_state == UpnpState.AVAILABLE, upnp_external_ip, public_ip)
+
+
+## Pure NAT diagnosis (unit-tested).
+static func diagnose_nat(upnp_available: bool, router_ip: String, observed_public_ip: String) -> Dictionary:
+	if upnp_available and router_ip != "":
+		match classify_ip(router_ip):
+			"cgnat":
+				return {"kind": "cgnat", "text": "Your router's internet address (%s) is a carrier-grade NAT address: your provider shares one public IP between many customers. Port forwarding on your router cannot make the server reachable. Ask your ISP for a public IPv4 address, or use a tunnel/proxy service." % router_ip}
+			"private":
+				return {"kind": "double_nat", "text": "Your router's internet address (%s) is private, so another router or modem sits in front of it (double NAT). Forward the port on that outer device too, or switch it to bridge mode." % router_ip}
+		if observed_public_ip != "" and observed_public_ip != router_ip:
+			return {"kind": "double_nat", "text": "Your router reports %s, but the internet sees you as %s. Something in between (a second router or your provider's CGNAT) also translates addresses, so forwarding on your router alone may not be enough." % [router_ip, observed_public_ip]}
+		return {"kind": "ok", "text": "Your router has a public internet address (%s). Forwarding the port on it is enough." % router_ip}
+	return {"kind": "unknown", "text": "Your router does not offer UPnP, so NAT can't be checked automatically. Forward the port manually, then use “Test from the internet”."}
+
+
+## {"name": "ufw" | "firewalld" | "", "active": bool, "command": String}
+func firewall_info(port: int) -> Dictionary:
+	if _firewall.is_empty():
+		_firewall = _detect_firewall()
+	var info := _firewall.duplicate()
+	info.command = firewall_command(info.name, port)
+	return info
+
+
+static func firewall_command(name: String, port: int) -> String:
+	match name:
+		"ufw":
+			return "sudo ufw allow %d/tcp comment 'Minecraft server'" % port
+		"firewalld":
+			return "sudo firewall-cmd --permanent --add-port=%d/tcp && sudo firewall-cmd --reload" % port
+	return ""
+
+
+func _detect_firewall() -> Dictionary:
+	if OS.get_name() != "Linux":
+		return {"name": "", "active": false}
+	var out: Array = []
+	if PlatformBackend.find_in_path("firewall-cmd") != "":
+		OS.execute("firewall-cmd", ["--state"], out, true)
+		if not out.is_empty() and str(out[0]).strip_edges() == "running":
+			return {"name": "firewalld", "active": true}
+	out.clear()
+	if PlatformBackend.find_in_path("systemctl") != "":
+		OS.execute("systemctl", ["is-active", "ufw"], out)
+		if not out.is_empty() and str(out[0]).strip_edges() == "active":
+			return {"name": "ufw", "active": true}
+	return {"name": "", "active": false}
+
+
+# --- Reachability ------------------------------------------------------------------
+
+## Asks api.mcsrvstat.us whether the server answers from the internet. On demand only.
+func test_reachability(inst: ServerInstance) -> Dictionary:
+	if public_ip == "":
+		await refresh_public_ip()
+	var result: Dictionary
+	if public_ip == "":
+		result = {"ok": false, "online": false, "error": "Your public IP address could not be determined (%s)." % public_ip_error}
+	else:
+		var res := await _get_json(MCSRVSTAT_URL % [public_ip, inst.config.port])
+		if res.ok and res.data is Dictionary:
+			result = parse_mcsrvstat(res.data)
+			result.ok = true
+		else:
+			result = {"ok": false, "online": false, "error": str(res.get("error", "Unexpected answer from api.mcsrvstat.us."))}
+	reachability_finished.emit(inst.config.id, result)
+	return result
+
+
+## Normalises an api.mcsrvstat.us v3 answer:
+## {online, version, motd, players_online, players_max, error, cache_hit}.
+static func parse_mcsrvstat(data: Dictionary) -> Dictionary:
+	var debug: Dictionary = data.get("debug", {}) if data.get("debug") is Dictionary else {}
+	var errors := PackedStringArray()
+	var err_value = debug.get("error", {})
+	if err_value is Dictionary:
+		for key in err_value:
+			errors.append(str(err_value[key]))
+	elif err_value is String and err_value != "":
+		errors.append(err_value)
+	var motd := ""
+	var motd_value = data.get("motd", {})
+	if motd_value is Dictionary and motd_value.get("clean") is Array:
+		motd = " ".join(PackedStringArray(motd_value.clean)).strip_edges()
+	var players: Dictionary = data.get("players", {}) if data.get("players") is Dictionary else {}
+	return {
+		"online": bool(data.get("online", false)),
+		"version": str(data.get("version", "")),
+		"motd": motd,
+		"players_online": int(players.get("online", 0)),
+		"players_max": int(players.get("max", 0)),
+		"error": "; ".join(errors),
+		"cache_hit": bool(debug.get("cachehit", false)),
+	}
+
+
+## Likely reasons a reachability test failed, most specific first.
+func explain_failure(inst: ServerInstance, result: Dictionary) -> PackedStringArray:
+	var reasons := PackedStringArray()
+	if not inst.is_process_alive() and not inst.is_asleep():
+		reasons.append("The server is stopped and “Start on connect” is off, so nothing answers on port %d. Start it (or enable Start on connect) and test again." % inst.config.port)
+		return reasons
+	var nat := nat_diagnosis()
+	if nat.kind == "cgnat" or nat.kind == "double_nat":
+		reasons.append(nat.text)
+	if inst.config.upnp_enabled:
+		if upnp_state != UpnpState.AVAILABLE:
+			reasons.append("UPnP forwarding is on, but no UPnP router was found (%s). Forward TCP port %d to %s manually in your router." % [upnp_error, inst.config.port, ServerInstance._lan_ip()])
+		elif mapping_errors.has(inst.config.id):
+			reasons.append(mapping_errors[inst.config.id])
+	else:
+		reasons.append("Make sure your router forwards TCP port %d to this computer (%s), or turn on UPnP forwarding above." % [inst.config.port, ServerInstance._lan_ip()])
+	var fw := firewall_info(inst.config.port)
+	if fw.active:
+		reasons.append("%s is active on this computer and may block the port. Allow it with: %s" % [fw.name, fw.command])
+	if str(result.get("error", "")) != "":
+		reasons.append("mcsrvstat.us reported: %s" % result.error)
+	return reasons
+
+
+func _get_json(url: String) -> Dictionary:
+	var http := HTTPRequest.new()
+	http.timeout = 20
+	add_child(http)
+	var err := http.request(url, PackedStringArray(["User-Agent: " + USER_AGENT, "Accept: application/json"]))
+	if err != OK:
+		http.queue_free()
+		return {"ok": false, "error": "Request failed: %s" % error_string(err)}
+	var response: Array = await http.request_completed
+	http.queue_free()
+	if response[0] != HTTPRequest.RESULT_SUCCESS:
+		return {"ok": false, "error": "Network error (%d) — are you online?" % response[0]}
+	if response[1] != 200:
+		return {"ok": false, "error": "HTTP %d" % response[1]}
+	var data = JSON.parse_string((response[3] as PackedByteArray).get_string_from_utf8())
+	if data == null:
+		return {"ok": false, "error": "Invalid response"}
+	return {"ok": true, "data": data}

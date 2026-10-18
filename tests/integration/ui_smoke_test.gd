@@ -85,6 +85,9 @@ func _ready() -> void:
 
 	main.get_node("%AppSettingsDialog").open()
 	await _shot("30_settings")
+	var prefs_scroll := main.get_node("%AppSettingsDialog").find_child("Scroll", true, false) as ScrollContainer
+	prefs_scroll.scroll_vertical = 100000
+	await _shot("30b_prefs_bottom")
 	main.get_node("%AppSettingsDialog").hide()
 	main.get_node("%UpdateDialog").open(created2.instance)
 	await get_tree().create_timer(2.0).timeout
@@ -99,6 +102,12 @@ func _ready() -> void:
 	main.get_node("%DuplicateServerDialog").open(inst)
 	await _shot("34_duplicate")
 	main.get_node("%DuplicateServerDialog").hide()
+	main.get_node("%ImportServerDialog").open()
+	await _shot("35_import_server")
+	main.get_node("%ImportServerDialog").hide()
+	main.get_node("%ImportWorldDialog").open(created2.instance)
+	await _shot("36_import_world")
+	main.get_node("%ImportWorldDialog").hide()
 
 	inst.stop()
 	await _wait_for(func() -> bool: return not inst.is_process_alive(), 60.0)

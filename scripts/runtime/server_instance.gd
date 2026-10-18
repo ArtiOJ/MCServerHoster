@@ -43,6 +43,10 @@ var orphan_pid := -1
 
 ## Log lines replayed right after attaching must not count as new joins/stops.
 var _replay_until_msec := 0
+## Plain-language reason for the last failure seen in the console ("" if none).
+var _failure_hint := ""
+## Paper wrote a crash report or hit a fatal exception during this run.
+var _crash_detected := false
 var _stop_requested := false
 var _restart_after_stop := false
 var _crash_times: Array[int] = []
@@ -195,6 +199,8 @@ func start(temporary := false) -> Error:
 		wake_listener.update.call_deferred()
 		return err
 	_write_pid_file(process.pid)
+	_failure_hint = ""
+	_crash_detected = false
 	_stop_requested = false
 	start_time_msec = Time.get_ticks_msec()
 	startup_seconds = -1.0
@@ -507,6 +513,7 @@ func _on_line(text: String, is_stderr: bool) -> void:
 		if not players.has(joined):
 			players.append(joined)
 		players_changed.emit()
+		Notifier.info("%s joined (%d online)." % [joined, players.size()], Notifier.Category.PLAYERS, config.display_name)
 		scheduler.fire(EventRule.Trigger.PLAYER_JOINED)
 		return
 	var left := LogParser.left_player(plain)
@@ -515,19 +522,25 @@ func _on_line(text: String, is_stderr: bool) -> void:
 		if idx >= 0:
 			players.remove_at(idx)
 		players_changed.emit()
+		Notifier.info("%s left (%d online)." % [left, players.size()], Notifier.Category.PLAYERS, config.display_name)
 		scheduler.fire(EventRule.Trigger.PLAYER_LEFT)
 		return
-	if LogParser.is_stopping(plain):
-		# Stopped from in-game or by a plugin: treat as an intentional shutdown.
+	if LogParser.is_crash_report(plain):
+		_crash_detected = true
+	var hint := LogParser.failure_hint(plain, config.port)
+	if hint != "":
+		_failure_hint = hint
+	if LogParser.is_stopping(plain) and state == State.RUNNING:
+		# Stopped from in-game or by a plugin: treat as an intentional shutdown. (While still
+		# starting, "Stopping server" means the boot failed, which must not look like a stop.)
 		_stop_requested = true
-		if state == State.RUNNING:
-			_set_state(State.STOPPING)
+		_set_state(State.STOPPING)
 
 
 func _on_started() -> void:
 	_set_state(State.RUNNING)
 	log_system("Server is online (started in %.1f s). Connect with %s" % [startup_seconds, connect_address()])
-	Notifier.success("%s is online." % config.display_name)
+	Notifier.success("%s is online." % config.display_name, Notifier.Category.SERVER_STATE, config.display_name)
 	max_players = get_properties().get_int("max-players", max_players)
 	_connect_rcon()
 	_query_timer.start()
@@ -555,9 +568,11 @@ func _on_process_exited(code: int) -> void:
 	tps = -1.0
 	players_changed.emit()
 	stats_updated.emit()
-	if _stop_requested:
+	if _stop_requested and not _crash_detected:
 		log_system("Server stopped (exit code %d)." % code)
 		_set_state(State.STOPPED)
+		if not _restart_after_stop:
+			Notifier.info("%s stopped." % config.display_name, Notifier.Category.SERVER_STATE, config.display_name)
 		if _restart_after_stop:
 			_restart_after_stop = false
 			start(is_temporary())
@@ -566,9 +581,12 @@ func _on_process_exited(code: int) -> void:
 		if is_temporary():
 			temporary_run_ended.emit()
 		return
-	log_system("Server process exited unexpectedly (exit code %d)." % code, LogParser.Level.ERROR)
+	var failed_start := state == State.STARTING
+	var reason := _failure_hint if _failure_hint != "" else LogParser.exit_code_hint(code)
+	var what := "failed to start" if failed_start else "crashed"
+	log_system("Server %s (exit code %d).%s" % [what, code, (" " + reason) if reason != "" else ""], LogParser.Level.ERROR)
 	_set_state(State.CRASHED)
-	Notifier.error("%s crashed (exit code %d)." % [config.display_name, code])
+	Notifier.error("%s %s: %s" % [config.display_name, what, reason if reason != "" else "exit code %d" % code], Notifier.Category.CRASH, config.display_name)
 	_maybe_auto_restart()
 	scheduler.fire(EventRule.Trigger.SERVER_CRASHED)
 	if is_temporary() and _restart_delay.is_stopped():
@@ -583,7 +601,7 @@ func _maybe_auto_restart() -> void:
 	_crash_times.append(now)
 	if _crash_times.size() > config.max_restarts:
 		log_system("Crash loop detected (%d crashes in %s); automatic restart disabled until the next manual start." % [_crash_times.size(), Fmt.duration(config.restart_window_sec)], LogParser.Level.ERROR)
-		Notifier.error("%s keeps crashing; auto-restart paused." % config.display_name)
+		Notifier.error("%s keeps crashing; auto-restart paused." % config.display_name, Notifier.Category.CRASH, config.display_name)
 		_crash_times.clear()
 		return
 	var delay := RESTART_DELAYS[mini(_crash_times.size() - 1, RESTART_DELAYS.size() - 1)]
@@ -718,7 +736,7 @@ func attach_running(pid: int) -> Error:
 		max_players = get_properties().get_int("max-players", max_players)
 		_connect_rcon()
 		_query_timer.start()
-	Notifier.info("Re-attached to %s, which was still running." % config.display_name)
+	Notifier.info("Re-attached to %s, which was still running." % config.display_name, Notifier.Category.SERVER_STATE, config.display_name)
 	return OK
 
 

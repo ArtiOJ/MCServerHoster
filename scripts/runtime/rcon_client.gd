@@ -25,6 +25,10 @@ var _attempts := 0
 var _buffer := PackedByteArray()
 ## request id -> {"done": bool, "text": String}
 var _pending := {}
+## True while a command is waiting for its reply. Minecraft's RCON server expects each
+## TCP read to hold exactly one packet and drops the connection otherwise, so commands
+## are sent strictly one at a time.
+var _in_flight := false
 
 @onready var _retry_timer: Timer = %RetryTimer
 
@@ -66,8 +70,13 @@ func is_ready() -> bool:
 
 ## Runs a command and returns its textual response ("" on failure or timeout).
 func execute(command: String) -> String:
-	if not _authed:
+	# Wait for our turn: concurrent callers (status polling, events, the console) queue up.
+	var queue_deadline := Time.get_ticks_msec() + REQUEST_TIMEOUT_MS * 4
+	while _in_flight and _authed and Time.get_ticks_msec() < queue_deadline:
+		await get_tree().process_frame
+	if not _authed or _in_flight:
 		return ""
+	_in_flight = true
 	var id := _send(TYPE_COMMAND, command)
 	var entry := {"done": false, "text": ""}
 	_pending[id] = entry
@@ -75,6 +84,7 @@ func execute(command: String) -> String:
 	while not entry.done and Time.get_ticks_msec() < deadline:
 		await get_tree().process_frame
 	_pending.erase(id)
+	_in_flight = false
 	return entry.text
 
 

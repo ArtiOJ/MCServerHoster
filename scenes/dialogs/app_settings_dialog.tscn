@@ -240,6 +240,183 @@ size_flags_vertical = 4
 tooltip_text = "Copies a command that writes /etc/systemd/logind.conf.d/50-server-manager.conf with InhibitDelayMaxSec=120."
 text = "Copy command"
 
+[node name="NotifySeparator" type="HSeparator" parent="Scroll/VBox"]
+layout_mode = 2
+
+[node name="NotifyTitle" type="Label" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Notifications"
+
+[node name="NotifyGrid" type="GridContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="DesktopLabel" type="Label" parent="Scroll/VBox/NotifyGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Show notifications on the desktop (through your desktop's notification service), not only inside the app."
+text = "Desktop notifications"
+
+[node name="DesktopNotifyCheck" type="CheckButton" parent="Scroll/VBox/NotifyGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Show notifications on the desktop (through your desktop's notification service), not only inside the app."
+
+[node name="NotifyWhenLabel" type="Label" parent="Scroll/VBox/NotifyGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "When desktop notifications appear. The in-app messages are always shown."
+text = "Show"
+
+[node name="NotifyWhenOption" type="OptionButton" parent="Scroll/VBox/NotifyGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "When desktop notifications appear. The in-app messages are always shown."
+selected = 1
+item_count = 3
+popup/item_0/text = "Always"
+popup/item_0/id = 0
+popup/item_1/text = "When the window isn't focused"
+popup/item_1/id = 1
+popup/item_2/text = "Never"
+popup/item_2/id = 2
+
+[node name="NotifyCategories" type="GridContainer" parent="Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+columns = 4
+
+[node name="CrashLabel" type="Label" parent="Scroll/VBox/NotifyCategories"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "A server crashed, or keeps crashing and auto-restart was paused. Shown as an urgent notification."
+text = "Crashes"
+
+[node name="NotifyCrashCheck" type="CheckButton" parent="Scroll/VBox/NotifyCategories"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "A server crashed, or keeps crashing and auto-restart was paused. Shown as an urgent notification."
+
+[node name="StateLabel" type="Label" parent="Scroll/VBox/NotifyCategories"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "A server came online, stopped, or was re-attached after Server Manager restarted."
+text = "Server started/stopped"
+
+[node name="NotifyStateCheck" type="CheckButton" parent="Scroll/VBox/NotifyCategories"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "A server came online, stopped, or was re-attached after Server Manager restarted."
+
+[node name="PlayersLabel" type="Label" parent="Scroll/VBox/NotifyCategories"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Someone joined or left. Also controls the in-app toasts for joins and leaves."
+text = "Players joining/leaving"
+
+[node name="NotifyPlayersCheck" type="CheckButton" parent="Scroll/VBox/NotifyCategories"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Someone joined or left. Also controls the in-app toasts for joins and leaves."
+
+[node name="WakeLabel" type="Label" parent="Scroll/VBox/NotifyCategories"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "A player or server-list ping woke a sleeping server."
+text = "Start on connect"
+
+[node name="NotifyWakeCheck" type="CheckButton" parent="Scroll/VBox/NotifyCategories"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "A player or server-list ping woke a sleeping server."
+
+[node name="BackupLabel" type="Label" parent="Scroll/VBox/NotifyCategories"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Backups that finished. Failed backups are always shown."
+text = "Backups"
+
+[node name="NotifyBackupCheck" type="CheckButton" parent="Scroll/VBox/NotifyCategories"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Backups that finished. Failed backups are always shown."
+
+[node name="UpdateLabel" type="Label" parent="Scroll/VBox/NotifyCategories"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "A newer Paper build is available (once per build)."
+text = "Updates available"
+
+[node name="NotifyUpdateCheck" type="CheckButton" parent="Scroll/VBox/NotifyCategories"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "A newer Paper build is available (once per build)."
+
+[node name="PowerLabel" type="Label" parent="Scroll/VBox/NotifyCategories"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Servers restarted after the computer woke up, or did not finish stopping before sleep."
+text = "Sleep & shutdown"
+
+[node name="NotifyPowerCheck" type="CheckButton" parent="Scroll/VBox/NotifyCategories"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Servers restarted after the computer woke up, or did not finish stopping before sleep."
+
+[node name="EventLabel" type="Label" parent="Scroll/VBox/NotifyCategories"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Notifications sent by your own events (the “Notify me” action)."
+text = "Event “Notify me” actions"
+
+[node name="NotifyEventCheck" type="CheckButton" parent="Scroll/VBox/NotifyCategories"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Notifications sent by your own events (the “Notify me” action)."
+
+[node name="NotifyRow" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="NotifyStatus" type="Label" parent="Scroll/VBox/NotifyRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="TestNotifyButton" type="Button" parent="Scroll/VBox/NotifyRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Show a sample desktop notification now, regardless of the settings above."
+text = "Send test"
+
 [node name="Separator" type="HSeparator" parent="Scroll/VBox"]
 layout_mode = 2
 

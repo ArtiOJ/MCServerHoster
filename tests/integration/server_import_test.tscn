@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/integration/server_import_test.gd" id="1"]
+
+[node name="ServerImportTest" type="Node"]
+script = ExtResource("1")

@@ -4,6 +4,7 @@ extends MarginContainer
 
 signal server_open_requested(server_id: String)
 signal new_server_requested
+signal import_server_requested
 
 const CARD_SCENE := preload("res://scenes/dashboard/server_card.tscn")
 
@@ -22,6 +23,7 @@ var _cpu_text := "—"
 @onready var _cards: HFlowContainer = %Cards
 @onready var _empty: PanelContainer = %EmptyState
 @onready var _create_button: Button = %CreateButton
+@onready var _import_button: Button = %ImportButton
 @onready var _start_all: Button = %StartAllButton
 @onready var _stop_all: Button = %StopAllButton
 @onready var _host_timer: Timer = %HostTimer
@@ -29,6 +31,7 @@ var _cpu_text := "—"
 
 func _ready() -> void:
 	_create_button.pressed.connect(func() -> void: new_server_requested.emit())
+	_import_button.pressed.connect(func() -> void: import_server_requested.emit())
 	_start_all.pressed.connect(ServerManager.start_all)
 	_stop_all.pressed.connect(ServerManager.stop_all)
 	_host_timer.timeout.connect(_sample_host)

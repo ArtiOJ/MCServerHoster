@@ -13,6 +13,15 @@ const SLEEP_POLICY_NAMES: PackedStringArray = [
 	"Block sleep while any server runs", "Let it sleep (servers pause)",
 ]
 const AUTOSTART_FILE := "server-manager.desktop"
+## When desktop notifications are shown (see Notifier).
+enum NotifyWhen { ALWAYS, UNFOCUSED, NEVER }
+const NOTIFY_WHEN_NAMES: PackedStringArray = ["Always", "When the window isn't focused", "Never"]
+## Per-category desktop notification defaults (keys match Notifier.CATEGORY_KEYS).
+## Backup failures are always shown; this toggle controls the success messages.
+const DEFAULT_NOTIFY_CATEGORIES := {
+	"crash": true, "server_state": false, "players": false, "wake": true,
+	"backup": true, "update": true, "power": true, "event": true,
+}
 
 const DEFAULT_SETTINGS_PATH := "user://settings.json"
 
@@ -32,10 +41,21 @@ var restart_after_wake := true
 var start_at_login := false
 ## Start with the window minimized (always the case when launched at login).
 var start_minimized := false
+## Show notifications on the desktop (in addition to the in-app toasts).
+var desktop_notifications := true
+var notify_when: NotifyWhen = NotifyWhen.UNFOCUSED
+## Category key -> enabled, see [constant DEFAULT_NOTIFY_CATEGORIES].
+var notify_categories := DEFAULT_NOTIFY_CATEGORIES.duplicate()
+## Server id -> newest Paper build already announced, so each update is notified once.
+var notified_update_builds := {}
 ## Running in tests or with `-- --no-autostart` skips auto-starting servers.
 var autostart_enabled := true
 ## `-- --profile=<name>` keeps a separate settings file (used by integration tests).
 var settings_path := DEFAULT_SETTINGS_PATH
+## PID of another running Server Manager using the same settings profile, or -1.
+## Two instances would fight over the same servers, so the second one must not start.
+var other_instance_pid := -1
+var _owns_lock := false
 
 
 func _ready() -> void:
@@ -45,7 +65,32 @@ func _ready() -> void:
 	for arg in args:
 		if arg.begins_with("--profile="):
 			settings_path = "user://settings-%s.json" % Fmt.slugify(arg.get_slice("=", 1))
+	_acquire_instance_lock()
 	load_settings()
+
+
+func _exit_tree() -> void:
+	if _owns_lock:
+		DirAccess.remove_absolute(_lock_path())
+
+
+func _lock_path() -> String:
+	return settings_path.get_basename() + ".lock"
+
+
+func _acquire_instance_lock() -> void:
+	var path := _lock_path()
+	if FileAccess.file_exists(path):
+		var pid := FileAccess.get_file_as_string(path).strip_edges().to_int()
+		var backend := PlatformBackend.get_current()
+		if pid > 0 and pid != OS.get_process_id() and backend.is_pid_alive(pid) \
+				and backend.process_executable(pid) in ["", OS.get_executable_path()]:
+			other_instance_pid = pid
+			return
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(str(OS.get_process_id()))
+		_owns_lock = true
 
 
 func backups_root() -> String:
@@ -72,6 +117,16 @@ func load_settings() -> void:
 	restart_after_wake = bool(data.get("restart_after_wake", restart_after_wake))
 	start_at_login = bool(data.get("start_at_login", start_at_login))
 	start_minimized = bool(data.get("start_minimized", start_minimized))
+	desktop_notifications = bool(data.get("desktop_notifications", desktop_notifications))
+	notify_when = clampi(int(data.get("notify_when", notify_when)), 0, NotifyWhen.size() - 1) as NotifyWhen
+	notify_categories = DEFAULT_NOTIFY_CATEGORIES.duplicate()
+	var saved_categories = data.get("notify_categories", {})
+	if saved_categories is Dictionary:
+		for key in saved_categories:
+			if notify_categories.has(key):
+				notify_categories[key] = bool(saved_categories[key])
+	var saved_updates = data.get("notified_update_builds", {})
+	notified_update_builds = saved_updates if saved_updates is Dictionary else {}
 
 
 func save_settings() -> void:
@@ -89,6 +144,10 @@ func save_settings() -> void:
 		"restart_after_wake": restart_after_wake,
 		"start_at_login": start_at_login,
 		"start_minimized": start_minimized,
+		"desktop_notifications": desktop_notifications,
+		"notify_when": notify_when,
+		"notify_categories": notify_categories,
+		"notified_update_builds": notified_update_builds,
 	}
 	var f := FileAccess.open(settings_path, FileAccess.WRITE)
 	if f == null:

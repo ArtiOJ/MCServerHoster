@@ -85,6 +85,8 @@ const AIKAR_LARGE_HEAP := {
 @export var wake_on_ping := false
 ## MOTD shown in the server list while asleep ("" = default).
 @export var wake_motd := ""
+## Ask the router (UPnP) to forward the game port while the server is running or asleep.
+@export var upnp_enabled := false
 ## Automation rules (triggers → actions). Older configs' scheduled tasks are migrated into these.
 @export var events: Array[EventRule] = []
 
@@ -173,6 +175,7 @@ func to_dict() -> Dictionary:
 		"auto_start": auto_start, "auto_restart": auto_restart, "max_restarts": max_restarts,
 		"restart_window_sec": restart_window_sec, "stop_timeout_sec": stop_timeout_sec,
 		"wake_on_connect": wake_on_connect, "wake_on_ping": wake_on_ping, "wake_motd": wake_motd,
+		"upnp_enabled": upnp_enabled,
 		"events": event_dicts,
 		"backup_retention": backup_retention, "backup_full": backup_full,
 		"pending_gamerules": pending_gamerules, "known_gamerules": known_gamerules,
@@ -216,6 +219,7 @@ static func from_dict(d: Dictionary, dir: String) -> ServerConfig:
 	c.wake_on_connect = bool(d.get("wake_on_connect", false))
 	c.wake_on_ping = bool(d.get("wake_on_ping", false))
 	c.wake_motd = str(d.get("wake_motd", ""))
+	c.upnp_enabled = bool(d.get("upnp_enabled", false))
 	var rules: Array[EventRule] = []
 	if d.has("events"):
 		for e in d.events:

@@ -5,6 +5,9 @@
 [ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="3"]
 [ext_resource type="PackedScene" path="res://scenes/components/property_row.tscn" id="4"]
 [ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/archive.svg" id="world_zip"]
+[ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="world_folder"]
+[ext_resource type="Texture2D" path="res://assets/icons/close.svg" id="world_clear"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bg"]
 bg_color = Color(0.114, 0.133, 0.169, 1)
@@ -103,6 +106,49 @@ layout_mode = 2
 theme_type_variation = &"MutedLabel"
 text = "The next steps pick the Minecraft version and resources. The manager downloads the matching Paper build from PaperMC, verifies its checksum and prepares the server folder for you."
 autowrap_mode = 3
+
+[node name="WorldSeparator" type="HSeparator" parent="Margin/VBox/Pages/Basics"]
+layout_mode = 2
+
+[node name="WorldLabel" type="Label" parent="Margin/VBox/Pages/Basics"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Optional. Use a downloaded map, a singleplayer save or another server's world instead of generating a new one. The world's Minecraft version is preselected on the next page, and its game mode and difficulty are applied."
+text = "Start from an existing world"
+
+[node name="WorldRow" type="HBoxContainer" parent="Margin/VBox/Pages/Basics"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WorldZipButton" type="Button" parent="Margin/VBox/Pages/Basics/WorldRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Pick a world or map archive (.zip)."
+text = "Choose .zip…"
+icon = ExtResource("world_zip")
+
+[node name="WorldFolderButton" type="Button" parent="Margin/VBox/Pages/Basics/WorldRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Pick a world folder (the one containing level.dat), e.g. from .minecraft/saves."
+text = "Choose folder…"
+icon = ExtResource("world_folder")
+
+[node name="WorldInfo" type="Label" parent="Margin/VBox/Pages/Basics/WorldRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text = "New world"
+text_overrun_behavior = 3
+
+[node name="WorldClearButton" type="Button" parent="Margin/VBox/Pages/Basics/WorldRow"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Generate a new world instead"
+icon = ExtResource("world_clear")
+flat = true
 
 [node name="Version" type="VBoxContainer" parent="Margin/VBox/Pages"]
 visible = false
@@ -346,3 +392,22 @@ custom_minimum_size = Vector2(140, 36)
 layout_mode = 2
 theme_type_variation = &"AccentButton"
 text = "Next"
+
+[node name="WorldZipDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Choose a world archive"
+size = Vector2i(820, 520)
+ok_button_text = "Open"
+file_mode = 0
+access = 2
+filters = PackedStringArray("*.zip ; World archives")
+use_native_dialog = true
+
+[node name="WorldFolderDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Choose a world folder"
+size = Vector2i(820, 520)
+ok_button_text = "Select Current Folder"
+file_mode = 2
+access = 2
+use_native_dialog = true

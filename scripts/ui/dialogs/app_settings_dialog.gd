@@ -19,6 +19,17 @@ extends ConfirmationDialog
 @onready var _power_status: Label = %PowerStatus
 @onready var _limit_notice: PanelContainer = %LimitNotice
 @onready var _copy_limit_button: Button = %CopyLimitButton
+@onready var _desktop_notify_check: CheckButton = %DesktopNotifyCheck
+@onready var _notify_when_option: OptionButton = %NotifyWhenOption
+@onready var _notify_categories: GridContainer = %NotifyCategories
+@onready var _notify_status: Label = %NotifyStatus
+@onready var _test_notify_button: Button = %TestNotifyButton
+## Category key -> its switch in the Notifications section.
+@onready var _category_checks := {
+	"crash": %NotifyCrashCheck, "server_state": %NotifyStateCheck, "players": %NotifyPlayersCheck,
+	"wake": %NotifyWakeCheck, "backup": %NotifyBackupCheck, "update": %NotifyUpdateCheck,
+	"power": %NotifyPowerCheck, "event": %NotifyEventCheck,
+}
 @onready var _dir_dialog: FileDialog = %DirDialog
 @onready var _java_dialog: FileDialog = %JavaDialog
 
@@ -31,6 +42,11 @@ func _ready() -> void:
 	_add_java_button.pressed.connect(func() -> void: _java_dialog.popup_centered())
 	_java_dialog.file_selected.connect(_add_java)
 	JavaRuntimes.runtimes_changed.connect(_fill_java_list)
+	_desktop_notify_check.toggled.connect(func(_on: bool) -> void: _update_notify_controls())
+	_notify_when_option.item_selected.connect(func(_i: int) -> void: _update_notify_controls())
+	_test_notify_button.pressed.connect(func() -> void:
+		if not Notifier.send_test():
+			Notifier.warn("Could not show a desktop notification (notify-send is missing)."))
 	_copy_limit_button.pressed.connect(func() -> void:
 		DisplayServer.clipboard_set(PowerManager.RAISE_LIMIT_COMMAND)
 		Notifier.info("Command copied. Paste it into a terminal, then reboot."))
@@ -52,8 +68,29 @@ func open() -> void:
 	_wake_check.disabled = not PowerManager.supported
 	_power_status.text = PowerManager.status_text()
 	_limit_notice.visible = PowerManager.supported and PowerManager.max_delay_sec < 60.0
+	_desktop_notify_check.button_pressed = AppSettings.desktop_notifications
+	_notify_when_option.select(AppSettings.notify_when)
+	for key in _category_checks:
+		(_category_checks[key] as CheckButton).button_pressed = bool(AppSettings.notify_categories.get(key, true))
+	_update_notify_controls()
 	_fill_java_list()
 	popup_centered()
+
+
+func _update_notify_controls() -> void:
+	var available := Notifier.is_desktop_available()
+	var active := available and _desktop_notify_check.button_pressed and _notify_when_option.selected != AppSettings.NotifyWhen.NEVER
+	_desktop_notify_check.disabled = not available
+	_notify_when_option.disabled = not available or not _desktop_notify_check.button_pressed
+	for check: CheckButton in _category_checks.values():
+		check.disabled = not active
+	_test_notify_button.disabled = not available
+	if not available:
+		_notify_status.text = "Desktop notifications need notify-send (package libnotify). In-app messages still work."
+	elif not active:
+		_notify_status.text = "Desktop notifications are off; in-app messages still appear."
+	else:
+		_notify_status.text = "Failed backups and errors always notify. Player joins also control the in-app toasts."
 
 
 func _browse_root() -> void:
@@ -99,6 +136,10 @@ func _apply() -> void:
 	AppSettings.sleep_policy = clampi(_sleep_option.selected, 0, AppSettings.SleepPolicy.size() - 1) as AppSettings.SleepPolicy
 	AppSettings.restart_after_wake = _wake_check.button_pressed
 	AppSettings.start_minimized = _minimized_check.button_pressed
+	AppSettings.desktop_notifications = _desktop_notify_check.button_pressed
+	AppSettings.notify_when = clampi(_notify_when_option.selected, 0, AppSettings.NotifyWhen.size() - 1) as AppSettings.NotifyWhen
+	for key in _category_checks:
+		AppSettings.notify_categories[key] = (_category_checks[key] as CheckButton).button_pressed
 	if AppSettings.start_at_login != _login_check.button_pressed:
 		AppSettings.start_at_login = _login_check.button_pressed
 		var err := AppSettings.apply_autostart()

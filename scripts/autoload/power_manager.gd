@@ -134,6 +134,10 @@ func _before_sleep() -> void:
 			inst.log_system("The computer is going to sleep; stopping the server.")
 			inst.stop()
 	await _wait_until_stopped(max_delay_sec - 0.5)
+	if ServerManager.any_running():
+		# Shown after wake-up: the server finishes saving once the computer runs again.
+		Notifier.warn("A server was still stopping when the computer went to sleep (logind allows %s). Consider raising the limit in Preferences → Power." % Fmt.duration(int(max_delay_sec)),
+				Notifier.Category.POWER)
 	_release(_delay_lock)
 
 
@@ -144,11 +148,15 @@ func _after_wake() -> void:
 	_handling = false
 	update_locks()
 	if AppSettings.restart_after_wake:
+		var restarted := PackedStringArray()
 		for id in _stopped_for_sleep:
 			var inst := ServerManager.get_instance(id)
 			if inst != null and not inst.is_busy() and not inst.is_temporary():
 				inst.log_system("The computer woke up; starting the server again.")
 				inst.start()
+				restarted.append(inst.config.display_name)
+		if not restarted.is_empty():
+			Notifier.info("The computer woke up; restarting %s." % ", ".join(restarted), Notifier.Category.POWER)
 	_stopped_for_sleep.clear()
 	resumed.emit()
 	for inst in ServerManager.get_instances():

@@ -13,6 +13,8 @@
 [ext_resource type="Texture2D" path="res://assets/logo.svg" id="11"]
 [ext_resource type="PackedScene" path="res://scenes/dialogs/duplicate_server_dialog.tscn" id="12"]
 [ext_resource type="PackedScene" path="res://scenes/dialogs/temp_run_dialog.tscn" id="13"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/import_server_dialog.tscn" id="import_server"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/import_world_dialog.tscn" id="import_world"]
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -99,7 +101,15 @@ visible = false
 unique_name_in_owner = true
 visible = false
 
+[node name="ImportServerDialog" parent="." instance=ExtResource("import_server")]
+unique_name_in_owner = true
+visible = false
+
 [node name="TempRunDialog" parent="." instance=ExtResource("13")]
+unique_name_in_owner = true
+visible = false
+
+[node name="ImportWorldDialog" parent="." instance=ExtResource("import_world")]
 unique_name_in_owner = true
 visible = false
 

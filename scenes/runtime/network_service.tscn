@@ -1,0 +1,9 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/autoload/network_service.gd" id="1"]
+
+[node name="NetworkService" type="Node"]
+script = ExtResource("1")
+
+[node name="RenewTimer" type="Timer" parent="."]
+unique_name_in_owner = true

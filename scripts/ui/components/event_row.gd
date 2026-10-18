@@ -210,8 +210,16 @@ func _update_view() -> void:
 	_window_start.editable = rule.window_enabled
 	_window_end.editable = rule.window_enabled
 	var a := rule.action
-	_text_edit.visible = a == EventRule.Action.COMMAND or a == EventRule.Action.BROADCAST
-	_text_edit.placeholder_text = "command without /" if a == EventRule.Action.COMMAND else "message"
+	_text_edit.visible = a in [EventRule.Action.COMMAND, EventRule.Action.BROADCAST, EventRule.Action.NOTIFY]
+	match a:
+		EventRule.Action.COMMAND:
+			_text_edit.placeholder_text = "command without /"
+		EventRule.Action.NOTIFY:
+			_text_edit.placeholder_text = "notification text — {server} and {players} are filled in"
+		_:
+			_text_edit.placeholder_text = "message"
+	_text_edit.tooltip_text = "Shown as a notification (see Preferences → Notifications). {server} becomes the server name, {players} the number of players online." \
+		if a == EventRule.Action.NOTIFY else "Console command (without the leading /) or chat message. Only sent while the server is online."
 	_warn_check.visible = a == EventRule.Action.STOP or a == EventRule.Action.RESTART
 
 	_mark(_time_edit, t != EventRule.Trigger.TIME or _valid_time(rule.time_of_day))

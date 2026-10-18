@@ -1,0 +1,301 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/network_tab.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/globe.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/copy.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/activity.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/settings.svg" id="7"]
+
+[node name="Network" type="MarginContainer"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+script = ExtResource("1")
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="AddressesCard" type="PanelContainer" parent="Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/AddressesCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Scroll/Content/AddressesCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Scroll/Content/AddressesCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("2")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Scroll/Content/AddressesCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SectionHeader"
+text = "Addresses"
+
+[node name="RefreshButton" type="Button" parent="Scroll/Content/AddressesCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Look up your public address again. It comes from your router (UPnP) when possible, otherwise from api.ipify.org (a third-party service that sees your IP address)."
+text = "Refresh"
+icon = ExtResource("4")
+
+[node name="Grid" type="GridContainer" parent="Scroll/Content/AddressesCard/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 3
+
+[node name="LanKey" type="Label" parent="Scroll/Content/AddressesCard/VBox/Grid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Players on the same home network (Wi-Fi/LAN) connect with this address."
+theme_type_variation = &"MutedLabel"
+text = "On this network"
+
+[node name="LanValue" type="Label" parent="Scroll/Content/AddressesCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+
+[node name="CopyLanButton" type="Button" parent="Scroll/Content/AddressesCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Copy"
+icon = ExtResource("3")
+
+[node name="PublicKey" type="Label" parent="Scroll/Content/AddressesCard/VBox/Grid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Players outside your home network connect with this address, once the port is forwarded on your router."
+theme_type_variation = &"MutedLabel"
+text = "From the internet"
+
+[node name="PublicValue" type="Label" parent="Scroll/Content/AddressesCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+
+[node name="CopyPublicButton" type="Button" parent="Scroll/Content/AddressesCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Copy"
+icon = ExtResource("3")
+
+[node name="AddressHint" type="Label" parent="Scroll/Content/AddressesCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="AccessCard" type="PanelContainer" parent="Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/AccessCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Scroll/Content/AccessCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Scroll/Content/AccessCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("5")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Scroll/Content/AccessCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Internet access"
+
+[node name="UpnpRow" type="HBoxContainer" parent="Scroll/Content/AccessCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="UpnpLabel" type="Label" parent="Scroll/Content/AccessCard/VBox/UpnpRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Ask your router (via UPnP) to forward this server's game port to this computer while the server is running or asleep. The forward is removed when the server stops. The RCON port is never forwarded."
+text = "UPnP forwarding"
+
+[node name="RetryUpnpButton" type="Button" parent="Scroll/Content/AccessCard/VBox/UpnpRow"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Search for the router and try forwarding again."
+text = "Retry"
+icon = ExtResource("4")
+
+[node name="UpnpCheck" type="CheckButton" parent="Scroll/Content/AccessCard/VBox/UpnpRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Ask your router (via UPnP) to forward this server's game port to this computer while the server is running or asleep. The forward is removed when the server stops. The RCON port is never forwarded."
+
+[node name="UpnpStatus" type="Label" parent="Scroll/Content/AccessCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="Separator" type="HSeparator" parent="Scroll/Content/AccessCard/VBox"]
+layout_mode = 2
+
+[node name="TestRow" type="HBoxContainer" parent="Scroll/Content/AccessCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="TestButton" type="Button" parent="Scroll/Content/AccessCard/VBox/TestRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Ask api.mcsrvstat.us (a third-party service) to connect to your public address and port, exactly like a player outside your network would. Results are cached for about a minute."
+theme_type_variation = &"AccentButton"
+text = "Test from the internet"
+icon = ExtResource("6")
+
+[node name="TestStatus" type="Label" parent="Scroll/Content/AccessCard/VBox/TestRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="TestReasons" type="Label" parent="Scroll/Content/AccessCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="TestHint" type="Label" parent="Scroll/Content/AccessCard/VBox"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "The test is done by api.mcsrvstat.us (third party) and cached for about a minute. It works while the server is running or asleep."
+autowrap_mode = 3
+
+[node name="WakePingNotice" type="PanelContainer" parent="Scroll/Content/AccessCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Label" type="Label" parent="Scroll/Content/AccessCard/VBox/WakePingNotice"]
+layout_mode = 2
+text = "“Wake on server-list ping” is on: testing while the server is asleep will start it."
+autowrap_mode = 3
+
+[node name="DiagnosticsCard" type="PanelContainer" parent="Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/DiagnosticsCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="Scroll/Content/DiagnosticsCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Scroll/Content/DiagnosticsCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("7")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Scroll/Content/DiagnosticsCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Diagnostics"
+
+[node name="NatKey" type="Label" parent="Scroll/Content/DiagnosticsCard/VBox"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Whether your connection allows port forwarding at all. Carrier-grade NAT or a second router in front of yours blocks incoming connections."
+text = "NAT"
+
+[node name="NatLabel" type="Label" parent="Scroll/Content/DiagnosticsCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="FirewallKey" type="Label" parent="Scroll/Content/DiagnosticsCard/VBox"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "A firewall on this computer can block players even when the router forwards the port."
+text = "Firewall"
+
+[node name="FirewallLabel" type="Label" parent="Scroll/Content/DiagnosticsCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="FirewallRow" type="HBoxContainer" parent="Scroll/Content/DiagnosticsCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FirewallCommand" type="LineEdit" parent="Scroll/Content/DiagnosticsCard/VBox/FirewallRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Run this once in a terminal (it asks for your password)."
+theme_type_variation = &"ConsoleInput"
+editable = false
+
+[node name="CopyFirewallButton" type="Button" parent="Scroll/Content/DiagnosticsCard/VBox/FirewallRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Copy command"
+icon = ExtResource("3")
+
+[node name="SecurityCard" type="PanelContainer" parent="Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/SecurityCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Scroll/Content/SecurityCard/VBox"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Security"
+
+[node name="RconLabel" type="Label" parent="Scroll/Content/SecurityCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="RconWarning" type="PanelContainer" parent="Scroll/Content/SecurityCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="RconWarningLabel" type="Label" parent="Scroll/Content/SecurityCard/VBox/RconWarning"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
