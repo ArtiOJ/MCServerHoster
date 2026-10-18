@@ -3,7 +3,8 @@ extends Node
 
 signal changed
 
-enum ExitBehavior { ASK, STOP_ALL, MINIMIZE }
+## DETACH quits the app and leaves servers running; they are re-attached on next launch.
+enum ExitBehavior { ASK, STOP_ALL, MINIMIZE, DETACH }
 ## What happens when the computer tries to sleep while servers run (see PowerManager).
 enum SleepPolicy { BLOCK_WHILE_PLAYERS, STOP_AND_SLEEP, BLOCK_WHILE_RUNNING, PAUSE }
 

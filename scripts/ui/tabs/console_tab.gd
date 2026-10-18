@@ -68,11 +68,15 @@ func focus_input() -> void:
 
 
 func _update_input_state() -> void:
-	var alive := instance.is_process_alive()
+	var alive := instance.can_send_commands()
 	_command_edit.editable = alive
 	_send_button.disabled = not alive
 	_offline_hint.visible = not alive
-	_command_edit.placeholder_text = "Type a command — Tab completes, ↑/↓ browse history" if alive else "Server is not running"
+	if instance.is_read_only():
+		_offline_hint.text = "Re-attached without RCON: showing logs/latest.log read-only. Restart the server from here for full control."
+	else:
+		_offline_hint.text = "The server is offline. Start it to send commands."
+	_command_edit.placeholder_text = "Type a command — Tab completes, ↑/↓ browse history" if alive else ("Read-only" if instance.is_read_only() else "Server is not running")
 
 
 func _passes(entry: Dictionary) -> bool:

@@ -61,6 +61,21 @@ func host_memory_bytes() -> int:
 	return int(OS.get_memory_info().get("physical", 0))
 
 
+## True while [param pid] exists (works for processes that are not our children).
+func is_pid_alive(pid: int) -> bool:
+	return pid > 0 and OS.is_process_running(pid)
+
+
+## PID of a Java process whose working directory is [param dir], or -1.
+func find_java_in_dir(_dir: String) -> int:
+	return -1
+
+
+## Seconds since [param pid] started, or -1 when unknown.
+func process_age_seconds(_pid: int) -> int:
+	return -1
+
+
 ## Absolute path of the server's process working directory, or "" if unknown.
 func process_cwd(_pid: int) -> String:
 	return ""

@@ -122,6 +122,38 @@ func host_memory_bytes() -> int:
 	return total if total > 0 else super.host_memory_bytes()
 
 
+func is_pid_alive(pid: int) -> bool:
+	if pid <= 0 or not DirAccess.dir_exists_absolute("/proc/%d" % pid):
+		return false
+	var stat := PlatformBackend.read_text("/proc/%d/stat" % pid)
+	# A zombie has exited; it only waits for its parent to collect the exit code.
+	return stat != "" and stat.substr(stat.rfind(")") + 2, 1) != "Z"
+
+
+func find_java_in_dir(dir: String) -> int:
+	var target := dir.trim_suffix("/")
+	for entry in DirAccess.get_directories_at("/proc"):
+		if not entry.is_valid_int():
+			continue
+		var pid := entry.to_int()
+		if PlatformBackend.read_text("/proc/%d/comm" % pid).strip_edges() != "java":
+			continue
+		if process_cwd(pid) == target and is_pid_alive(pid):
+			return pid
+	return -1
+
+
+func process_age_seconds(pid: int) -> int:
+	var stat := PlatformBackend.read_text("/proc/%d/stat" % pid)
+	var uptime := PlatformBackend.read_text("/proc/uptime").get_slice(" ", 0).to_float()
+	if stat == "" or uptime <= 0.0:
+		return -1
+	var rest := stat.substr(stat.rfind(")") + 2).split(" ")
+	if rest.size() < 20:
+		return -1
+	return int(uptime - rest[19].to_int() / CLK_TCK)
+
+
 func process_cwd(pid: int) -> String:
 	var dir := DirAccess.open("/proc/%d" % pid)
 	if dir == null:

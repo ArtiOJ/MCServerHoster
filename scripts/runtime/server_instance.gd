@@ -41,6 +41,8 @@ var command_history := PackedStringArray()
 ## PID of a server left running by a previous session of the manager (-1 if none).
 var orphan_pid := -1
 
+## Log lines replayed right after attaching must not count as new joins/stops.
+var _replay_until_msec := 0
 var _stop_requested := false
 var _restart_after_stop := false
 var _crash_times: Array[int] = []
@@ -68,6 +70,10 @@ func _ready() -> void:
 	monitor.sampled.connect(func(_c: float, _r: int) -> void: stats_updated.emit())
 	rcon.authenticated.connect(_query_status)
 	rcon.authenticated.connect(refresh_gamerules)
+	# Re-attached servers can only take commands once RCON is up; let the UI know.
+	rcon.authenticated.connect(func() -> void:
+		if process.is_attached():
+			state_changed.emit(state))
 	_stop_timeout.timeout.connect(_on_stop_timeout)
 	_restart_delay.timeout.connect(_on_restart_delay_timeout)
 	_query_timer.wait_time = QUERY_INTERVAL_SEC
@@ -76,9 +82,9 @@ func _ready() -> void:
 	config_changed.connect(wake_listener.update)
 	wake_listener.update.call_deferred()
 	max_players = get_properties().get_int("max-players", 20)
-	orphan_pid = find_orphan_pid()
-	if orphan_pid > 0:
-		log_system("This server is still running from a previous session (PID %d) but is not attached to the manager. Use \"Stop leftover process\" before starting it again." % orphan_pid, LogParser.Level.WARN)
+	var running := find_running_pid()
+	if running > 0:
+		_attach_on_ready.call_deferred(running)
 
 
 # --- Queries -----------------------------------------------------------------
@@ -207,7 +213,9 @@ func stop() -> void:
 			_stop_requested = true
 			_set_state(State.STOPPING)
 			log_system("Stopping server…")
-			if not process.write_line("stop"):
+			if process.is_attached() and rcon.is_ready():
+				rcon.execute("stop")
+			elif not process.write_line("stop"):
 				process.terminate()
 			_stop_timeout.start(config.stop_timeout_sec)
 		State.CRASHED:
@@ -254,7 +262,30 @@ func send_command(command: String, echo := true) -> bool:
 		_stop_timeout.start(config.stop_timeout_sec)
 		if state == State.RUNNING or state == State.STARTING:
 			_set_state(State.STOPPING)
+	if process.is_attached():
+		if not rcon.is_ready():
+			log_system("Commands are unavailable: this re-attached server has no working RCON connection.", LogParser.Level.WARN)
+			return false
+		_send_via_rcon(bare)
+		return true
 	return process.write_line(bare)
+
+
+## True when commands can reach the server (stdin pipe, or RCON for re-attached servers).
+func can_send_commands() -> bool:
+	if not process.is_running():
+		return false
+	return rcon.is_ready() if process.is_attached() else true
+
+
+## Sends a command over RCON and shows its reply in the console (re-attached servers
+## have no stdin, and RCON replies are not written to the server log).
+func _send_via_rcon(command: String) -> void:
+	var reply := await rcon.execute(command)
+	for line in reply.split("\n", false):
+		var plain := Ansi.strip(line)
+		_append_console({"text": line, "plain": plain, "level": LogParser.Level.INFO})
+		backups.on_console_line(plain)
 
 
 func log_system(message: String, level := LogParser.Level.SYSTEM) -> void:
@@ -469,6 +500,8 @@ func _on_line(text: String, is_stderr: bool) -> void:
 			startup_seconds = secs
 			_on_started()
 			return
+	if Time.get_ticks_msec() < _replay_until_msec:
+		return  # Backlog from before we attached: show it, but don't act on it.
 	var joined := LogParser.joined_player(plain)
 	if joined != "":
 		if not players.has(joined):
@@ -496,11 +529,19 @@ func _on_started() -> void:
 	log_system("Server is online (started in %.1f s). Connect with %s" % [startup_seconds, connect_address()])
 	Notifier.success("%s is online." % config.display_name)
 	max_players = get_properties().get_int("max-players", max_players)
-	if config.rcon_port > 0 and config.rcon_password != "":
-		rcon.connect_to("127.0.0.1", config.rcon_port, config.rcon_password)
+	_connect_rcon()
 	_query_timer.start()
 	apply_pending_gamerules()
 	scheduler.fire(EventRule.Trigger.SERVER_ONLINE)
+
+
+## Connects RCON with the settings the running server actually loaded.
+func _connect_rcon() -> void:
+	var props := get_properties()
+	var port := props.get_int("rcon.port", config.rcon_port)
+	var password := props.get_value("rcon.password", config.rcon_password)
+	if props.get_bool("enable-rcon") and port > 0 and password != "":
+		rcon.connect_to("127.0.0.1", port, password)
 
 
 func _on_process_exited(code: int) -> void:
@@ -621,6 +662,64 @@ func stop_orphan() -> void:
 	_remove_pid_file()
 	log_system("Leftover server stopped.")
 	state_changed.emit(state)
+
+
+# --- Re-attaching ------------------------------------------------------------
+
+## PID of this server's process if it is already running (started by an earlier
+## session of the manager, or outside it), or -1.
+func find_running_pid() -> int:
+	var pid := find_orphan_pid()
+	if pid <= 0:
+		pid = PlatformBackend.get_current().find_java_in_dir(working_directory())
+	return pid
+
+
+## True for a re-attached server without RCON: the console is read-only.
+func is_read_only() -> bool:
+	return process.is_attached() and not rcon.is_ready()
+
+
+func _attach_on_ready(pid: int) -> void:
+	var err := attach_running(pid)
+	if err != OK:
+		orphan_pid = pid
+		log_system("This server is running (PID %d) but could not be re-attached: %s. Use \"Stop leftover process\" before starting it again." % [pid, error_string(err)], LogParser.Level.WARN)
+		state_changed.emit(state)
+
+
+## Takes control of an already-running server: output from logs/latest.log, commands
+## and stop through RCON, statistics from the PID.
+func attach_running(pid: int) -> Error:
+	if is_busy():
+		return ERR_ALREADY_IN_USE
+	var err := process.attach(pid, working_directory().path_join("logs/latest.log"))
+	if err != OK:
+		return err
+	orphan_pid = -1
+	wake_listener.close()
+	_write_pid_file(pid)
+	_stop_requested = false
+	_restart_after_stop = false
+	_replay_until_msec = Time.get_ticks_msec() + 1500
+	var age := PlatformBackend.get_current().process_age_seconds(pid)
+	start_time_msec = Time.get_ticks_msec() - maxi(age, 0) * 1000
+	startup_seconds = -1.0
+	tps = -1.0
+	players.clear()
+	monitor.track(pid)
+	scheduler.on_server_started()
+	log_system("Re-attached to the running server (PID %d, up %s). The console follows logs/latest.log; commands go through RCON." % [pid, Fmt.duration(maxi(age, 0))])
+	# Still booting if the game port is not open yet; the "Done" line will flip it to running.
+	if PlatformBackend.is_port_free(config.port):
+		_set_state(State.STARTING)
+	else:
+		_set_state(State.RUNNING)
+		max_players = get_properties().get_int("max-players", max_players)
+		_connect_rcon()
+		_query_timer.start()
+	Notifier.info("Re-attached to %s, which was still running." % config.display_name)
+	return OK
 
 
 ## PID of a server process left running by a previous session of the manager, or -1.

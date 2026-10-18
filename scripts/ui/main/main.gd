@@ -45,6 +45,7 @@ func _ready() -> void:
 	_temp_dialog.visibility_changed.connect(_show_next_temp_decision)
 	_quit_dialog.stop_and_quit_requested.connect(_stop_all_and_quit)
 	_quit_dialog.minimize_requested.connect(_minimize)
+	_quit_dialog.detach_requested.connect(_quit_leaving_servers)
 	ServerManager.server_removed.connect(func(id: String) -> void:
 		if id == _current_id:
 			show_dashboard())
@@ -162,6 +163,8 @@ func _on_close_requested() -> void:
 			_stop_all_and_quit()
 		AppSettings.ExitBehavior.MINIMIZE:
 			_minimize()
+		AppSettings.ExitBehavior.DETACH:
+			_quit_leaving_servers()
 		_:
 			_quit_dialog.open()
 
@@ -177,6 +180,15 @@ func _stop_all_and_quit() -> void:
 	_restore_window()
 	_quit_dialog.show_stopping()
 	await ServerManager.stop_all_and_wait()
+	get_tree().quit()
+
+
+## Quits without stopping servers; they are re-attached on the next launch.
+func _quit_leaving_servers() -> void:
+	_quitting = true
+	for inst in ServerManager.get_instances():
+		if inst.is_process_alive():
+			inst.log_system("Server Manager closed; the server keeps running and will be re-attached on next launch.")
 	get_tree().quit()
 
 

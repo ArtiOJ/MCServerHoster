@@ -4,7 +4,8 @@ extends RefCounted
 
 enum Level { INFO, WARN, ERROR, OTHER, COMMAND, SYSTEM }
 
-static var _re_level := RegEx.create_from_string("^\\[(\\d{2}:\\d{2}:\\d{2})(?: [\\w\\- /#]+?)? ?(INFO|WARN|ERROR|FATAL)\\]")
+# Matches the console format "[12:00:00 INFO]:" and the log-file format "[12:00:00] [Server thread/INFO]:".
+static var _re_level := RegEx.create_from_string("^\\[(\\d{2}:\\d{2}:\\d{2})(?:\\] \\[[^\\]]*/| [\\w\\- /#]+?)? ?(INFO|WARN|ERROR|FATAL)\\]")
 static var _re_done := RegEx.create_from_string("Done \\(([\\d.,]+)s\\)! For help")
 # Newer versions prefix broadcast messages with "System chat: ".
 static var _re_join := RegEx.create_from_string("\\]: (?:System chat: )?([A-Za-z0-9_.]{1,16}) joined the game")

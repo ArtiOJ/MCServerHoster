@@ -166,7 +166,7 @@ tooltip_text = "Start the servers that were stopped for sleep again when the com
 
 [node name="ExitLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
 layout_mode = 2
-tooltip_text = "What happens when you close the window while servers are running. Keep running minimizes the window (Linux has no tray icon support in Godot)."
+tooltip_text = "What happens when you close the window while servers are running. Keep running minimizes the window (Linux has no tray icon support in Godot). Quit, leave servers running closes the app; servers keep going and are re-attached the next time it opens (events, sleep handling and start-on-connect pause while it is closed)."
 text = "Closing the window"
 
 [node name="ExitOption" type="OptionButton" parent="Scroll/VBox/PowerGrid"]
@@ -174,13 +174,15 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 selected = 0
-item_count = 3
+item_count = 4
 popup/item_0/text = "Ask every time"
 popup/item_0/id = 0
 popup/item_1/text = "Stop all servers, then quit"
 popup/item_1/id = 1
 popup/item_2/text = "Keep running (minimize window)"
 popup/item_2/id = 2
+popup/item_3/text = "Quit, leave servers running"
+popup/item_3/id = 3
 
 [node name="LoginLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
 layout_mode = 2
