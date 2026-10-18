@@ -221,9 +221,15 @@ Each phase ends in a runnable app and passing headless tests.
 
 ---
 
-## 7. Open decisions (recommended defaults in **bold**)
+## 7. Decisions (accepted 2026-10-18)
 
-1. **Server lifetime on app exit:** **ask, defaulting to graceful stop-all; tray mode keeps them running** — vs. full detach/reattach from day one.
-2. **Platform:** **Linux-first behind a `PlatformBackend` abstraction** — vs. Linux + Windows from the start.
-3. **Servers root:** **`~/MinecraftServers` (changeable in settings)** — vs. hidden inside Godot's `user://`.
-4. **Version control:** **`git init` in Phase 0.**
+1. Server lifetime on app exit: ask (stop all gracefully / keep running in background); servers left over from a crashed session are detected via a PID file and can be stopped from the UI.
+2. Platform: Linux-first behind `PlatformBackend`.
+3. Servers root: `~/MinecraftServers`, changeable in Settings.
+4. Version control: git.
+
+## 8. Status
+
+Phases 0–7 implemented. Remaining stretch goals: full detach/reattach (console via log tail + RCON),
+Hangar/Modrinth plugin search, in-app YAML config editor, import of existing non-managed servers,
+Windows/macOS backends.

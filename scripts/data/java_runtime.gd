@@ -14,5 +14,10 @@ func display_name() -> String:
 	return "Java %d  (%s %s)" % [major, v, version]
 
 
+## Key that is equal for the same installation reached through different paths.
+func identity() -> String:
+	return "%s|%s|%s" % [major, version, vendor]
+
+
 func _to_string() -> String:
 	return "%s @ %s" % [display_name(), executable]

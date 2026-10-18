@@ -1,0 +1,105 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/properties_tab.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/undo.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/save.svg" id="4"]
+
+[node name="Properties" type="MarginContainer"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Toolbar" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SearchEdit" type="LineEdit" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+placeholder_text = "Search properties…"
+clear_button_enabled = true
+right_icon = ExtResource("2")
+
+[node name="RawToggle" type="CheckButton" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Edit server.properties as plain text"
+text = "Raw editor"
+
+[node name="Spacer" type="Control" parent="VBox/Toolbar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="StatusLabel" type="Label" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+
+[node name="RevertButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Discard unsaved changes"
+text = "Revert"
+icon = ExtResource("3")
+
+[node name="SaveButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = "Save"
+icon = ExtResource("4")
+
+[node name="RunningNotice" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Label" type="Label" parent="VBox/RunningNotice"]
+layout_mode = 2
+text = "The server is running. Changes to server.properties apply after a restart."
+autowrap_mode = 3
+
+[node name="ManagedNote" type="Label" parent="VBox"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "The server port and RCON settings are managed in the Resources tab and written automatically before every start."
+autowrap_mode = 3
+
+[node name="MissingNotice" type="Label" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "This server has not been started yet; the remaining properties are generated on its first start."
+autowrap_mode = 3
+
+[node name="FormScroll" type="ScrollContainer" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="FormList" type="VBoxContainer" parent="VBox/FormScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="RawEditor" type="CodeEdit" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+highlight_current_line = true
+gutters_draw_line_numbers = true

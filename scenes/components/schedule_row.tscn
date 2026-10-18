@@ -1,0 +1,91 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/components/schedule_row.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/trash.svg" id="2"]
+
+[node name="ScheduleRow" type="HBoxContainer"]
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+script = ExtResource("1")
+
+[node name="EnabledCheck" type="CheckBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Enabled"
+button_pressed = true
+
+[node name="KindOption" type="OptionButton" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(120, 0)
+layout_mode = 2
+selected = 0
+item_count = 3
+popup/item_0/text = "Restart"
+popup/item_0/id = 0
+popup/item_1/text = "Command"
+popup/item_1/id = 1
+popup/item_2/text = "Backup"
+popup/item_2/id = 2
+
+[node name="ModeOption" type="OptionButton" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+selected = 0
+item_count = 2
+popup/item_0/text = "Daily at"
+popup/item_0/id = 0
+popup/item_1/text = "Every"
+popup/item_1/id = 1
+
+[node name="TimeEdit" type="LineEdit" parent="."]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(76, 0)
+layout_mode = 2
+tooltip_text = "Local time of day (24-hour HH:MM)"
+placeholder_text = "04:00"
+max_length = 5
+
+[node name="IntervalSpin" type="SpinBox" parent="."]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+min_value = 5.0
+max_value = 10080.0
+step = 5.0
+value = 360.0
+rounded = true
+suffix = "min"
+update_on_text_changed = true
+
+[node name="CommandEdit" type="LineEdit" parent="."]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"ConsoleInput"
+placeholder_text = "command, e.g. say Remember to vote!"
+
+[node name="WarnCheck" type="CheckBox" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Broadcast a countdown in chat before restarting"
+button_pressed = true
+text = "Warn players"
+
+[node name="NextLabel" type="Label" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+horizontal_alignment = 2
+text_overrun_behavior = 3
+
+[node name="DeleteButton" type="Button" parent="."]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Remove task"
+theme_type_variation = &"DangerButton"
+icon = ExtResource("2")

@@ -1,0 +1,272 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/automation_tab.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/activity.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/clock.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/archive.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/restart.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/terminal.svg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/icons/undo.svg" id="8"]
+[ext_resource type="Texture2D" path="res://assets/icons/save.svg" id="9"]
+
+[node name="Automation" type="MarginContainer"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Scroll" type="ScrollContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="RecoveryCard" type="PanelContainer" parent="VBox/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/RecoveryCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/RecoveryCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/RecoveryCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("2")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/Scroll/Content/RecoveryCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Startup & recovery"
+
+[node name="AutoStartCheck" type="CheckButton" parent="VBox/Scroll/Content/RecoveryCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Start this server when Server Manager opens"
+
+[node name="AutoRestartCheck" type="CheckButton" parent="VBox/Scroll/Content/RecoveryCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Restart automatically after a crash"
+
+[node name="Grid" type="GridContainer" parent="VBox/Scroll/Content/RecoveryCard/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="MaxRestartsLabel" type="Label" parent="VBox/Scroll/Content/RecoveryCard/VBox/Grid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Maximum automatic restarts"
+
+[node name="MaxRestartsSpin" type="SpinBox" parent="VBox/Scroll/Content/RecoveryCard/VBox/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+max_value = 20.0
+value = 3.0
+rounded = true
+update_on_text_changed = true
+
+[node name="WindowLabel" type="Label" parent="VBox/Scroll/Content/RecoveryCard/VBox/Grid"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "…within a window of"
+
+[node name="WindowSpin" type="SpinBox" parent="VBox/Scroll/Content/RecoveryCard/VBox/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+min_value = 1.0
+max_value = 1440.0
+value = 10.0
+rounded = true
+suffix = "min"
+update_on_text_changed = true
+
+[node name="StopTimeoutLabel" type="Label" parent="VBox/Scroll/Content/RecoveryCard/VBox/Grid"]
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "How long to wait for a graceful stop before the process is terminated."
+mouse_filter = 1
+text = "Graceful stop timeout"
+
+[node name="StopTimeoutSpin" type="SpinBox" parent="VBox/Scroll/Content/RecoveryCard/VBox/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+min_value = 5.0
+max_value = 600.0
+value = 60.0
+rounded = true
+suffix = "s"
+update_on_text_changed = true
+
+[node name="RecoveryHint" type="Label" parent="VBox/Scroll/Content/RecoveryCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="ScheduleCard" type="PanelContainer" parent="VBox/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/ScheduleCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/ScheduleCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("3")
+stretch_mode = 5
+
+[node name="Titles" type="VBoxContainer" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="Title" type="Label" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header/Titles"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Scheduled tasks"
+
+[node name="Subtitle" type="Label" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header/Titles"]
+layout_mode = 2
+theme_type_variation = &"SubtitleLabel"
+text = "Times use this computer's local time zone. Restarts can warn players in chat beforehand."
+autowrap_mode = 3
+
+[node name="AddTaskMenu" type="MenuButton" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 0
+text = "Add task"
+icon = ExtResource("5")
+flat = false
+item_count = 3
+popup/item_0/text = "Scheduled restart"
+popup/item_0/icon = ExtResource("6")
+popup/item_0/id = 0
+popup/item_1/text = "Scheduled command"
+popup/item_1/icon = ExtResource("7")
+popup/item_1/id = 1
+popup/item_2/text = "Scheduled backup"
+popup/item_2/icon = ExtResource("4")
+popup/item_2/id = 2
+
+[node name="ScheduleList" type="VBoxContainer" parent="VBox/Scroll/Content/ScheduleCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="EmptyScheduleLabel" type="Label" parent="VBox/Scroll/Content/ScheduleCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "No scheduled tasks. Use \"Add task\" to schedule restarts, commands or backups."
+autowrap_mode = 3
+
+[node name="BackupCard" type="PanelContainer" parent="VBox/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/BackupCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/BackupCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/BackupCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("4")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/Scroll/Content/BackupCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Backup policy"
+
+[node name="RetentionRow" type="HBoxContainer" parent="VBox/Scroll/Content/BackupCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="Label" type="Label" parent="VBox/Scroll/Content/BackupCard/VBox/RetentionRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Backups to keep (0 = keep all)"
+
+[node name="RetentionSpin" type="SpinBox" parent="VBox/Scroll/Content/BackupCard/VBox/RetentionRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+max_value = 1000.0
+value = 10.0
+rounded = true
+update_on_text_changed = true
+
+[node name="FullBackupCheck" type="CheckButton" parent="VBox/Scroll/Content/BackupCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Scheduled backups include the whole server folder (plugins and configs), not just the worlds"
+autowrap_mode = 3
+
+[node name="RetentionHint" type="Label" parent="VBox/Scroll/Content/BackupCard/VBox"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "The oldest backups are deleted automatically once the limit is reached."
+autowrap_mode = 3
+
+[node name="Footer" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DirtyLabel" type="Label" parent="VBox/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+
+[node name="RevertButton" type="Button" parent="VBox/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Revert"
+icon = ExtResource("8")
+
+[node name="SaveButton" type="Button" parent="VBox/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = "Save"
+icon = ExtResource("9")
+
+[node name="RefreshTimer" type="Timer" parent="."]
+unique_name_in_owner = true
+wait_time = 5.0
+autostart = true

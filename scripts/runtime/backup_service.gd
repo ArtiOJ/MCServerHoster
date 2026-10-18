@@ -77,7 +77,7 @@ func create_backup(full: bool) -> String:
 		while not _world_saved and Time.get_ticks_msec() < deadline and instance.is_online():
 			await get_tree().create_timer(0.2).timeout
 
-	var roots := PackedStringArray([""]) if full else _world_dirs()
+	var roots := PackedStringArray([""]) if full else world_dirs()
 	_progress = 0.0
 	_thread = Thread.new()
 	_thread.start(_zip_worker.bind(instance.config.directory, roots, out_path))
@@ -166,7 +166,7 @@ func _prune() -> void:
 		DirAccess.remove_absolute(all[i].path)
 
 
-func _world_dirs() -> PackedStringArray:
+func world_dirs() -> PackedStringArray:
 	var level := ServerProperties.load_file(instance.config.properties_path()).get_value("level-name", "world")
 	var out := PackedStringArray()
 	for d in [level, level + "_nether", level + "_the_end"]:

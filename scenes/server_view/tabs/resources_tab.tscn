@@ -1,0 +1,371 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/resources_tab.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/components/slider_field.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/memory.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/cpu.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/terminal.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/globe.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/undo.svg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/icons/save.svg" id="8"]
+
+[node name="Resources" type="MarginContainer"]
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 16
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 16
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="RunningNotice" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Label" type="Label" parent="VBox/RunningNotice"]
+layout_mode = 2
+text = "The server is running. Resource changes apply the next time it starts."
+autowrap_mode = 3
+
+[node name="Scroll" type="ScrollContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="Content" type="VBoxContainer" parent="VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 14
+
+[node name="MemoryCard" type="PanelContainer" parent="VBox/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/MemoryCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/MemoryCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/MemoryCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("3")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/Scroll/Content/MemoryCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Memory"
+
+[node name="Subtitle" type="Label" parent="VBox/Scroll/Content/MemoryCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SubtitleLabel"
+text = "— Java heap given to the server"
+
+[node name="MaxRamField" parent="VBox/Scroll/Content/MemoryCard/VBox" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Maximum heap (-Xmx)"
+unit = 1
+min_value = 512.0
+max_value = 32768.0
+step = 256.0
+hint = "How much memory the server may use for the world, players and plugins. 4–8 GB suits most small servers."
+
+[node name="MinRamField" parent="VBox/Scroll/Content/MemoryCard/VBox" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Initial heap (-Xms)"
+unit = 1
+min_value = 256.0
+max_value = 4096.0
+step = 256.0
+hint = "Memory reserved at startup. Paper's recommended flags pre-touch this memory, so equal to the maximum gives the most stable performance."
+
+[node name="HardCapCheck" type="CheckButton" parent="VBox/Scroll/Content/MemoryCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Hard memory limit"
+autowrap_mode = 3
+
+[node name="HostRamLabel" type="Label" parent="VBox/Scroll/Content/MemoryCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="RamWarning" type="Label" parent="VBox/Scroll/Content/MemoryCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.949, 0.722, 0.294, 1)
+autowrap_mode = 3
+
+[node name="CpuCard" type="PanelContainer" parent="VBox/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/CpuCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/CpuCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/CpuCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("4")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/Scroll/Content/CpuCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "CPU"
+
+[node name="Subtitle" type="Label" parent="VBox/Scroll/Content/CpuCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SubtitleLabel"
+text = "— processor share, pinning and priority"
+
+[node name="CoresField" parent="VBox/Scroll/Content/CpuCard/VBox" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Processors visible to Java"
+unit = 3
+max_value = 8.0
+zero_text = "All"
+hint = "Sets -XX:ActiveProcessorCount, which sizes Paper's worker and GC thread pools."
+
+[node name="QuotaField" parent="VBox/Scroll/Content/CpuCard/VBox" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "CPU quota"
+unit = 2
+max_value = 800.0
+step = 25.0
+zero_text = "Unlimited"
+hint = "Hard ceiling on CPU time enforced by the kernel. 100% equals one full core."
+
+[node name="AffinityRow" type="HBoxContainer" parent="VBox/Scroll/Content/CpuCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Label" type="Label" parent="VBox/Scroll/Content/CpuCard/VBox/AffinityRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Pin to CPU cores"
+
+[node name="AffinityEdit" type="LineEdit" parent="VBox/Scroll/Content/CpuCard/VBox/AffinityRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(260, 0)
+layout_mode = 2
+placeholder_text = "e.g. 0-3 or 0,2,4 (empty = any)"
+clear_button_enabled = true
+
+[node name="AffinityStatus" type="Label" parent="VBox/Scroll/Content/CpuCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="NiceField" parent="VBox/Scroll/Content/CpuCard/VBox" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Process priority (nice)"
+unit = 4
+max_value = 19.0
+hint = "Higher values let other programs (and other servers) take precedence when the CPU is busy."
+
+[node name="SupportLabel" type="Label" parent="VBox/Scroll/Content/CpuCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="JavaCard" type="PanelContainer" parent="VBox/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/JavaCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/JavaCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/JavaCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("5")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/Scroll/Content/JavaCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Java"
+
+[node name="JavaInfo" type="Label" parent="VBox/Scroll/Content/JavaCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SubtitleLabel"
+text = "— requires Java 21"
+
+[node name="Grid" type="GridContainer" parent="VBox/Scroll/Content/JavaCard/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="RuntimeLabel" type="Label" parent="VBox/Scroll/Content/JavaCard/VBox/Grid"]
+layout_mode = 2
+text = "Runtime"
+
+[node name="JavaOption" type="OptionButton" parent="VBox/Scroll/Content/JavaCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+fit_to_longest_item = false
+
+[node name="PresetLabel" type="Label" parent="VBox/Scroll/Content/JavaCard/VBox/Grid"]
+layout_mode = 2
+text = "JVM flags preset"
+
+[node name="PresetOption" type="OptionButton" parent="VBox/Scroll/Content/JavaCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Garbage-collector tuning. Paper's recommended flags come from the PaperMC download API."
+
+[node name="ExtraArgsLabel" type="Label" parent="VBox/Scroll/Content/JavaCard/VBox/Grid"]
+layout_mode = 2
+text = "Extra JVM arguments"
+
+[node name="ExtraArgsEdit" type="LineEdit" parent="VBox/Scroll/Content/JavaCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"ConsoleInput"
+placeholder_text = "e.g. -Dpaper.playerconnection.keepalive=60"
+
+[node name="ServerArgsLabel" type="Label" parent="VBox/Scroll/Content/JavaCard/VBox/Grid"]
+layout_mode = 2
+text = "Extra server arguments"
+
+[node name="ServerArgsEdit" type="LineEdit" parent="VBox/Scroll/Content/JavaCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"ConsoleInput"
+placeholder_text = "e.g. --forceUpgrade"
+
+[node name="JavaWarning" type="Label" parent="VBox/Scroll/Content/JavaCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.949, 0.722, 0.294, 1)
+autowrap_mode = 3
+
+[node name="PreviewTitle" type="Label" parent="VBox/Scroll/Content/JavaCard/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardTitle"
+text = "LAUNCH COMMAND PREVIEW"
+
+[node name="CommandPreview" type="CodeEdit" parent="VBox/Scroll/Content/JavaCard/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+editable = false
+wrap_mode = 1
+
+[node name="NetworkCard" type="PanelContainer" parent="VBox/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/NetworkCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/NetworkCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/NetworkCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("6")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/Scroll/Content/NetworkCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Network"
+
+[node name="PortRow" type="HBoxContainer" parent="VBox/Scroll/Content/NetworkCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Label" type="Label" parent="VBox/Scroll/Content/NetworkCard/VBox/PortRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Server port"
+
+[node name="PortSpin" type="SpinBox" parent="VBox/Scroll/Content/NetworkCard/VBox/PortRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(160, 0)
+layout_mode = 2
+min_value = 1024.0
+max_value = 65535.0
+value = 25565.0
+rounded = true
+update_on_text_changed = true
+
+[node name="PortStatus" type="Label" parent="VBox/Scroll/Content/NetworkCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="RconLabel" type="Label" parent="VBox/Scroll/Content/NetworkCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="Footer" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="DirtyLabel" type="Label" parent="VBox/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="RevertButton" type="Button" parent="VBox/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Revert"
+icon = ExtResource("7")
+
+[node name="SaveButton" type="Button" parent="VBox/Footer"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = "Save"
+icon = ExtResource("8")

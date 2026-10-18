@@ -1,0 +1,186 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/players_tab.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/components/player_list_panel.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/users.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/send.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/close.svg" id="5"]
+
+[node name="Players" type="MarginContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+script = ExtResource("1")
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="OnlineCard" type="PanelContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/VBox/OnlineCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Scroll/VBox/OnlineCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Scroll/VBox/OnlineCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("3")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Scroll/VBox/OnlineCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SectionHeader"
+text = "Online players"
+
+[node name="CountLabel" type="Label" parent="Scroll/VBox/OnlineCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"Badge"
+text = "offline"
+
+[node name="Body" type="HBoxContainer" parent="Scroll/VBox/OnlineCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 16
+
+[node name="ListBox" type="VBoxContainer" parent="Scroll/VBox/OnlineCard/VBox/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="OnlineList" type="ItemList" parent="Scroll/VBox/OnlineCard/VBox/Body/ListBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 160)
+layout_mode = 2
+size_flags_vertical = 3
+max_columns = 0
+same_column_width = true
+fixed_column_width = 160
+
+[node name="OfflineLabel" type="Label" parent="Scroll/VBox/OnlineCard/VBox/Body/ListBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "The server is not running."
+
+[node name="Actions" type="VBoxContainer" parent="Scroll/VBox/OnlineCard/VBox/Body"]
+custom_minimum_size = Vector2(280, 0)
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ActionsCaption" type="Label" parent="Scroll/VBox/OnlineCard/VBox/Body/Actions"]
+layout_mode = 2
+theme_type_variation = &"CardTitle"
+text = "SELECTED PLAYER"
+
+[node name="RoleRow" type="HBoxContainer" parent="Scroll/VBox/OnlineCard/VBox/Body/Actions"]
+layout_mode = 2
+
+[node name="OpButton" type="Button" parent="Scroll/VBox/OnlineCard/VBox/Body/Actions/RoleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Make the selected player an operator"
+disabled = true
+text = "Op"
+
+[node name="DeopButton" type="Button" parent="Scroll/VBox/OnlineCard/VBox/Body/Actions/RoleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Remove operator status"
+disabled = true
+text = "Deop"
+
+[node name="MessageEdit" type="LineEdit" parent="Scroll/VBox/OnlineCard/VBox/Body/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Reason or private message (optional)"
+
+[node name="ModRow" type="HBoxContainer" parent="Scroll/VBox/OnlineCard/VBox/Body/Actions"]
+layout_mode = 2
+
+[node name="MessageButton" type="Button" parent="Scroll/VBox/OnlineCard/VBox/Body/Actions/ModRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Send the text above as a private message"
+disabled = true
+text = "Message"
+icon = ExtResource("4")
+
+[node name="KickButton" type="Button" parent="Scroll/VBox/OnlineCard/VBox/Body/Actions/ModRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Kick the selected player (uses the text above as reason)"
+disabled = true
+text = "Kick"
+icon = ExtResource("5")
+
+[node name="BanButton" type="Button" parent="Scroll/VBox/OnlineCard/VBox/Body/Actions/ModRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Ban the selected player (uses the text above as reason)"
+theme_type_variation = &"DangerButton"
+disabled = true
+text = "Ban"
+
+[node name="ListsHeader" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+
+[node name="ListsTitle" type="Label" parent="Scroll/VBox/ListsHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SectionHeader"
+text = "Access lists"
+
+[node name="WhitelistToggle" type="CheckButton" parent="Scroll/VBox/ListsHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Only players on the whitelist may join (server.properties: white-list)"
+text = "Whitelist enabled"
+
+[node name="Lists" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="WhitelistPanel" parent="Scroll/VBox/Lists" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Whitelist"
+
+[node name="OpsPanel" parent="Scroll/VBox/Lists" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Operators"
+
+[node name="BansPanel" parent="Scroll/VBox/Lists" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Banned"
+
+[node name="ReloadTimer" type="Timer" parent="."]
+unique_name_in_owner = true
+one_shot = true

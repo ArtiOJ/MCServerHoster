@@ -1,0 +1,140 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/plugins_tab.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/upload.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/trash.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/puzzle.svg" id="6"]
+
+[node name="Plugins" type="MarginContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Toolbar" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="InstallButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+tooltip_text = "Copy plugin .jar files into this server's plugins folder"
+text = "Install…"
+icon = ExtResource("2")
+
+[node name="OpenFolderButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Open folder"
+icon = ExtResource("3")
+
+[node name="RefreshButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Rescan the plugins folder"
+text = "Refresh"
+icon = ExtResource("4")
+
+[node name="Spacer" type="Control" parent="VBox/Toolbar"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="DropHint" type="Label" parent="VBox/Toolbar"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Tip: drag .jar files onto the window to install"
+
+[node name="RestartNotice" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="NoticeLabel" type="Label" parent="VBox/RestartNotice"]
+layout_mode = 2
+text = "Restart the server to apply plugin changes."
+
+[node name="ListCard" type="PanelContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/ListCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="VBox/ListCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/ListCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("6")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/ListCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SectionHeader"
+text = "Installed plugins"
+
+[node name="ToggleButton" type="Button" parent="VBox/ListCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Enable or disable the selected plugin (renames it to/from .jar.disabled)"
+disabled = true
+text = "Disable"
+
+[node name="DeleteButton" type="Button" parent="VBox/ListCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DangerButton"
+tooltip_text = "Move the selected plugin jar to the trash"
+disabled = true
+text = "Delete"
+icon = ExtResource("5")
+
+[node name="PluginTree" type="Tree" parent="VBox/ListCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+columns = 5
+column_titles_visible = true
+hide_root = true
+select_mode = 1
+
+[node name="SummaryLabel" type="Label" parent="VBox/ListCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="InstallDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Install plugins"
+ok_button_text = "Install"
+file_mode = 1
+access = 2
+filters = PackedStringArray("*.jar ; Plugin jars")
+use_native_dialog = true
+
+[node name="DeleteDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Delete plugin"
+ok_button_text = "Move to trash"
+dialog_autowrap = true

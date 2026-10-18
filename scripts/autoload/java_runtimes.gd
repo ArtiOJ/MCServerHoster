@@ -25,7 +25,9 @@ func rescan() -> void:
 			continue
 		seen[exe] = true
 		var rt := _inspect(home, exe)
-		if rt != null:
+		# The same JDK is often reachable through symlinked paths (e.g. /usr/lib64 -> /usr/lib).
+		if rt != null and not seen.has(rt.identity()):
+			seen[rt.identity()] = true
 			found.append(rt)
 	if found.is_empty():
 		var on_path := PlatformBackend.find_in_path("java")

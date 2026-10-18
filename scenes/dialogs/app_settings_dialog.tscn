@@ -1,0 +1,182 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/dialogs/app_settings_dialog.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="4"]
+
+[node name="AppSettingsDialog" type="ConfirmationDialog"]
+title = "Settings"
+size = Vector2i(700, 600)
+min_size = Vector2i(640, 520)
+ok_button_text = "Save"
+script = ExtResource("1")
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 684.0
+offset_bottom = 542.0
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 10
+
+[node name="GeneralTitle" type="Label" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "General"
+
+[node name="Grid" type="GridContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="RootLabel" type="Label" parent="Scroll/VBox/Grid"]
+layout_mode = 2
+text = "Servers folder"
+
+[node name="RootRow" type="HBoxContainer" parent="Scroll/VBox/Grid"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="RootEdit" type="LineEdit" parent="Scroll/VBox/Grid/RootRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "~/MinecraftServers"
+
+[node name="BrowseButton" type="Button" parent="Scroll/VBox/Grid/RootRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Browse…"
+icon = ExtResource("2")
+
+[node name="RootHintSpacer" type="Control" parent="Scroll/VBox/Grid"]
+layout_mode = 2
+
+[node name="RootHint" type="Label" parent="Scroll/VBox/Grid"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text = "Only affects servers created from now on; existing servers stay where they are. Backups are stored in its _backups folder."
+autowrap_mode = 3
+
+[node name="DefaultRamLabel" type="Label" parent="Scroll/VBox/Grid"]
+layout_mode = 2
+text = "Default RAM for new servers"
+
+[node name="DefaultRamSpin" type="SpinBox" parent="Scroll/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+custom_minimum_size = Vector2(180, 0)
+min_value = 512.0
+max_value = 262144.0
+step = 256.0
+value = 4096.0
+rounded = true
+suffix = "MB"
+update_on_text_changed = true
+
+[node name="ConsoleLinesLabel" type="Label" parent="Scroll/VBox/Grid"]
+layout_mode = 2
+text = "Console history"
+
+[node name="ConsoleLinesSpin" type="SpinBox" parent="Scroll/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+custom_minimum_size = Vector2(180, 0)
+min_value = 500.0
+max_value = 100000.0
+step = 500.0
+value = 5000.0
+rounded = true
+suffix = "lines"
+update_on_text_changed = true
+
+[node name="ExitLabel" type="Label" parent="Scroll/VBox/Grid"]
+layout_mode = 2
+text = "Closing with servers running"
+
+[node name="ExitOption" type="OptionButton" parent="Scroll/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+selected = 0
+item_count = 3
+popup/item_0/text = "Ask every time"
+popup/item_0/id = 0
+popup/item_1/text = "Stop all servers, then quit"
+popup/item_1/id = 1
+popup/item_2/text = "Keep running (minimize window)"
+popup/item_2/id = 2
+
+[node name="UpdatesCheck" type="CheckButton" parent="Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Check for new Paper builds when the app starts"
+
+[node name="UnstableCheck" type="CheckButton" parent="Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Show pre-release and release-candidate Minecraft versions"
+
+[node name="Separator" type="HSeparator" parent="Scroll/VBox"]
+layout_mode = 2
+
+[node name="JavaTitle" type="Label" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Java runtimes"
+
+[node name="JavaHint" type="Label" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Servers pick the lowest installed Java that meets their Minecraft version's requirement unless a runtime is chosen in their Resources tab."
+autowrap_mode = 3
+
+[node name="JavaList" type="ItemList" parent="Scroll/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+size_flags_vertical = 3
+select_mode = 0
+
+[node name="JavaButtons" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RescanButton" type="Button" parent="Scroll/VBox/JavaButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Rescan"
+icon = ExtResource("3")
+
+[node name="AddJavaButton" type="Button" parent="Scroll/VBox/JavaButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add Java…"
+icon = ExtResource("4")
+
+[node name="DirDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Choose servers folder"
+size = Vector2i(820, 520)
+ok_button_text = "Select Current Folder"
+file_mode = 2
+access = 2
+
+[node name="JavaDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Select a java executable"
+size = Vector2i(820, 520)
+ok_button_text = "Open"
+file_mode = 0
+access = 2
