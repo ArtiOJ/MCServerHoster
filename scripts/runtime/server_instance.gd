@@ -19,6 +19,8 @@ const STATE_NAMES := ["Stopped", "Starting", "Running", "Stopping", "Crashed", "
 const STATE_COLORS: Array[Color] = [
 	Color("6b7280"), Color("f2b84b"), Color("3fb97f"), Color("f2b84b"), Color("e05555"), Color("5aa9f2"),
 ]
+## Stopped but listening for players (start on connect).
+const ASLEEP_COLOR := Color("8b7cf6")
 ## Back-off between automatic restarts after consecutive crashes.
 const RESTART_DELAYS: Array[int] = [5, 15, 60]
 const QUERY_INTERVAL_SEC := 5.0
@@ -48,6 +50,7 @@ var _crash_times: Array[int] = []
 @onready var rcon: RconClient = %RconClient
 @onready var scheduler: TaskScheduler = %TaskScheduler
 @onready var backups: BackupService = %BackupService
+@onready var wake_listener: WakeListener = %WakeListener
 @onready var _stop_timeout: Timer = %StopTimeoutTimer
 @onready var _restart_delay: Timer = %RestartDelayTimer
 @onready var _query_timer: Timer = %QueryTimer
@@ -69,6 +72,9 @@ func _ready() -> void:
 	_restart_delay.timeout.connect(_on_restart_delay_timeout)
 	_query_timer.wait_time = QUERY_INTERVAL_SEC
 	_query_timer.timeout.connect(_query_status)
+	state_changed.connect(func(_s: State) -> void: wake_listener.update())
+	config_changed.connect(wake_listener.update)
+	wake_listener.update.call_deferred()
 	max_players = get_properties().get_int("max-players", 20)
 	orphan_pid = find_orphan_pid()
 	if orphan_pid > 0:
@@ -91,11 +97,11 @@ func is_busy() -> bool:
 
 
 func state_name() -> String:
-	return STATE_NAMES[state]
+	return "Asleep" if state == State.STOPPED and is_asleep() else STATE_NAMES[state]
 
 
 func state_color() -> Color:
-	return STATE_COLORS[state]
+	return ASLEEP_COLOR if state == State.STOPPED and is_asleep() else STATE_COLORS[state]
 
 
 func uptime_seconds() -> int:
@@ -106,6 +112,11 @@ func uptime_seconds() -> int:
 
 func get_properties() -> ServerProperties:
 	return ServerProperties.load_file(working_directory().path_join("server.properties"))
+
+
+## True while stopped but listening for players to wake the server (start on connect).
+func is_asleep() -> bool:
+	return wake_listener.is_listening()
 
 
 ## True while a temporary copy is running or waiting for a keep/discard decision.
@@ -159,10 +170,13 @@ func start(temporary := false) -> Error:
 		Notifier.warn("%s: %s" % [config.display_name, msg])
 		return ERR_UNAVAILABLE
 	_restart_delay.stop()
+	# The wake-on-connect listener holds the game port while stopped; release it first.
+	wake_listener.close()
 	var problem := start_problem()
 	if problem != "":
 		log_system(problem, LogParser.Level.ERROR)
 		Notifier.error("%s: %s" % [config.display_name, problem])
+		wake_listener.update.call_deferred()
 		return FAILED
 	_prepare_files()
 	var java := JavaRuntimes.resolve_for(config)
@@ -172,6 +186,7 @@ func start(temporary := false) -> Error:
 	var err := process.launch(cmd.path, cmd.args)
 	if err != OK:
 		log_system("Failed to launch process: %s" % error_string(err), LogParser.Level.ERROR)
+		wake_listener.update.call_deferred()
 		return err
 	_write_pid_file(process.pid)
 	_stop_requested = false

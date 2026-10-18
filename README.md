@@ -16,6 +16,7 @@ install, configure, start/stop, monitor, back up and update them from one interf
 - **Resources**: heap size, optional hard memory cap (cgroup), CPU quota, core pinning, process priority, Java runtime, JVM flag presets (Paper-recommended / Aikar), extra arguments, and a preview of the full launch command.
 - **Network**: per-server ports with conflict detection. RCON is configured automatically and used for silent TPS and player queries.
 - **Events**: per-server rules of the form *when → do*. Triggers: time of day, interval, app start, server online/stopped/crashed, player joined/left, server empty for N minutes, player count reached, TPS below a threshold, computer going to sleep or waking. Rules can be limited to certain weekdays, a time window and the server's state. Actions: start, stop, restart (with in-game countdowns), run a command, broadcast, world or full backup. Example: start Fri–Sun at 18:00 and stop once empty for 15 minutes. Older scheduled tasks are migrated automatically.
+- **Start on connect**: while a server is stopped, the app answers on its port. The server shows in players' server lists with an "asleep" MOTD; a join attempt starts it, and the player is asked to reconnect in a few seconds. Optionally a server-list ping is enough to start it. Pair it with a "Stop when empty" event for a fully on-demand server.
 - **Power & background**: works with systemd-logind so servers stop cleanly before sleep, shutdown and reboot. A sleep policy (block while players are online, always stop, block while running, or let it sleep) and restart-after-wake are in Preferences. Blocking only blocks sleep; the screen still turns off. Optional start at login (minimized).
 - **Players**: online list with op/deop/kick/ban/message, plus whitelist, operator and ban list management.
 - **Plugins**: list, enable/disable, delete, install via a file dialog or by dragging `.jar` files onto the window.
@@ -86,6 +87,9 @@ godot --headless --path . res://tests/integration/feature_test.tscn -- --no-auto
 
 # End-to-end: timed/condition events and simulated sleep/wake with real inhibitor locks
 godot --headless --path . res://tests/integration/events_test.tscn -- --no-autostart --profile=ev --root=/tmp/sm-ev
+
+# End-to-end: start on connect (asleep MOTD, join → boot, back to sleep, wake on ping)
+godot --headless --path . res://tests/integration/wake_test.tscn -- --no-autostart --profile=wk --root=/tmp/sm-wk
 
 # UI smoke test with screenshots of every view (needs a display)
 godot --path . res://tests/integration/ui_smoke_test.tscn -- --no-autostart --profile=ui --root=/tmp/sm-ui --shots=/tmp/sm-shots

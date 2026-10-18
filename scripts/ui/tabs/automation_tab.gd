@@ -6,7 +6,7 @@ extends ServerTab
 const ROW_SCENE := preload("res://scenes/components/event_row.tscn")
 const EDITED_FIELDS: PackedStringArray = [
 	"auto_start", "auto_restart", "max_restarts", "restart_window_sec", "stop_timeout_sec",
-	"events", "backup_retention", "backup_full",
+	"events", "backup_retention", "backup_full", "wake_on_connect", "wake_on_ping", "wake_motd",
 ]
 
 var _draft: ServerConfig
@@ -21,6 +21,13 @@ var _expanded := {}
 @onready var _window_spin: SpinBox = %WindowSpin
 @onready var _stop_timeout_spin: SpinBox = %StopTimeoutSpin
 @onready var _recovery_hint: Label = %RecoveryHint
+@onready var _wake_check: CheckButton = %WakeCheck
+@onready var _wake_options: GridContainer = %WakeOptions
+@onready var _wake_motd_edit: LineEdit = %WakeMotdEdit
+@onready var _wake_ping_check: CheckButton = %WakePingCheck
+@onready var _wake_status: Label = %WakeStatus
+@onready var _idle_row: HBoxContainer = %IdleRow
+@onready var _add_idle_button: Button = %AddIdleButton
 @onready var _add_menu: MenuButton = %AddEventMenu
 @onready var _event_list: VBoxContainer = %EventList
 @onready var _empty_label: Label = %EmptyEventsLabel
@@ -39,6 +46,10 @@ func _ready() -> void:
 	for spin: SpinBox in [_max_restarts_spin, _window_spin, _stop_timeout_spin, _retention_spin]:
 		spin.value_changed.connect(_on_input_changed.unbind(1))
 	_full_check.toggled.connect(_on_input_changed.unbind(1))
+	_wake_check.toggled.connect(_on_input_changed.unbind(1))
+	_wake_ping_check.toggled.connect(_on_input_changed.unbind(1))
+	_wake_motd_edit.text_changed.connect(_on_input_changed.unbind(1))
+	_add_idle_button.pressed.connect(_add_idle_stop)
 	var popup := _add_menu.get_popup()
 	var templates := EventRule.templates()
 	for i in templates.size():
@@ -52,6 +63,7 @@ func _ready() -> void:
 func _on_bound() -> void:
 	watch(instance.config_changed, _on_config_changed)
 	watch(instance.state_changed, _update_next_runs.unbind(1))
+	watch(instance.state_changed, _update_wake_status.unbind(1))
 	_load_draft()
 
 
@@ -78,6 +90,9 @@ func _load_draft() -> void:
 	_stop_timeout_spin.value = _draft.stop_timeout_sec
 	_retention_spin.value = _draft.backup_retention
 	_full_check.button_pressed = _draft.backup_full
+	_wake_check.button_pressed = _draft.wake_on_connect
+	_wake_ping_check.button_pressed = _draft.wake_on_ping
+	_wake_motd_edit.text = _draft.wake_motd
 	_loading = false
 	_expanded.clear()
 	for i in open_indices:
@@ -119,6 +134,31 @@ func _add_event(template_index: int) -> void:
 	_refresh()
 
 
+func _add_idle_stop() -> void:
+	for i in EventRule.templates().size():
+		if EventRule.templates()[i][0] == "Stop when empty":
+			_add_event(i)
+			return
+
+
+func _update_wake_status() -> void:
+	if instance == null or _draft == null:
+		return
+	if not _draft.wake_on_connect:
+		_wake_status.text = ""
+	elif instance.config.wake_on_connect != _draft.wake_on_connect:
+		_wake_status.text = "Save to start listening on port %d." % instance.config.port
+	elif instance.is_asleep():
+		_wake_status.text = "Asleep — listening on port %d for players." % instance.config.port
+	elif instance.wake_listener.last_error != "":
+		_wake_status.text = instance.wake_listener.last_error
+	elif instance.is_temporary():
+		_wake_status.text = "Paused while a temporary copy is pending."
+	else:
+		_wake_status.text = "Listens on port %d whenever the server is stopped." % instance.config.port
+	_wake_status.visible = _wake_status.text != ""
+
+
 func _remove_event(rule: EventRule) -> void:
 	_draft.events.erase(rule)
 	_expanded.erase(rule)
@@ -133,6 +173,9 @@ func _on_input_changed() -> void:
 	_draft.auto_restart = _auto_restart_check.button_pressed
 	_draft.max_restarts = int(_max_restarts_spin.value)
 	_draft.restart_window_sec = int(_window_spin.value) * 60
+	_draft.wake_on_connect = _wake_check.button_pressed
+	_draft.wake_on_ping = _wake_ping_check.button_pressed
+	_draft.wake_motd = _wake_motd_edit.text
 	_draft.stop_timeout_sec = int(_stop_timeout_spin.value)
 	_draft.backup_retention = int(_retention_spin.value)
 	_draft.backup_full = _full_check.button_pressed
@@ -146,6 +189,10 @@ func _refresh() -> void:
 	_window_spin.editable = _draft.auto_restart
 	_recovery_hint.text = ("After a crash the server restarts after 5 s, then 15 s, then 60 s. If it crashes more than %d time(s) within %s, automatic restarts pause until you start it manually." % [_draft.max_restarts, Fmt.duration(_draft.restart_window_sec)]) \
 		if _draft.auto_restart else "Crashed servers stay stopped until you start them."
+	_wake_options.visible = _draft.wake_on_connect
+	_idle_row.visible = _draft.wake_on_connect and not _draft.events.any(func(r: EventRule) -> bool:
+		return r.enabled and r.trigger == EventRule.Trigger.SERVER_EMPTY and r.action == EventRule.Action.STOP)
+	_update_wake_status()
 	var invalid := _rows.any(func(r: EventRow) -> bool: return not r.is_valid())
 	_sleep_notice.visible = _draft.events.any(func(r: EventRule) -> bool:
 		return r.trigger == EventRule.Trigger.SYSTEM_SLEEP or r.trigger == EventRule.Trigger.SYSTEM_WAKE)
@@ -190,6 +237,9 @@ func _save() -> void:
 	c.stop_timeout_sec = _draft.stop_timeout_sec
 	c.backup_retention = _draft.backup_retention
 	c.backup_full = _draft.backup_full
+	c.wake_on_connect = _draft.wake_on_connect
+	c.wake_on_ping = _draft.wake_on_ping
+	c.wake_motd = _draft.wake_motd
 	var events: Array[EventRule] = []
 	for rule in _draft.events:
 		events.append(EventRule.from_dict(rule.to_dict()))

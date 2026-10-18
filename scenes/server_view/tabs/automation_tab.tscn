@@ -7,6 +7,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="5"]
 [ext_resource type="Texture2D" path="res://assets/icons/undo.svg" id="8"]
 [ext_resource type="Texture2D" path="res://assets/icons/save.svg" id="9"]
+[ext_resource type="Texture2D" path="res://assets/icons/globe.svg" id="10"]
 
 [node name="Automation" type="MarginContainer"]
 size_flags_horizontal = 3
@@ -125,6 +126,95 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
 autowrap_mode = 3
+
+[node name="WakeCard" type="PanelContainer" parent="VBox/Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/WakeCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/WakeCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/WakeCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("10")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/Scroll/Content/WakeCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "While stopped, Server Manager answers on the server's port. The server shows in players' server lists with the message below, and starts as soon as someone tries to join. That first player is asked to reconnect once it is up."
+theme_type_variation = &"SectionHeader"
+text = "Start on connect"
+
+[node name="WakeCheck" type="CheckButton" parent="VBox/Scroll/Content/WakeCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "While stopped, Server Manager answers on the server's port. The server shows in players' server lists with the message below, and starts as soon as someone tries to join. That first player is asked to reconnect once it is up."
+
+[node name="WakeOptions" type="GridContainer" parent="VBox/Scroll/Content/WakeCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="MotdLabel" type="Label" parent="VBox/Scroll/Content/WakeCard/VBox/WakeOptions"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Shown in the multiplayer server list while the server is asleep. Supports § colour codes. Leave empty for the default."
+text = "Asleep MOTD"
+
+[node name="WakeMotdEdit" type="LineEdit" parent="VBox/Scroll/Content/WakeCard/VBox/WakeOptions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Shown in the multiplayer server list while the server is asleep. Supports § colour codes. Leave empty for the default."
+placeholder_text = "§7Asleep §8— §ajoin to start the server"
+max_length = 120
+
+[node name="PingLabel" type="Label" parent="VBox/Scroll/Content/WakeCard/VBox/WakeOptions"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Also start when the server is merely refreshed in someone's server list, before they click Join. Faster for players, but any ping (including bots and scanners) starts it."
+text = "Wake on server-list ping"
+
+[node name="WakePingCheck" type="CheckButton" parent="VBox/Scroll/Content/WakeCard/VBox/WakeOptions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Also start when the server is merely refreshed in someone's server list, before they click Join. Faster for players, but any ping (including bots and scanners) starts it."
+
+[node name="WakeStatus" type="Label" parent="VBox/Scroll/Content/WakeCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="IdleRow" type="HBoxContainer" parent="VBox/Scroll/Content/WakeCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="IdleHint" type="Label" parent="VBox/Scroll/Content/WakeCard/VBox/IdleRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text = "Tip: add a “Stop when empty” event so the server goes back to sleep after players leave."
+autowrap_mode = 3
+
+[node name="AddIdleButton" type="Button" parent="VBox/Scroll/Content/WakeCard/VBox/IdleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+text = "Add “Stop when empty”"
+icon = ExtResource("5")
 
 [node name="EventsCard" type="PanelContainer" parent="VBox/Scroll/Content"]
 layout_mode = 2
