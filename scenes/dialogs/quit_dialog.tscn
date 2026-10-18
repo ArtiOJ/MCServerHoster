@@ -26,7 +26,8 @@ autowrap_mode = 3
 [node name="RememberCheck" type="CheckBox" parent="VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Remember my choice (change it later in Settings)"
+tooltip_text = "Don't ask again. You can change this later in Preferences."
+text = "Remember my choice"
 
 [node name="ProgressTimer" type="Timer" parent="."]
 unique_name_in_owner = true

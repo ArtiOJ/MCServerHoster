@@ -11,6 +11,8 @@ const PAGE_TITLES: PackedStringArray = [
 	"Name your server", "Choose a Minecraft version", "Resources & network", "Gameplay defaults",
 	"Review & accept the EULA", "Installing",
 ]
+const ROW_SCENE := preload("res://scenes/components/property_row.tscn")
+const SECTION_SCENE := preload("res://scenes/components/section_header.tscn")
 const COLORS: Array[Color] = [Color("3fb97f"), Color("5aa9f2"), Color("c678dd"), Color("f2b84b"), Color("e06c75"), Color("56b6c2")]
 
 var _page: Page = Page.BASICS
@@ -20,6 +22,10 @@ var _build := {}
 var _request_serial := 0
 var _installing := false
 var _created: ServerInstance
+## Rows in the "More settings" section and the version they were built for.
+var _more_rows: Array[PropertyRow] = []
+var _more_sections := {}
+var _more_version := "-"
 
 @onready var _step_label: Label = %StepLabel
 @onready var _title_label: Label = %PageTitle
@@ -35,16 +41,10 @@ var _created: ServerInstance
 @onready var _port_spin: SpinBox = %PortSpin
 @onready var _port_status: Label = %PortStatus
 @onready var _auto_start_check: CheckButton = %AutoStartCheck
-@onready var _gamemode: OptionButton = %GamemodeOption
-@onready var _difficulty: OptionButton = %DifficultyOption
-@onready var _world_type: OptionButton = %WorldTypeOption
-@onready var _max_players: SpinBox = %MaxPlayersSpin
-@onready var _motd_edit: LineEdit = %MotdEdit
-@onready var _seed_edit: LineEdit = %SeedEdit
-@onready var _online_check: CheckButton = %OnlineModeCheck
-@onready var _whitelist_check: CheckButton = %WhitelistCheck
-@onready var _pvp_check: CheckButton = %PvpCheck
-@onready var _hardcore_check: CheckButton = %HardcoreCheck
+@onready var _main_rows: VBoxContainer = %MainRows
+@onready var _more_settings: FoldableContainer = %MoreSettings
+@onready var _more_search: LineEdit = %MoreSearch
+@onready var _more_list: VBoxContainer = %MoreList
 @onready var _summary_label: Label = %SummaryLabel
 @onready var _eula_check: CheckBox = %EulaCheck
 @onready var _install_status: Label = %InstallStatus
@@ -68,6 +68,7 @@ func _ready() -> void:
 	_version_list.item_selected.connect(_on_version_selected)
 	_port_spin.value_changed.connect(func(_v: float) -> void: _check_port())
 	_eula_check.toggled.connect(func(_on: bool) -> void: _update_nav())
+	_more_search.text_changed.connect(func(_t: String) -> void: _filter_more())
 	var host_mb := PlatformBackend.get_current().host_memory_bytes() / 1048576
 	_ram_field.max_value = maxi(1024, (host_mb / 256) * 256)
 
@@ -84,8 +85,12 @@ func open() -> void:
 	_auto_start_check.button_pressed = false
 	_eula_check.button_pressed = false
 	_show_pre.button_pressed = AppSettings.show_unstable_versions
-	_motd_edit.text = ""
-	_seed_edit.text = ""
+	for row: PropertyRow in _main_rows.get_children():
+		row.setup_entry(row.entry, str(row.entry.get("default", "")))
+	_clear_more()
+	_more_version = "-"
+	_more_search.text = ""
+	_more_settings.folded = true
 	_install_error.visible = false
 	_set_page(Page.BASICS)
 	popup_centered()
@@ -107,6 +112,8 @@ func _set_page(page: Page) -> void:
 	_pages.current_tab = page
 	_step_label.text = "STEP %d OF %d" % [mini(page + 1, Page.INSTALL), Page.INSTALL] if page < Page.INSTALL else "INSTALLING"
 	_title_label.text = PAGE_TITLES[page]
+	if page == Page.GAMEPLAY and _more_version != _selected_version():
+		rebuild_more_settings(_selected_version())
 	if page == Page.REVIEW:
 		_summary_label.text = _summary_text()
 	_update_nav()
@@ -263,32 +270,105 @@ func _check_port() -> void:
 # --- Review & install -----------------------------------------------------
 
 func _summary_text() -> String:
-	return "\n".join([
+	var players := _main_value("max-players")
+	var seed_text := _main_value("level-seed")
+	var extra := _more_rows.filter(func(r: PropertyRow) -> bool: return r.is_modified()).size()
+	var lines := PackedStringArray([
 		"Name:  %s" % _name_edit.text.strip_edges(),
 		"Software:  Paper %s, build #%d" % [_selected_version(), _build.get("id", 0)],
 		"Memory:  %s heap" % Fmt.megabytes(int(_ram_field.value)),
 		"Port:  %d" % int(_port_spin.value),
-		"Game mode:  %s · %s · up to %d players" % [_gamemode.get_item_text(_gamemode.selected), _difficulty.get_item_text(_difficulty.selected), int(_max_players.value)],
-		"Online mode:  %s" % ("on (Mojang-verified accounts)" if _online_check.button_pressed else "OFF — anyone can join with any name"),
-		"Folder:  %s" % AppSettings.servers_root.path_join(Fmt.slugify(_name_edit.text)),
+		"Game mode:  %s · %s · up to %s players" % [_main_value("gamemode"), _main_value("difficulty"), players],
+		"World:  %s · seed %s" % [_main_value("level-type").trim_prefix("minecraft:"), seed_text if seed_text != "" else "random"],
+		"MOTD:  %s" % _main_value("motd"),
 	])
+	if extra > 0:
+		lines.append("%d additional setting%s changed" % [extra, "" if extra == 1 else "s"])
+	lines.append("Folder:  %s" % AppSettings.servers_root.path_join(Fmt.slugify(_name_edit.text)))
+	return "\n".join(lines)
 
 
-func _properties() -> Dictionary:
-	var props := {
-		"gamemode": _gamemode.get_item_text(_gamemode.selected).to_lower(),
-		"difficulty": _difficulty.get_item_text(_difficulty.selected).to_lower(),
-		"level-type": ["minecraft:normal", "minecraft:flat", "minecraft:large_biomes", "minecraft:amplified"][_world_type.selected],
-		"max-players": str(int(_max_players.value)),
-		"online-mode": str(_online_check.button_pressed).to_lower(),
-		"white-list": str(_whitelist_check.button_pressed).to_lower(),
-		"pvp": str(_pvp_check.button_pressed).to_lower(),
-		"hardcore": str(_hardcore_check.button_pressed).to_lower(),
-		"level-seed": _seed_edit.text.strip_edges(),
-	}
-	if _motd_edit.text.strip_edges() != "":
-		props["motd"] = _motd_edit.text.strip_edges()
-	return props
+func _main_value(id: String) -> String:
+	for row: PropertyRow in _main_rows.get_children():
+		if row.key == id:
+			return row.get_value()
+	return ""
+
+
+## Settings that differ from the defaults (entry id -> value), passed to ServerManager.create_server().
+func settings_spec() -> Dictionary:
+	var out := {}
+	for row: PropertyRow in _main_rows.get_children():
+		if row.is_modified():
+			out[row.key] = row.get_value()
+	for row in _more_rows:
+		if row.is_modified():
+			out[row.key] = row.get_value()
+	return out
+
+
+# --- More settings ---------------------------------------------------------
+
+## Fills the "More settings" section with every catalog setting that applies to
+## [param version], keeping values the user already changed where they still apply.
+func rebuild_more_settings(version: String) -> void:
+	var kept := {}
+	for row in _more_rows:
+		if row.is_modified():
+			kept[row.key] = row.get_value()
+	_clear_more()
+	_more_version = version
+	var by_category := {}
+	for e in SettingsCatalog.for_version(version):
+		if SettingsCatalog.MAIN_IDS.has(e.id) or (e.source == "property" and PropertySchema.is_managed(e.key)):
+			continue
+		var cat := SettingsTab._category_of(e)
+		if not by_category.has(cat):
+			by_category[cat] = []
+		by_category[cat].append(e)
+	for cat in SettingsCatalog.CATEGORIES:
+		if not by_category.has(cat):
+			continue
+		var section: SectionHeader = SECTION_SCENE.instantiate()
+		section.title = cat
+		_more_list.add_child(section)
+		var rows: Array[PropertyRow] = []
+		for e: Dictionary in by_category[cat]:
+			var row: PropertyRow = ROW_SCENE.instantiate()
+			row.setup_entry(e, str(e.get("default", "")))
+			_more_list.add_child(row)
+			if kept.has(e.id):
+				row.set_value(kept[e.id])
+			rows.append(row)
+			_more_rows.append(row)
+		_more_sections[section] = rows
+	_filter_more()
+
+
+## Row editing [param id] in the "More settings" section, or null.
+func more_row(id: String) -> PropertyRow:
+	for row in _more_rows:
+		if row.key == id:
+			return row
+	return null
+
+
+func _clear_more() -> void:
+	for child in _more_list.get_children():
+		_more_list.remove_child(child)
+		child.queue_free()
+	_more_rows.clear()
+	_more_sections.clear()
+
+
+func _filter_more() -> void:
+	var filter := _more_search.text
+	for section: SectionHeader in _more_sections:
+		var any := false
+		for row: PropertyRow in _more_sections[section]:
+			row.visible = row.matches(filter)
+			any = any or row.visible
+		section.visible = any
 
 
 func _install() -> void:
@@ -306,7 +386,7 @@ func _install() -> void:
 		"ram_max_mb": ram,
 		"ram_min_mb": clampi(ram / 4, 512, ram),
 		"port": int(_port_spin.value),
-		"properties": _properties(),
+		"settings": settings_spec(),
 	}, func(stage: String, fraction: float) -> void:
 		_install_status.text = stage
 		_install_progress.value = fraction * 100.0)

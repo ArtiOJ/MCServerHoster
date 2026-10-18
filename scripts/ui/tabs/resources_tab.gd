@@ -200,7 +200,8 @@ func _refresh() -> void:
 
 
 func _refresh_memory() -> void:
-	_hard_cap_check.text = "Hard memory limit — kill the server if it uses more than %s (heap + JVM overhead)" % Fmt.megabytes(_draft.hard_cap_mb())
+	_hard_cap_check.text = "Hard memory limit"
+	_hard_cap_check.tooltip_text = "Kill the server if it uses more than %s (heap + JVM overhead), enforced by the kernel." % Fmt.megabytes(_draft.hard_cap_mb())
 	var total_all := _draft.ram_max_mb
 	for inst in ServerManager.get_instances():
 		if inst != instance:

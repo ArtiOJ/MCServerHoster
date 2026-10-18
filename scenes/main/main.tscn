@@ -11,6 +11,8 @@
 [ext_resource type="PackedScene" path="res://scenes/dialogs/app_settings_dialog.tscn" id="9"]
 [ext_resource type="PackedScene" path="res://scenes/dialogs/quit_dialog.tscn" id="10"]
 [ext_resource type="Texture2D" path="res://assets/logo.svg" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/duplicate_server_dialog.tscn" id="12"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/temp_run_dialog.tscn" id="13"]
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -90,6 +92,14 @@ unique_name_in_owner = true
 visible = false
 
 [node name="QuitDialog" parent="." instance=ExtResource("10")]
+unique_name_in_owner = true
+visible = false
+
+[node name="DuplicateServerDialog" parent="." instance=ExtResource("12")]
+unique_name_in_owner = true
+visible = false
+
+[node name="TempRunDialog" parent="." instance=ExtResource("13")]
 unique_name_in_owner = true
 visible = false
 

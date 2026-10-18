@@ -6,7 +6,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="4"]
 
 [node name="AppSettingsDialog" type="ConfirmationDialog"]
-title = "Settings"
+title = "Preferences"
 size = Vector2i(700, 600)
 min_size = Vector2i(640, 520)
 ok_button_text = "Save"
@@ -121,12 +121,14 @@ popup/item_2/id = 2
 [node name="UpdatesCheck" type="CheckButton" parent="Scroll/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Check for new Paper builds when the app starts"
+tooltip_text = "Check PaperMC for new builds of each server's Minecraft version when the app starts."
+text = "Check for updates on launch"
 
 [node name="UnstableCheck" type="CheckButton" parent="Scroll/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Show pre-release and release-candidate Minecraft versions"
+tooltip_text = "Show pre-release and release-candidate Minecraft versions when creating or updating servers."
+text = "Show pre-releases"
 
 [node name="Separator" type="HSeparator" parent="Scroll/VBox"]
 layout_mode = 2

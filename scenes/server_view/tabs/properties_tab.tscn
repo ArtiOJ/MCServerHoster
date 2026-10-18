@@ -5,7 +5,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/undo.svg" id="3"]
 [ext_resource type="Texture2D" path="res://assets/icons/save.svg" id="4"]
 
-[node name="Properties" type="MarginContainer"]
+[node name="Settings" type="MarginContainer"]
 size_flags_horizontal = 3
 size_flags_vertical = 3
 theme_override_constants/margin_left = 20
@@ -26,15 +26,22 @@ theme_override_constants/separation = 8
 unique_name_in_owner = true
 custom_minimum_size = Vector2(280, 0)
 layout_mode = 2
-placeholder_text = "Search properties…"
+placeholder_text = "Search settings…"
 clear_button_enabled = true
 right_icon = ExtResource("2")
 
 [node name="RawToggle" type="CheckButton" parent="VBox/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Edit server.properties as plain text"
-text = "Raw editor"
+tooltip_text = "Edit server.properties and the Paper, Spigot and Bukkit config files as plain text"
+text = "Edit files"
+
+[node name="FileOption" type="OptionButton" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(260, 0)
+layout_mode = 2
+tooltip_text = "File to edit"
 
 [node name="Spacer" type="Control" parent="VBox/Toolbar"]
 layout_mode = 2
@@ -67,13 +74,36 @@ theme_type_variation = &"NoticePanel"
 
 [node name="Label" type="Label" parent="VBox/RunningNotice"]
 layout_mode = 2
-text = "The server is running. Changes to server.properties apply after a restart."
+text = "The server is running. File settings apply after a restart; game rules apply immediately."
+autowrap_mode = 3
+
+[node name="PendingNotice" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="PendingLabel" type="Label" parent="VBox/PendingNotice"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Game rule changes will be applied when the server next starts."
+autowrap_mode = 3
+
+[node name="TempNotice" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Label" type="Label" parent="VBox/TempNotice"]
+layout_mode = 2
+text = "A temporary copy is running or waiting for a decision. Changes here apply to the real server, not the copy."
 autowrap_mode = 3
 
 [node name="ManagedNote" type="Label" parent="VBox"]
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
-text = "The server port and RCON settings are managed in the Resources tab and written automatically before every start."
+text = "Port and RCON are managed in the Resources tab. Hover a setting for details."
 autowrap_mode = 3
 
 [node name="MissingNotice" type="Label" parent="VBox"]
@@ -81,7 +111,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
-text = "This server has not been started yet; the remaining properties are generated on its first start."
+text = "This server has not been started yet; Minecraft and Paper fill in every remaining setting on its first start."
 autowrap_mode = 3
 
 [node name="FormScroll" type="ScrollContainer" parent="VBox"]
@@ -94,7 +124,7 @@ horizontal_scroll_mode = 0
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-theme_override_constants/separation = 14
+theme_override_constants/separation = 10
 
 [node name="RawEditor" type="CodeEdit" parent="VBox"]
 unique_name_in_owner = true

@@ -3,6 +3,8 @@
 [ext_resource type="Script" path="res://scripts/ui/dialogs/new_server_wizard.gd" id="1"]
 [ext_resource type="PackedScene" path="res://scenes/components/slider_field.tscn" id="2"]
 [ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/components/property_row.tscn" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="5"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bg"]
 bg_color = Color(0.114, 0.133, 0.169, 1)
@@ -174,146 +176,86 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "✓ Available"
 
-[node name="AutoStartCheck" type="CheckButton" parent="Margin/VBox/Pages/Resources"]
+[node name="AutoStartRow" type="HBoxContainer" parent="Margin/VBox/Pages/Resources"]
+layout_mode = 2
+tooltip_text = "Start this server automatically whenever Server Manager opens."
+theme_override_constants/separation = 12
+
+[node name="AutoStartLabel" type="Label" parent="Margin/VBox/Pages/Resources/AutoStartRow"]
+layout_mode = 2
+text = "Auto-start"
+
+[node name="AutoStartCheck" type="CheckButton" parent="Margin/VBox/Pages/Resources/AutoStartRow"]
 unique_name_in_owner = true
 layout_mode = 2
-size_flags_horizontal = 0
-text = "Start automatically when Server Manager opens"
+tooltip_text = "Start this server automatically whenever Server Manager opens."
 
-[node name="Gameplay" type="GridContainer" parent="Margin/VBox/Pages"]
+[node name="Gameplay" type="ScrollContainer" parent="Margin/VBox/Pages"]
 visible = false
 layout_mode = 2
-theme_override_constants/h_separation = 18
-theme_override_constants/v_separation = 12
-columns = 2
+horizontal_scroll_mode = 0
 
-[node name="GamemodeLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
-layout_mode = 2
-text = "Game mode"
-
-[node name="GamemodeOption" type="OptionButton" parent="Margin/VBox/Pages/Gameplay"]
-unique_name_in_owner = true
+[node name="VBox" type="VBoxContainer" parent="Margin/VBox/Pages/Gameplay"]
 layout_mode = 2
 size_flags_horizontal = 3
-selected = 0
-item_count = 4
-popup/item_0/text = "Survival"
-popup/item_0/id = 0
-popup/item_1/text = "Creative"
-popup/item_1/id = 1
-popup/item_2/text = "Adventure"
-popup/item_2/id = 2
-popup/item_3/text = "Spectator"
-popup/item_3/id = 3
+theme_override_constants/separation = 14
 
-[node name="DifficultyLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
-layout_mode = 2
-text = "Difficulty"
-
-[node name="DifficultyOption" type="OptionButton" parent="Margin/VBox/Pages/Gameplay"]
+[node name="MainRows" type="VBoxContainer" parent="Margin/VBox/Pages/Gameplay/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-selected = 2
-item_count = 4
-popup/item_0/text = "Peaceful"
-popup/item_0/id = 0
-popup/item_1/text = "Easy"
-popup/item_1/id = 1
-popup/item_2/text = "Normal"
-popup/item_2/id = 2
-popup/item_3/text = "Hard"
-popup/item_3/id = 3
+theme_override_constants/separation = 8
 
-[node name="WorldTypeLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
+[node name="GamemodeRow" parent="Margin/VBox/Pages/Gameplay/VBox/MainRows" instance=ExtResource("4")]
 layout_mode = 2
-text = "World type"
+setting_id = "gamemode"
 
-[node name="WorldTypeOption" type="OptionButton" parent="Margin/VBox/Pages/Gameplay"]
+[node name="DifficultyRow" parent="Margin/VBox/Pages/Gameplay/VBox/MainRows" instance=ExtResource("4")]
+layout_mode = 2
+setting_id = "difficulty"
+
+[node name="WorldTypeRow" parent="Margin/VBox/Pages/Gameplay/VBox/MainRows" instance=ExtResource("4")]
+layout_mode = 2
+setting_id = "level-type"
+
+[node name="MaxPlayersRow" parent="Margin/VBox/Pages/Gameplay/VBox/MainRows" instance=ExtResource("4")]
+layout_mode = 2
+setting_id = "max-players"
+
+[node name="MotdRow" parent="Margin/VBox/Pages/Gameplay/VBox/MainRows" instance=ExtResource("4")]
+layout_mode = 2
+setting_id = "motd"
+
+[node name="SeedRow" parent="Margin/VBox/Pages/Gameplay/VBox/MainRows" instance=ExtResource("4")]
+layout_mode = 2
+setting_id = "level-seed"
+
+[node name="MoreSettings" type="FoldableContainer" parent="Margin/VBox/Pages/Gameplay/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-selected = 0
-item_count = 4
-popup/item_0/text = "Default"
-popup/item_0/id = 0
-popup/item_1/text = "Superflat"
-popup/item_1/id = 1
-popup/item_2/text = "Large biomes"
-popup/item_2/id = 2
-popup/item_3/text = "Amplified"
-popup/item_3/id = 3
+folded = true
+title = "More settings"
 
-[node name="MaxPlayersLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
+[node name="MoreVBox" type="VBoxContainer" parent="Margin/VBox/Pages/Gameplay/VBox/MoreSettings"]
 layout_mode = 2
-text = "Max players"
+theme_override_constants/separation = 10
 
-[node name="MaxPlayersSpin" type="SpinBox" parent="Margin/VBox/Pages/Gameplay"]
+[node name="MoreSearch" type="LineEdit" parent="Margin/VBox/Pages/Gameplay/VBox/MoreSettings/MoreVBox"]
 unique_name_in_owner = true
 layout_mode = 2
-min_value = 1.0
-max_value = 500.0
-value = 20.0
+placeholder_text = "Search settings…"
+clear_button_enabled = true
+right_icon = ExtResource("5")
 
-[node name="MotdLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
+[node name="MoreHint" type="Label" parent="Margin/VBox/Pages/Gameplay/VBox/MoreSettings/MoreVBox"]
 layout_mode = 2
-text = "MOTD"
+theme_type_variation = &"MutedLabel"
+text = "Everything else from server.properties, Paper, Spigot and Bukkit, plus game rules. Hover a setting for details."
+autowrap_mode = 3
 
-[node name="MotdEdit" type="LineEdit" parent="Margin/VBox/Pages/Gameplay"]
+[node name="MoreList" type="VBoxContainer" parent="Margin/VBox/Pages/Gameplay/VBox/MoreSettings/MoreVBox"]
 unique_name_in_owner = true
 layout_mode = 2
-placeholder_text = "A Minecraft Server"
-max_length = 120
-
-[node name="SeedLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
-layout_mode = 2
-text = "World seed"
-
-[node name="SeedEdit" type="LineEdit" parent="Margin/VBox/Pages/Gameplay"]
-unique_name_in_owner = true
-layout_mode = 2
-placeholder_text = "Random"
-
-[node name="OnlineModeLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
-layout_mode = 2
-text = "Online mode"
-
-[node name="OnlineModeCheck" type="CheckButton" parent="Margin/VBox/Pages/Gameplay"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 0
-tooltip_text = "Verify player accounts with Mojang. Only disable this behind a proxy such as Velocity."
-button_pressed = true
-text = "Verify accounts"
-
-[node name="WhitelistLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
-layout_mode = 2
-text = "Whitelist"
-
-[node name="WhitelistCheck" type="CheckButton" parent="Margin/VBox/Pages/Gameplay"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 0
-text = "Only whitelisted players"
-
-[node name="PvpLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
-layout_mode = 2
-text = "PvP"
-
-[node name="PvpCheck" type="CheckButton" parent="Margin/VBox/Pages/Gameplay"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 0
-button_pressed = true
-text = "Players can hurt each other"
-
-[node name="HardcoreLabel" type="Label" parent="Margin/VBox/Pages/Gameplay"]
-layout_mode = 2
-text = "Hardcore"
-
-[node name="HardcoreCheck" type="CheckButton" parent="Margin/VBox/Pages/Gameplay"]
-unique_name_in_owner = true
-layout_mode = 2
-size_flags_horizontal = 0
-text = "One life only"
+theme_override_constants/separation = 8
 
 [node name="Review" type="VBoxContainer" parent="Margin/VBox/Pages"]
 visible = false

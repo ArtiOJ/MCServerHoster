@@ -1,0 +1,39 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/dialogs/temp_run_dialog.gd" id="1"]
+
+[node name="TempRunDialog" type="ConfirmationDialog"]
+title = "Temporary run"
+size = Vector2i(580, 240)
+ok_button_text = "Discard changes"
+cancel_button_text = "Decide later"
+dialog_hide_on_ok = false
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 564.0
+offset_bottom = 184.0
+theme_override_constants/separation = 10
+
+[node name="Message" type="Label" parent="VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(548, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="HintLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(548, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="Progress" type="ProgressBar" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(0, 8)
+layout_mode = 2
+indeterminate = true
+show_percentage = false

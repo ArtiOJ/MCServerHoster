@@ -59,12 +59,14 @@ text = "Startup & recovery"
 [node name="AutoStartCheck" type="CheckButton" parent="VBox/Scroll/Content/RecoveryCard/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Start this server when Server Manager opens"
+tooltip_text = "Start this server automatically when Server Manager opens."
+text = "Auto-start"
 
 [node name="AutoRestartCheck" type="CheckButton" parent="VBox/Scroll/Content/RecoveryCard/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Restart automatically after a crash"
+tooltip_text = "Restart the server automatically when it crashes, with back-off and crash-loop protection."
+text = "Auto-restart on crash"
 
 [node name="Grid" type="GridContainer" parent="VBox/Scroll/Content/RecoveryCard/VBox"]
 layout_mode = 2
@@ -234,8 +236,8 @@ update_on_text_changed = true
 [node name="FullBackupCheck" type="CheckButton" parent="VBox/Scroll/Content/BackupCard/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Scheduled backups include the whole server folder (plugins and configs), not just the worlds"
-autowrap_mode = 3
+tooltip_text = "Scheduled backups include the whole server folder (plugins and configs), not just the worlds."
+text = "Full backups"
 
 [node name="RetentionHint" type="Label" parent="VBox/Scroll/Content/BackupCard/VBox"]
 layout_mode = 2

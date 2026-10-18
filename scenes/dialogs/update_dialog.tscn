@@ -62,7 +62,8 @@ autowrap_mode = 3
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
-text = "Back up worlds before installing"
+tooltip_text = "Back up the worlds before installing the new build."
+text = "Back up first"
 
 [node name="Progress" type="ProgressBar" parent="VBox"]
 unique_name_in_owner = true

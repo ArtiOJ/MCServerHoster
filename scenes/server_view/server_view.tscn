@@ -38,7 +38,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
-[node name="Properties" parent="Tabs" instance=ExtResource("5")]
+[node name="Settings" parent="Tabs" instance=ExtResource("5")]
 visible = false
 layout_mode = 2
 

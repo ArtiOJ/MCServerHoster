@@ -4,6 +4,8 @@ extends Control
 
 var _current_id := ""
 var _quitting := false
+## Servers whose temporary run ended while the decision dialog was already showing.
+var _temp_queue: Array[ServerInstance] = []
 
 @onready var _sidebar: Sidebar = %Sidebar
 @onready var _dashboard: Dashboard = %Dashboard
@@ -13,6 +15,8 @@ var _quitting := false
 @onready var _update_dialog: UpdateDialog = %UpdateDialog
 @onready var _settings_dialog: AppSettingsDialog = %AppSettingsDialog
 @onready var _quit_dialog: QuitDialog = %QuitDialog
+@onready var _duplicate_dialog: DuplicateServerDialog = %DuplicateServerDialog
+@onready var _temp_dialog: TempRunDialog = %TempRunDialog
 @onready var _tray: StatusIndicator = %TrayIcon
 @onready var _tray_menu: PopupMenu = %TrayMenu
 
@@ -31,6 +35,11 @@ func _ready() -> void:
 	_wizard.server_created.connect(func(inst: ServerInstance) -> void: show_server(inst.config.id))
 	_server_view.update_requested.connect(_update_dialog.open)
 	_server_view.delete_requested.connect(_delete_dialog.open)
+	_server_view.duplicate_requested.connect(_duplicate_dialog.open)
+	_server_view.temp_decision_requested.connect(_temp_dialog.open)
+	_duplicate_dialog.duplicated.connect(func(inst: ServerInstance) -> void: show_server(inst.config.id))
+	ServerManager.temporary_run_ended.connect(_on_temporary_run_ended)
+	_temp_dialog.visibility_changed.connect(_show_next_temp_decision)
 	_quit_dialog.stop_and_quit_requested.connect(_stop_all_and_quit)
 	_quit_dialog.minimize_requested.connect(_minimize)
 	ServerManager.server_removed.connect(func(id: String) -> void:
@@ -102,6 +111,27 @@ func _select_relative(step: int) -> void:
 		if all[i].config.id == _current_id:
 			idx = i
 	show_server(all[posmod(idx + step, all.size())].config.id)
+
+
+func _on_temporary_run_ended(inst: ServerInstance) -> void:
+	if _quitting:
+		return  # The copy stays pending and is offered again next session.
+	if _temp_dialog.visible:
+		if not _temp_queue.has(inst):
+			_temp_queue.append(inst)
+		return
+	_restore_window()
+	_temp_dialog.open(inst)
+
+
+func _show_next_temp_decision() -> void:
+	if _temp_dialog.visible or _quitting:
+		return
+	while not _temp_queue.is_empty():
+		var inst: ServerInstance = _temp_queue.pop_front()
+		if is_instance_valid(inst) and inst.is_temporary() and not inst.is_process_alive():
+			_temp_dialog.open.call_deferred(inst)
+			return
 
 
 func _on_files_dropped(files: PackedStringArray) -> void:

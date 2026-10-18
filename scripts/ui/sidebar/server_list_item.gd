@@ -27,6 +27,8 @@ func _refresh() -> void:
 	_color_bar.color = instance.config.color
 	_name_label.text = instance.config.display_name
 	var sub := "%s · %s" % [instance.state_name(), instance.config.mc_version]
+	if instance.is_temporary():
+		sub += " · temp copy"
 	if instance.update_available_build > 0:
 		sub += " · update"
 	_sub_label.text = sub

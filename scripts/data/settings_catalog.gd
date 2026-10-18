@@ -38,7 +38,7 @@ const PROPERTY_CATEGORY_OVERRIDES := {
 	"allow-flight": "Gameplay", "server-ip": "Network",
 }
 const PROPERTY_CATEGORY_RENAMES := {
-	"Network & Performance": "Network", "Players & Security": "Players & security",
+	"Network & Performance": "Network", "Players & Security": "Players & security", "Resource Pack": "Resource pack",
 }
 
 const T_BOOL := PropertySchema.Type.BOOL

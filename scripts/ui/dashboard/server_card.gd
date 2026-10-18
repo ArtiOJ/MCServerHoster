@@ -58,6 +58,8 @@ func _refresh() -> void:
 		_stats_label.text = "%s · CPU %.0f%% · RAM %s" % [players, instance.monitor.cpu_percent, Fmt.bytes(instance.monitor.rss_bytes)]
 	else:
 		_stats_label.text = "Offline"
+	if instance.is_temporary():
+		_stats_label.text += " · temp copy"
 	var alive := instance.is_process_alive()
 	_toggle_button.text = "Stop" if alive else "Start"
 	_toggle_button.icon = STOP_ICON if alive else PLAY_ICON

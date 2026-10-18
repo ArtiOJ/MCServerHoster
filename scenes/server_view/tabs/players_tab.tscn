@@ -159,7 +159,7 @@ text = "Access lists"
 unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Only players on the whitelist may join (server.properties: white-list)"
-text = "Whitelist enabled"
+text = "Whitelist"
 
 [node name="Lists" type="HBoxContainer" parent="Scroll/VBox"]
 layout_mode = 2

@@ -67,6 +67,8 @@ func _ready() -> void:
 	await _shot("22_wizard_resources")
 	wizard.get_node("%NextButton").pressed.emit()
 	await _shot("23_wizard_gameplay")
+	(wizard.find_child("MoreSettings", true, false) as FoldableContainer).folded = false
+	await _shot("23b_wizard_more_settings")
 	wizard.get_node("%NextButton").pressed.emit()
 	await _shot("24_wizard_review")
 	wizard.hide()
@@ -84,12 +86,24 @@ func _ready() -> void:
 	main.get_node("%QuitDialog").open()
 	await _shot("33_quit")
 	main.get_node("%QuitDialog").hide()
+	main.get_node("%DuplicateServerDialog").open(inst)
+	await _shot("34_duplicate")
+	main.get_node("%DuplicateServerDialog").hide()
 
 	inst.stop()
 	await _wait_for(func() -> bool: return not inst.is_process_alive(), 60.0)
 	main.show_server(inst.config.id)
 	tabs.current_tab = 0
 	await _shot("40_overview_stopped")
+
+	await inst.start_temporary()
+	await _wait_for(func() -> bool: return inst.is_online(), 240.0)
+	await _shot("41_temp_running")
+	inst.stop()
+	await _wait_for(func() -> bool: return main.get_node("%TempRunDialog").visible, 90.0)
+	await _shot("42_temp_dialog")
+	main.get_node("%TempRunDialog").hide()
+	await inst.finish_temporary(false)
 	for i in ServerManager.get_instances().duplicate():
 		ServerManager.delete_server(i.config.id, true, false, true)
 	print("UI smoke test finished")

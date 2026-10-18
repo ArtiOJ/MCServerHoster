@@ -30,15 +30,18 @@ layout_mode = 2
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
-text = "Delete the server folder (worlds, plugins, configs)"
+tooltip_text = "Delete the server folder (worlds, plugins, configs). Unchecked: only remove it from Server Manager."
+text = "Delete files"
 
 [node name="TrashCheck" type="CheckBox" parent="VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 button_pressed = true
-text = "Move to the system trash instead of deleting permanently"
+tooltip_text = "Move files to the system trash instead of deleting them permanently."
+text = "Use trash"
 
 [node name="DeleteBackupsCheck" type="CheckBox" parent="VBox"]
 unique_name_in_owner = true
 layout_mode = 2
-text = "Also delete this server's backups"
+tooltip_text = "Also delete this server's backups."
+text = "Delete backups"

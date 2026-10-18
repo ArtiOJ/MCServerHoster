@@ -5,6 +5,8 @@ extends VBoxContainer
 
 signal update_requested(instance: ServerInstance)
 signal delete_requested(instance: ServerInstance)
+signal duplicate_requested(instance: ServerInstance)
+signal temp_decision_requested(instance: ServerInstance)
 
 const TAB_ICONS: Array[Texture2D] = [
 	preload("res://assets/icons/activity.svg"),
@@ -30,6 +32,8 @@ func _ready() -> void:
 		_tabs.set_tab_icon(i, TAB_ICONS[i])
 	_header.update_requested.connect(func() -> void: update_requested.emit(instance))
 	_header.delete_requested.connect(func() -> void: delete_requested.emit(instance))
+	_header.duplicate_requested.connect(func() -> void: duplicate_requested.emit(instance))
+	_header.temp_decision_requested.connect(func() -> void: temp_decision_requested.emit(instance))
 
 
 func show_instance(inst: ServerInstance) -> void:

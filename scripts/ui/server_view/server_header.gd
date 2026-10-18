@@ -4,14 +4,21 @@ extends PanelContainer
 
 signal update_requested
 signal delete_requested
+signal duplicate_requested
+signal temp_decision_requested
 
-enum MenuItem { OPEN_FOLDER, COPY_ADDRESS, UPDATE, CHECK_UPDATES, STOP_ORPHAN, CLEAR_CONSOLE, DELETE }
+enum MenuItem { OPEN_FOLDER, COPY_ADDRESS, UPDATE, CHECK_UPDATES, STOP_ORPHAN, CLEAR_CONSOLE, DELETE, DUPLICATE, TEMP_DECISION }
+enum StartItem { START, START_TEMPORARY }
+
+const TEMP_START_TOOLTIP := "Run a throwaway copy of this server for testing. It shows as this server while running; when it stops you choose whether to keep or discard what changed."
 
 var instance: ServerInstance
 
 @onready var _color_bar: ColorRect = %ColorBar
 @onready var _name_label: Label = %NameLabel
 @onready var _state_badge: Label = %StateBadge
+@onready var _temp_badge: Label = %TempBadge
+@onready var _start_menu: MenuButton = %StartMenuButton
 @onready var _update_button: Button = %UpdateButton
 @onready var _info_label: Label = %InfoLabel
 @onready var _start_button: Button = %StartButton
@@ -28,6 +35,9 @@ func _ready() -> void:
 	_kill_button.pressed.connect(func() -> void: instance.kill())
 	_update_button.pressed.connect(func() -> void: update_requested.emit())
 	_more_button.get_popup().id_pressed.connect(_on_menu)
+	var start_popup := _start_menu.get_popup()
+	start_popup.set_item_tooltip(start_popup.get_item_index(StartItem.START_TEMPORARY), TEMP_START_TOOLTIP)
+	start_popup.id_pressed.connect(_on_start_menu)
 
 
 func bind(inst: ServerInstance) -> void:
@@ -57,6 +67,7 @@ func _refresh() -> void:
 	var badge_style := (_state_badge.get_theme_stylebox("normal") as StyleBoxFlat).duplicate() as StyleBoxFlat
 	badge_style.bg_color = Color(instance.state_color(), 0.16)
 	_state_badge.add_theme_stylebox_override("normal", badge_style)
+	_temp_badge.visible = instance.is_temporary()
 	_update_button.visible = instance.update_available_build > 0
 	_update_button.text = "Update to #%d" % instance.update_available_build
 	_info_label.text = "Paper %s · build #%d · port %d · %s" % [cfg.mc_version, cfg.paper_build, cfg.port, cfg.directory]
@@ -66,6 +77,14 @@ func _refresh() -> void:
 	var installing := s == ServerInstance.State.INSTALLING
 	_start_button.visible = not alive and s != ServerInstance.State.STOPPING
 	_start_button.disabled = installing or instance.orphan_pid > 0
+	_start_button.tooltip_text = "Keep or discard the temporary copy first (⋮ menu), or resume it from the Start options." \
+			if instance.is_temporary() else "Start the server (Ctrl+Enter)"
+	_start_menu.visible = _start_button.visible
+	_start_menu.disabled = _start_button.disabled
+	var start_popup := _start_menu.get_popup()
+	var temp_idx := start_popup.get_item_index(StartItem.START_TEMPORARY)
+	start_popup.set_item_text(temp_idx, "Resume temporary copy" if instance.is_temporary() else "Start temporary copy")
+	start_popup.set_item_disabled(start_popup.get_item_index(StartItem.START), instance.is_temporary())
 	_stop_button.visible = alive or s == ServerInstance.State.CRASHED
 	_stop_button.disabled = s == ServerInstance.State.STOPPING
 	_stop_button.text = "Cancel restart" if s == ServerInstance.State.CRASHED else "Stop"
@@ -77,6 +96,17 @@ func _refresh() -> void:
 	popup.set_item_disabled(popup.get_item_index(MenuItem.UPDATE), alive or installing)
 	popup.set_item_disabled(popup.get_item_index(MenuItem.DELETE), alive or installing)
 	popup.set_item_disabled(popup.get_item_index(MenuItem.STOP_ORPHAN), instance.orphan_pid <= 0)
+	popup.set_item_disabled(popup.get_item_index(MenuItem.DUPLICATE), installing)
+	popup.set_item_disabled(popup.get_item_index(MenuItem.TEMP_DECISION), not instance.is_temporary() or alive or installing)
+
+
+func _on_start_menu(id: int) -> void:
+	match id:
+		StartItem.START:
+			instance.start()
+		StartItem.START_TEMPORARY:
+			await instance.start_temporary()
+			_refresh()
 
 
 func _on_menu(id: int) -> void:
@@ -102,3 +132,7 @@ func _on_menu(id: int) -> void:
 			instance.clear_console()
 		MenuItem.DELETE:
 			delete_requested.emit()
+		MenuItem.DUPLICATE:
+			duplicate_requested.emit()
+		MenuItem.TEMP_DECISION:
+			temp_decision_requested.emit()

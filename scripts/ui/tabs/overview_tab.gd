@@ -67,9 +67,14 @@ func _refresh_all() -> void:
 		notices.append("A server process from a previous session is still running (PID %d). Use “Stop leftover process” in the ⋮ menu." % instance.orphan_pid)
 	if instance.state == ServerInstance.State.CRASHED:
 		notices.append("The server crashed (exit code %d). Check the Console tab for the error." % instance.last_exit_code)
+	if instance.is_temporary():
+		if instance.is_process_alive():
+			notices.append("Running a temporary copy — changes will be discarded or kept when it stops.")
+		else:
+			notices.append("A temporary copy is waiting for a keep/discard decision (⋮ menu).")
 	if instance.update_available_build > 0:
 		notices.append("Paper build #%d is available (installed: #%d)." % [instance.update_available_build, cfg.paper_build])
-	var problem := instance.start_problem() if not instance.is_busy() and instance.orphan_pid <= 0 else ""
+	var problem := instance.start_problem() if not instance.is_busy() and instance.orphan_pid <= 0 and not instance.is_temporary() else ""
 	if problem != "":
 		notices.append(problem)
 	_notice.visible = not notices.is_empty()
