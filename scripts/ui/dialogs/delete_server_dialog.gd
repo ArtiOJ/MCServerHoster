@@ -7,7 +7,6 @@ var _instance: ServerInstance
 @onready var _message: Label = %Message
 @onready var _name_edit: LineEdit = %NameEdit
 @onready var _delete_files: CheckBox = %DeleteFilesCheck
-@onready var _use_trash: CheckBox = %TrashCheck
 @onready var _delete_backups: CheckBox = %DeleteBackupsCheck
 
 
@@ -18,18 +17,16 @@ func _ready() -> void:
 		if not get_ok_button().disabled:
 			_on_confirmed()
 			hide())
-	_delete_files.toggled.connect(func(on: bool) -> void: _use_trash.disabled = not on and not _delete_backups.button_pressed)
 	confirmed.connect(_on_confirmed)
 
 
 func open(inst: ServerInstance) -> void:
 	_instance = inst
 	title = "Delete %s?" % inst.config.display_name
-	_message.text = "This removes \"%s\" from Server Manager.\nFolder: %s\n\nType the server name to confirm." % [inst.config.display_name, inst.config.directory]
+	_message.text = "This permanently deletes \"%s\". It cannot be undone.\nFolder: %s\n\nType the server name to confirm." % [inst.config.display_name, inst.config.directory]
 	_name_edit.text = ""
 	_name_edit.placeholder_text = inst.config.display_name
 	_delete_files.button_pressed = true
-	_use_trash.button_pressed = true
 	_delete_backups.button_pressed = false
 	_validate()
 	popup_centered()
@@ -44,7 +41,7 @@ func _on_confirmed() -> void:
 	if _instance == null:
 		return
 	var display := _instance.config.display_name
-	var err := ServerManager.delete_server(_instance.config.id, _delete_files.button_pressed, _use_trash.button_pressed, _delete_backups.button_pressed)
+	var err := ServerManager.delete_server(_instance.config.id, _delete_files.button_pressed, _delete_backups.button_pressed)
 	_instance = null
 	if err == OK:
 		Notifier.success("Deleted %s." % display)

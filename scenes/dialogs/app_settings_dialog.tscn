@@ -101,11 +101,75 @@ rounded = true
 suffix = "lines"
 update_on_text_changed = true
 
-[node name="ExitLabel" type="Label" parent="Scroll/VBox/Grid"]
+[node name="UpdatesCheck" type="CheckButton" parent="Scroll/VBox"]
+unique_name_in_owner = true
 layout_mode = 2
-text = "Closing with servers running"
+tooltip_text = "Check PaperMC for new builds of each server's Minecraft version when the app starts."
+text = "Check for updates on launch"
 
-[node name="ExitOption" type="OptionButton" parent="Scroll/VBox/Grid"]
+[node name="UnstableCheck" type="CheckButton" parent="Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show pre-release and release-candidate Minecraft versions when creating or updating servers."
+text = "Show pre-releases"
+
+[node name="PowerSeparator" type="HSeparator" parent="Scroll/VBox"]
+layout_mode = 2
+
+[node name="PowerTitle" type="Label" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Power & background"
+
+[node name="PowerGrid" type="GridContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="SleepLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "What happens when the computer tries to sleep while servers run. A sleeping computer cannot run anything, so servers either keep it awake or are stopped cleanly first. Blocking sleep never stops the screen from turning off or locking."
+text = "When the computer sleeps"
+
+[node name="SleepOption" type="OptionButton" parent="Scroll/VBox/PowerGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Block while players are online: sleep is refused while anyone is playing; otherwise servers are stopped cleanly first.
+Stop servers, then sleep: always stop cleanly, never block.
+Block while any server runs: the computer stays awake while a server is running.
+Let it sleep: servers freeze during sleep and continue after waking; players get disconnected."
+selected = 0
+item_count = 4
+popup/item_0/text = "Block sleep while players are online"
+popup/item_0/id = 0
+popup/item_1/text = "Stop servers, then sleep"
+popup/item_1/id = 1
+popup/item_2/text = "Block sleep while any server runs"
+popup/item_2/id = 2
+popup/item_3/text = "Let it sleep (servers pause)"
+popup/item_3/id = 3
+
+[node name="WakeLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Start the servers that were stopped for sleep again when the computer wakes up."
+text = "Restart after wake"
+
+[node name="WakeCheck" type="CheckButton" parent="Scroll/VBox/PowerGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Start the servers that were stopped for sleep again when the computer wakes up."
+
+[node name="ExitLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
+layout_mode = 2
+tooltip_text = "What happens when you close the window while servers are running. Keep running minimizes the window (Linux has no tray icon support in Godot)."
+text = "Closing the window"
+
+[node name="ExitOption" type="OptionButton" parent="Scroll/VBox/PowerGrid"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -118,17 +182,61 @@ popup/item_1/id = 1
 popup/item_2/text = "Keep running (minimize window)"
 popup/item_2/id = 2
 
-[node name="UpdatesCheck" type="CheckButton" parent="Scroll/VBox"]
-unique_name_in_owner = true
+[node name="LoginLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
 layout_mode = 2
-tooltip_text = "Check PaperMC for new builds of each server's Minecraft version when the app starts."
-text = "Check for updates on launch"
+mouse_filter = 0
+tooltip_text = "Launch Server Manager (minimized) when you log in, so auto-start servers and events keep working."
+text = "Start at login"
 
-[node name="UnstableCheck" type="CheckButton" parent="Scroll/VBox"]
+[node name="LoginCheck" type="CheckButton" parent="Scroll/VBox/PowerGrid"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Show pre-release and release-candidate Minecraft versions when creating or updating servers."
-text = "Show pre-releases"
+size_flags_horizontal = 0
+tooltip_text = "Launch Server Manager (minimized) when you log in, so auto-start servers and events keep working."
+
+[node name="MinimizedLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Always open with the window minimized. Launches at login are minimized regardless."
+text = "Start minimized"
+
+[node name="MinimizedCheck" type="CheckButton" parent="Scroll/VBox/PowerGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Always open with the window minimized. Launches at login are minimized regardless."
+
+[node name="PowerStatus" type="Label" parent="Scroll/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(600, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="LimitNotice" type="PanelContainer" parent="Scroll/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="LimitRow" type="HBoxContainer" parent="Scroll/VBox/LimitNotice"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="LimitLabel" type="Label" parent="Scroll/VBox/LimitNotice/LimitRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Your system only lets apps delay sleep and shutdown for a few seconds, which can be too short for a clean stop. Run the copied command once in a terminal (needs your password) and reboot to allow up to 2 minutes."
+autowrap_mode = 3
+
+[node name="CopyLimitButton" type="Button" parent="Scroll/VBox/LimitNotice/LimitRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Copies a command that writes /etc/systemd/logind.conf.d/50-server-manager.conf with InhibitDelayMaxSec=120."
+text = "Copy command"
 
 [node name="Separator" type="HSeparator" parent="Scroll/VBox"]
 layout_mode = 2

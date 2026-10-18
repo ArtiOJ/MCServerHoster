@@ -136,5 +136,5 @@ use_native_dialog = true
 [node name="DeleteDialog" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true
 title = "Delete plugin"
-ok_button_text = "Move to trash"
+ok_button_text = "Delete"
 dialog_autowrap = true

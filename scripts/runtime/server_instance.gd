@@ -331,7 +331,7 @@ func start_temporary() -> Error:
 
 
 ## Ends a pending temporary run. [param keep] replaces the server's files with the copy
-## (the previous files go to the system trash); otherwise the copy is deleted.
+## after saving a safety backup of the current worlds; otherwise the copy is deleted.
 func finish_temporary(keep: bool) -> Error:
 	if not is_temporary():
 		return ERR_DOES_NOT_EXIST
@@ -342,6 +342,13 @@ func finish_temporary(keep: bool) -> Error:
 	_set_state(State.INSTALLING)
 	var err := OK
 	if keep and DirAccess.dir_exists_absolute(temp):
+		if not backups.world_dirs(original).is_empty():
+			_set_state(State.STOPPED)
+			log_system("Saving a safety backup of the server's current worlds…")
+			if await backups.create_backup(false, original, "pre-keep") == "":
+				log_system("Safety backup failed; the temporary copy was not applied.", LogParser.Level.ERROR)
+				return FAILED
+			_set_state(State.INSTALLING)
 		log_system("Keeping the changes from the temporary run…")
 		var aside := "%s.before-temp-%s" % [original, Fmt.file_stamp(int(Time.get_unix_time_from_system()))]
 		err = DirAccess.rename_absolute(original, aside)
@@ -354,7 +361,7 @@ func finish_temporary(keep: bool) -> Error:
 					await FileOps.run_async(self, func() -> Error: return FileOps.remove_tree(temp))
 			if err == OK:
 				DirAccess.rename_absolute(aside.path_join(ServerConfig.META_DIR), original.path_join(ServerConfig.META_DIR))
-				OS.move_to_trash(aside)
+				await FileOps.run_async(self, func() -> Error: return FileOps.remove_tree(aside))
 			else:
 				FileOps.remove_path(original)
 				DirAccess.rename_absolute(aside, original)
@@ -452,6 +459,7 @@ func _on_line(text: String, is_stderr: bool) -> void:
 		if not players.has(joined):
 			players.append(joined)
 		players_changed.emit()
+		scheduler.fire(EventRule.Trigger.PLAYER_JOINED)
 		return
 	var left := LogParser.left_player(plain)
 	if left != "":
@@ -459,6 +467,7 @@ func _on_line(text: String, is_stderr: bool) -> void:
 		if idx >= 0:
 			players.remove_at(idx)
 		players_changed.emit()
+		scheduler.fire(EventRule.Trigger.PLAYER_LEFT)
 		return
 	if LogParser.is_stopping(plain):
 		# Stopped from in-game or by a plugin: treat as an intentional shutdown.
@@ -476,6 +485,7 @@ func _on_started() -> void:
 		rcon.connect_to("127.0.0.1", config.rcon_port, config.rcon_password)
 	_query_timer.start()
 	apply_pending_gamerules()
+	scheduler.fire(EventRule.Trigger.SERVER_ONLINE)
 
 
 func _on_process_exited(code: int) -> void:
@@ -496,6 +506,7 @@ func _on_process_exited(code: int) -> void:
 			_restart_after_stop = false
 			start(is_temporary())
 			return
+		scheduler.fire(EventRule.Trigger.SERVER_STOPPED)
 		if is_temporary():
 			temporary_run_ended.emit()
 		return
@@ -503,6 +514,7 @@ func _on_process_exited(code: int) -> void:
 	_set_state(State.CRASHED)
 	Notifier.error("%s crashed (exit code %d)." % [config.display_name, code])
 	_maybe_auto_restart()
+	scheduler.fire(EventRule.Trigger.SERVER_CRASHED)
 	if is_temporary() and _restart_delay.is_stopped():
 		temporary_run_ended.emit()
 

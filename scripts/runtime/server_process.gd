@@ -16,7 +16,7 @@ var _stderr: FileAccess
 ## Partial-line byte buffers keyed by is_stderr.
 var _pending := {false: PackedByteArray(), true: PackedByteArray()}
 
-@onready var _poll_timer: Timer = %PollTimer
+@onready var _poll_timer: Timer = $PollTimer
 
 
 func _ready() -> void:

@@ -36,8 +36,8 @@ func _ready() -> void:
 	})
 	var inst: ServerInstance = created.instance
 	inst.config.cpu_quota_pct = 300
-	var s := ScheduleEntry.new()
-	inst.config.schedules.append(s)
+	inst.config.events.append(EventRule.from_template(EventRule.templates()[2][1]))
+	inst.config.events.append(EventRule.from_template(EventRule.templates()[3][1]))
 	inst.save_config()
 
 	var main: Control = MAIN_SCENE.instantiate()
@@ -105,7 +105,7 @@ func _ready() -> void:
 	main.get_node("%TempRunDialog").hide()
 	await inst.finish_temporary(false)
 	for i in ServerManager.get_instances().duplicate():
-		ServerManager.delete_server(i.config.id, true, false, true)
+		ServerManager.delete_server(i.config.id, true, true)
 	print("UI smoke test finished")
 	get_tree().quit()
 

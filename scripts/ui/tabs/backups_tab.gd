@@ -121,7 +121,7 @@ func _confirm_restore() -> void:
 	if path == "":
 		return
 	_restore_dialog.dialog_text = ("Restore \"%s\"?\n\nThe world folders contained in this backup will be replaced. " +
-		"The current versions are moved to the system trash, so they can still be recovered.") % path.get_file()
+		"A safety backup of the current worlds is saved to this list first, then they are deleted.") % path.get_file()
 	_restore_dialog.popup_centered()
 
 

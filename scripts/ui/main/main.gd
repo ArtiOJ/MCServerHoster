@@ -24,6 +24,9 @@ var _temp_queue: Array[ServerInstance] = []
 func _ready() -> void:
 	get_tree().auto_accept_quit = false
 	get_window().min_size = Vector2i(1100, 680)
+	PowerManager.shutting_down.connect(_on_system_shutdown)
+	if AppSettings.launched_minimized():
+		DisplayServer.window_set_mode.call_deferred(DisplayServer.WINDOW_MODE_MINIMIZED)
 	get_window().files_dropped.connect(_on_files_dropped)
 
 	_sidebar.dashboard_selected.connect(show_dashboard)
@@ -163,6 +166,12 @@ func _on_close_requested() -> void:
 			_quit_dialog.open()
 
 
+## The computer is shutting down or rebooting: stop everything cleanly and exit.
+func _on_system_shutdown() -> void:
+	if not _quitting:
+		_stop_all_and_quit()
+
+
 func _stop_all_and_quit() -> void:
 	_quitting = true
 	_restore_window()
@@ -173,7 +182,8 @@ func _stop_all_and_quit() -> void:
 
 func _minimize() -> void:
 	DisplayServer.window_set_mode(DisplayServer.WINDOW_MODE_MINIMIZED)
-	Notifier.info("Server Manager keeps running in the background. Use the tray icon to return.")
+	var where := "the tray icon" if DisplayServer.has_feature(DisplayServer.FEATURE_STATUS_INDICATOR) else "the taskbar"
+	Notifier.info("Server Manager keeps running in the background. Use %s to return." % where)
 
 
 func _restore_window() -> void:

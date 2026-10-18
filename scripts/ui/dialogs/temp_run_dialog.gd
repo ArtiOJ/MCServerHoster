@@ -16,7 +16,7 @@ var _keep_button: Button
 func _ready() -> void:
 	_keep_button = add_button("Keep changes", false, ACTION_KEEP)
 	_keep_button.theme_type_variation = &"AccentButton"
-	_keep_button.tooltip_text = "Make the copy permanent. The server's previous files are moved to the system trash."
+	_keep_button.tooltip_text = "Make the copy permanent. A safety backup of the server's current worlds is saved to its Backups first."
 	get_ok_button().theme_type_variation = &"DangerButton"
 	get_ok_button().tooltip_text = "Delete the temporary copy. The server stays exactly as it was before the test run."
 	get_cancel_button().tooltip_text = "Leave the copy as it is. Starting normally is blocked until you decide; resume it from the Start ▾ menu."
@@ -43,7 +43,7 @@ func open(inst: ServerInstance) -> void:
 		_message.text = "%s is running as a temporary copy. Stop it first, then choose whether to keep or discard what changed." % inst.config.display_name
 	else:
 		_message.text = "%s was running as a temporary copy. Discard everything that changed during the test run, or keep the changes and make them permanent?" % inst.config.display_name
-	_hint.text = "Keeping replaces the server's files with the copy; the previous files are moved to the system trash."
+	_hint.text = "Keeping replaces the server's files with the copy; a safety backup of the current worlds is saved to Backups first. Discarding deletes the copy permanently."
 	_set_enabled(not running)
 	popup_centered()
 

@@ -53,6 +53,8 @@ func _ready() -> void:
 		_check(LogParser.parse_gamerule(await inst.rcon.execute("gamerule pvp")) == "false", "pvp game rule is false on the server")
 	else:
 		_check(inst.get_properties().get_value("pvp") == "false", "pvp property survived boot")
+	# Untouched rules are read one by one over RCON after boot.
+	await _wait_for(func() -> bool: return inst.config.known_gamerules.get("gamerule.spawn_mobs", "") == "true", 20.0)
 	_check(inst.config.known_gamerules.get("gamerule.spawn_mobs", "") == "true", "refresh_gamerules read untouched rules")
 	var settings := ServerSettings.open(inst.config)
 	_check(settings.get_value(SettingsCatalog.get_entry("bukkit.yml::settings.allow-end")) == "false", "bukkit allow-end survived boot")
@@ -80,7 +82,7 @@ func _ready() -> void:
 		_check(inst.is_online() and copy.is_online(), "original and copy run at the same time")
 		copy.stop()
 		await _wait_for(func() -> bool: return not copy.is_process_alive(), 90.0)
-		ServerManager.delete_server(copy.config.id, true, false, true)
+		ServerManager.delete_server(copy.config.id, true, true)
 
 	inst.stop()
 	await _wait_for(func() -> bool: return not inst.is_process_alive(), 90.0)
@@ -116,12 +118,14 @@ func _ready() -> void:
 	_check(await inst.finish_temporary(true) == OK, "keep temporary copy")
 	_check(FileAccess.file_exists(dir.path_join("keep-marker.txt")), "kept change is now in the server folder")
 	_check(ServerConfig.load_from_dir(dir) != null, "manager config survived the swap")
+	_check(inst.backups.list_backups().any(func(b: Dictionary) -> bool: return b.name.ends_with("_pre-keep.zip")), "safety backup saved before keeping")
+	_check(not Array(DirAccess.get_directories_at(dir.get_base_dir())).any(func(d: String) -> bool: return d.contains(".before-temp-")), "previous files deleted, not left behind")
 	_check(not inst.is_temporary(), "no temporary copy pending")
 	await _boot(inst, "server boots normally after keeping")
 	inst.stop()
 	await _wait_for(func() -> bool: return not inst.is_process_alive(), 90.0)
 
-	ServerManager.delete_server(inst.config.id, true, false, true)
+	ServerManager.delete_server(inst.config.id, true, true)
 	_finish()
 
 

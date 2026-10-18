@@ -16,16 +16,18 @@ func test_round_trip() -> void:
 	c.display_name = "Survival"
 	c.cpu_quota_pct = 250
 	c.cpu_affinity = "0-3"
-	var s := ScheduleEntry.new()
-	s.kind = ScheduleEntry.Kind.COMMAND
-	s.command = "say hi"
-	c.schedules.append(s)
+	var e := EventRule.new()
+	e.action = EventRule.Action.COMMAND
+	e.text = "say hi"
+	e.weekdays = 0b0100010
+	c.events.append(e)
 	var back := ServerConfig.from_dict(JSON.parse_string(JSON.stringify(c.to_dict())), c.directory)
 	check_eq(back.display_name, "Survival", "name")
 	check_eq(back.cpu_quota_pct, 250, "quota")
 	check_eq(back.cpu_affinity, "0-3", "affinity")
-	check_eq(back.schedules.size(), 1, "schedules")
-	check_eq(back.schedules[0].command, "say hi", "schedule command")
+	check_eq(back.events.size(), 1, "events")
+	check_eq(back.events[0].text, "say hi", "event text")
+	check_eq(back.events[0].weekdays, 0b0100010, "event weekdays")
 	check_eq(back.recommended_flags, PackedStringArray(["-XX:+UseG1GC"]), "flags")
 
 
@@ -67,19 +69,6 @@ func test_linux_launch_command() -> void:
 		check(limited.args.has("0-1"), "taskset cpu list")
 	var java_idx := Array(limited.args).find("/usr/bin/java")
 	check(java_idx > 0 and limited.args[java_idx + 1] == "-Xms1024M", "java follows wrappers")
-
-
-func test_schedule_next_run() -> void:
-	var e := ScheduleEntry.new()
-	e.mode = ScheduleEntry.Mode.INTERVAL
-	e.interval_minutes = 60
-	check_eq(e.next_run_after(1000, 1000), 1000 + 3600, "first interval")
-	check_eq(e.next_run_after(1000 + 3600, 1000), 1000 + 7200, "strictly after")
-	e.mode = ScheduleEntry.Mode.DAILY
-	e.time_of_day = "04:30"
-	var now := int(Time.get_unix_time_from_system())
-	var next := e.next_run_after(now, now)
-	check(next > now and next <= now + 86400, "daily within a day")
 
 
 func test_slug_and_args() -> void:

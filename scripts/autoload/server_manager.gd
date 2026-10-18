@@ -234,9 +234,9 @@ func import_server(dir: String) -> Dictionary:
 	return {"ok": true, "instance": _register(cfg)}
 
 
-## Removes a server. With [param delete_files] its folder is moved to the system
-## trash (or permanently deleted if [param use_trash] is false).
-func delete_server(server_id: String, delete_files := true, use_trash := true, delete_backups := false) -> Error:
+## Removes a server. With [param delete_files] its folder is deleted permanently
+## (nothing goes to the system trash).
+func delete_server(server_id: String, delete_files := true, delete_backups := false) -> Error:
 	var inst := get_instance(server_id)
 	if inst == null:
 		return ERR_DOES_NOT_EXIST
@@ -247,14 +247,11 @@ func delete_server(server_id: String, delete_files := true, use_trash := true, d
 	if inst.is_temporary():
 		FileOps.remove_path(inst.config.temp_run_dir)
 	if delete_files and DirAccess.dir_exists_absolute(dir):
-		var err := OS.move_to_trash(dir) if use_trash else _remove_dir_recursive(dir)
+		var err := _remove_dir_recursive(dir)
 		if err != OK:
 			return err
 	if delete_backups and DirAccess.dir_exists_absolute(backup_dir):
-		if use_trash:
-			OS.move_to_trash(backup_dir)
-		else:
-			_remove_dir_recursive(backup_dir)
+		_remove_dir_recursive(backup_dir)
 	AppSettings.unregister_server_dir(dir)
 	_instances.erase(inst)
 	inst.queue_free()
@@ -312,6 +309,8 @@ func _auto_start() -> void:
 	for inst in _instances:
 		if inst.config.auto_start and inst.orphan_pid <= 0 and not inst.is_temporary():
 			inst.start()
+	for inst in _instances:
+		inst.scheduler.fire(EventRule.Trigger.APP_STARTED)
 
 
 static func _remove_dir_recursive(path: String) -> Error:

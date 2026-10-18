@@ -188,7 +188,7 @@ func _confirm_delete() -> void:
 	var file := _selected_file()
 	if file == "":
 		return
-	_delete_dialog.dialog_text = "Move \"%s\" to the trash?\nIts configuration folder (if any) is kept." % file
+	_delete_dialog.dialog_text = "Permanently delete \"%s\"?\nIts configuration folder (if any) is kept." % file
 	_delete_dialog.popup_centered()
 
 
@@ -196,7 +196,7 @@ func _delete_selected() -> void:
 	var path := _selected_path()
 	if path == "":
 		return
-	var err := OS.move_to_trash(path)
+	var err := DirAccess.remove_absolute(path)
 	if err != OK:
 		Notifier.error("Could not delete %s: %s" % [path.get_file(), error_string(err)])
 		return

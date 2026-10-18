@@ -5,8 +5,6 @@
 [ext_resource type="Texture2D" path="res://assets/icons/clock.svg" id="3"]
 [ext_resource type="Texture2D" path="res://assets/icons/archive.svg" id="4"]
 [ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="5"]
-[ext_resource type="Texture2D" path="res://assets/icons/restart.svg" id="6"]
-[ext_resource type="Texture2D" path="res://assets/icons/terminal.svg" id="7"]
 [ext_resource type="Texture2D" path="res://assets/icons/undo.svg" id="8"]
 [ext_resource type="Texture2D" path="res://assets/icons/save.svg" id="9"]
 
@@ -128,68 +126,70 @@ layout_mode = 2
 theme_type_variation = &"MutedLabel"
 autowrap_mode = 3
 
-[node name="ScheduleCard" type="PanelContainer" parent="VBox/Scroll/Content"]
+[node name="EventsCard" type="PanelContainer" parent="VBox/Scroll/Content"]
 layout_mode = 2
 theme_type_variation = &"CardPanel"
 
-[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/ScheduleCard"]
+[node name="VBox" type="VBoxContainer" parent="VBox/Scroll/Content/EventsCard"]
 layout_mode = 2
 theme_override_constants/separation = 12
 
-[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/ScheduleCard/VBox"]
+[node name="Header" type="HBoxContainer" parent="VBox/Scroll/Content/EventsCard/VBox"]
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header"]
+[node name="Icon" type="TextureRect" parent="VBox/Scroll/Content/EventsCard/VBox/Header"]
 layout_mode = 2
 size_flags_vertical = 4
 texture = ExtResource("3")
 stretch_mode = 5
 
-[node name="Titles" type="VBoxContainer" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header"]
+[node name="Titles" type="VBoxContainer" parent="VBox/Scroll/Content/EventsCard/VBox/Header"]
 layout_mode = 2
 size_flags_horizontal = 3
 theme_override_constants/separation = 2
 
-[node name="Title" type="Label" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header/Titles"]
+[node name="Title" type="Label" parent="VBox/Scroll/Content/EventsCard/VBox/Header/Titles"]
 layout_mode = 2
 theme_type_variation = &"SectionHeader"
-text = "Scheduled tasks"
+text = "Events"
 
-[node name="Subtitle" type="Label" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header/Titles"]
+[node name="Subtitle" type="Label" parent="VBox/Scroll/Content/EventsCard/VBox/Header/Titles"]
 layout_mode = 2
 theme_type_variation = &"SubtitleLabel"
-text = "Times use this computer's local time zone. Restarts can warn players in chat beforehand."
+text = "When something happens or a time arrives, do something — e.g. start at 18:00 on weekends, stop when empty."
 autowrap_mode = 3
 
-[node name="AddTaskMenu" type="MenuButton" parent="VBox/Scroll/Content/ScheduleCard/VBox/Header"]
+[node name="AddEventMenu" type="MenuButton" parent="VBox/Scroll/Content/EventsCard/VBox/Header"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_vertical = 0
-text = "Add task"
+tooltip_text = "Add an event from a template; every field can be changed afterwards."
+text = "Add event"
 icon = ExtResource("5")
 flat = false
-item_count = 3
-popup/item_0/text = "Scheduled restart"
-popup/item_0/icon = ExtResource("6")
-popup/item_0/id = 0
-popup/item_1/text = "Scheduled command"
-popup/item_1/icon = ExtResource("7")
-popup/item_1/id = 1
-popup/item_2/text = "Scheduled backup"
-popup/item_2/icon = ExtResource("4")
-popup/item_2/id = 2
 
-[node name="ScheduleList" type="VBoxContainer" parent="VBox/Scroll/Content/ScheduleCard/VBox"]
+[node name="SleepNotice" type="PanelContainer" parent="VBox/Scroll/Content/EventsCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Label" type="Label" parent="VBox/Scroll/Content/EventsCard/VBox/SleepNotice"]
+layout_mode = 2
+text = "Sleep/wake events depend on Preferences → Power."
+autowrap_mode = 3
+
+[node name="EventList" type="VBoxContainer" parent="VBox/Scroll/Content/EventsCard/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="EmptyScheduleLabel" type="Label" parent="VBox/Scroll/Content/ScheduleCard/VBox"]
+[node name="EmptyEventsLabel" type="Label" parent="VBox/Scroll/Content/EventsCard/VBox"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
-text = "No scheduled tasks. Use \"Add task\" to schedule restarts, commands or backups."
+text = "No events yet. Use \"Add event\" to start from a template."
 autowrap_mode = 3
 
 [node name="BackupCard" type="PanelContainer" parent="VBox/Scroll/Content"]

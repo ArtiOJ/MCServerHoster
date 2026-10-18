@@ -1,0 +1,232 @@
+extends Node
+## Cooperates with systemd-logind so servers are stopped cleanly before the computer
+## sleeps or shuts down, and (depending on [member AppSettings.sleep_policy]) blocks
+## sleep while servers are in use. Blocking only affects sleep: the screen can still
+## turn off and lock as usual.
+##
+## Mechanism: `gdbus monitor` reports logind's PrepareForSleep/PrepareForShutdown
+## signals; `systemd-inhibit … cat` holds an inhibitor lock for as long as its stdin
+## pipe stays open, so closing the pipe releases the lock instantly.
+
+## The computer is about to sleep (servers are being handled per the policy).
+signal sleeping
+## The computer woke up again.
+signal resumed
+## The computer is shutting down or rebooting; the app should stop servers and quit.
+signal shutting_down
+
+const WHO := "Server Manager"
+const LOGIN1_ARGS: PackedStringArray = ["monitor", "--system", "--dest", "org.freedesktop.login1", "--object-path", "/org/freedesktop/login1"]
+## Command that raises logind's limit on how long apps may delay sleep/shutdown (needs root,
+## takes effect after the next reboot).
+const RAISE_LIMIT_COMMAND := "sudo mkdir -p /etc/systemd/logind.conf.d && printf '[Login]\\nInhibitDelayMaxSec=120\\n' | sudo tee /etc/systemd/logind.conf.d/50-server-manager.conf"
+
+var supported := false
+## How long logind lets us delay sleep/shutdown (InhibitDelayMaxSec).
+var max_delay_sec := 5.0
+## True between "about to sleep" and "woke up".
+var asleep := false
+
+var _gdbus := ""
+var _inhibit := ""
+var _monitor := {}
+var _monitor_buf := PackedByteArray()
+var _delay_lock := {}
+var _block_lock := {}
+var _stopped_for_sleep := PackedStringArray()
+var _handling := false
+static var _re_signal := RegEx.create_from_string("PrepareFor(Sleep|Shutdown) \\((true|false)")
+
+@onready var _poll_timer: Timer = $PollTimer
+@onready var _policy_timer: Timer = $PolicyTimer
+
+
+func _ready() -> void:
+	_gdbus = PlatformBackend.find_in_path("gdbus")
+	_inhibit = PlatformBackend.find_in_path("systemd-inhibit")
+	supported = OS.get_name() == "Linux" and _gdbus != "" and _inhibit != ""
+	if not supported:
+		return
+	max_delay_sec = _read_max_delay()
+	_poll_timer.timeout.connect(_poll_monitor)
+	_policy_timer.timeout.connect(update_locks)
+	ServerManager.server_state_changed.connect(func(_i: ServerInstance) -> void: update_locks())
+	AppSettings.changed.connect(update_locks)
+	_start_monitor()
+	update_locks()
+
+
+func _exit_tree() -> void:
+	_release(_delay_lock)
+	_release(_block_lock)
+	if _monitor.has("pid") and OS.is_process_running(_monitor.pid):
+		OS.kill(_monitor.pid)
+
+
+## Human-readable state for the Preferences dialog.
+func status_text() -> String:
+	if not supported:
+		return "Sleep and shutdown handling needs systemd-logind (gdbus and systemd-inhibit were not found)."
+	var parts := PackedStringArray()
+	parts.append("Delaying sleep/shutdown to stop servers" if not _delay_lock.is_empty() else "No servers to protect right now")
+	if not _block_lock.is_empty():
+		parts.append("sleep is blocked")
+	return "%s · logind allows %s to stop servers." % [", ".join(parts), Fmt.duration(int(max_delay_sec))]
+
+
+## Re-evaluates which inhibitor locks are needed for the current servers and policy.
+func update_locks() -> void:
+	if not supported or _handling:
+		return
+	var alive := ServerManager.any_running()
+	var policy := AppSettings.sleep_policy
+	var delay_what := PackedStringArray()
+	if alive:
+		delay_what.append("shutdown")
+		if policy != AppSettings.SleepPolicy.PAUSE:
+			delay_what.append("sleep")
+	_set_lock(_delay_lock, ":".join(delay_what), "delay", "Stopping Minecraft servers cleanly")
+	var block := false
+	match policy:
+		AppSettings.SleepPolicy.BLOCK_WHILE_PLAYERS:
+			block = ServerManager.get_instances().any(func(i: ServerInstance) -> bool: return i.is_online() and not i.players.is_empty())
+		AppSettings.SleepPolicy.BLOCK_WHILE_RUNNING:
+			block = alive
+	_set_lock(_block_lock, "sleep" if block else "", "block", "Minecraft servers are in use")
+
+
+## Parses a `gdbus monitor` line into ["Sleep"|"Shutdown", active: bool], or [] if irrelevant.
+static func parse_signal(line: String) -> Array:
+	var m := _re_signal.search(line)
+	return [m.get_string(1), m.get_string(2) == "true"] if m != null else []
+
+
+## Handles one line of `gdbus monitor` output.
+func handle_monitor_line(line: String) -> void:
+	var sig := parse_signal(line)
+	if sig.is_empty():
+		return
+	var active: bool = sig[1]
+	if sig[0] == "Sleep":
+		if active:
+			_before_sleep()
+		else:
+			_after_wake()
+	elif active:
+		_before_shutdown()
+
+
+func _before_sleep() -> void:
+	if asleep:
+		return
+	asleep = true
+	_handling = true
+	sleeping.emit()
+	for inst in ServerManager.get_instances():
+		inst.scheduler.fire(EventRule.Trigger.SYSTEM_SLEEP)
+	if AppSettings.sleep_policy == AppSettings.SleepPolicy.PAUSE:
+		_release(_delay_lock)
+		return
+	_stopped_for_sleep.clear()
+	for inst in ServerManager.get_instances():
+		if inst.is_process_alive():
+			_stopped_for_sleep.append(inst.config.id)
+			inst.log_system("The computer is going to sleep; stopping the server.")
+			inst.stop()
+	await _wait_until_stopped(max_delay_sec - 0.5)
+	_release(_delay_lock)
+
+
+func _after_wake() -> void:
+	if not asleep:
+		return
+	asleep = false
+	_handling = false
+	update_locks()
+	if AppSettings.restart_after_wake:
+		for id in _stopped_for_sleep:
+			var inst := ServerManager.get_instance(id)
+			if inst != null and not inst.is_busy() and not inst.is_temporary():
+				inst.log_system("The computer woke up; starting the server again.")
+				inst.start()
+	_stopped_for_sleep.clear()
+	resumed.emit()
+	for inst in ServerManager.get_instances():
+		inst.scheduler.fire(EventRule.Trigger.SYSTEM_WAKE)
+
+
+func _before_shutdown() -> void:
+	_handling = true
+	_release(_block_lock)
+	shutting_down.emit()
+	ServerManager.stop_all()
+	await _wait_until_stopped(max_delay_sec - 0.5)
+	_release(_delay_lock)
+
+
+func _wait_until_stopped(seconds: float) -> void:
+	var deadline := Time.get_ticks_msec() + int(maxf(seconds, 0.5) * 1000.0)
+	while ServerManager.any_running() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.1).timeout
+
+
+func _set_lock(lock: Dictionary, what: String, mode: String, why: String) -> void:
+	if lock.get("what", "") == what:
+		return
+	_release(lock)
+	if what == "":
+		return
+	var info := OS.execute_with_pipe(_inhibit, ["--what=" + what, "--mode=" + mode, "--who=" + WHO, "--why=" + why, "cat"], false)
+	if info.is_empty():
+		push_warning("Could not take a %s inhibitor lock" % mode)
+		return
+	lock.merge(info)
+	lock["what"] = what
+
+
+## Closing the inhibitor's stdin ends `cat`, which releases the lock.
+func _release(lock: Dictionary) -> void:
+	if lock.is_empty():
+		return
+	for key in ["stdio", "stderr"]:
+		if lock.get(key) is FileAccess:
+			(lock[key] as FileAccess).close()
+	lock.clear()
+
+
+func _start_monitor() -> void:
+	_monitor = OS.execute_with_pipe(_gdbus, LOGIN1_ARGS, false)
+	_monitor_buf.clear()
+	if _monitor.is_empty():
+		push_warning("Could not watch logind for sleep/shutdown events")
+		return
+	_poll_timer.start()
+
+
+func _poll_monitor() -> void:
+	if _monitor.is_empty():
+		return
+	var pipe: FileAccess = _monitor.stdio
+	var chunk := pipe.get_buffer(16384)
+	while not chunk.is_empty():
+		_monitor_buf.append_array(chunk)
+		chunk = pipe.get_buffer(16384)
+	var nl := _monitor_buf.find(10)
+	while nl != -1:
+		handle_monitor_line(_monitor_buf.slice(0, nl).get_string_from_utf8())
+		_monitor_buf = _monitor_buf.slice(nl + 1)
+		nl = _monitor_buf.find(10)
+	if not OS.is_process_running(_monitor.pid):
+		# gdbus exited (e.g. the system bus restarted); reconnect shortly.
+		_monitor = {}
+		get_tree().create_timer(5.0).timeout.connect(_start_monitor)
+
+
+func _read_max_delay() -> float:
+	var output: Array = []
+	if OS.execute("busctl", ["get-property", "org.freedesktop.login1", "/org/freedesktop/login1",
+			"org.freedesktop.login1.Manager", "InhibitDelayMaxUSec"], output) == 0 and not output.is_empty():
+		var usec := str(output[0]).strip_edges().get_slice(" ", 1).to_int()
+		if usec > 0:
+			return usec / 1_000_000.0
+	return 5.0

@@ -15,12 +15,13 @@ install, configure, start/stop, monitor, back up and update them from one interf
 - **Temporary test runs**: "Start temporary copy" runs a throwaway copy that shows as the same server. When it stops you choose to discard the changes or keep them (the previous files go to the trash). Copies are near-instant on btrfs/XFS (reflink).
 - **Resources**: heap size, optional hard memory cap (cgroup), CPU quota, core pinning, process priority, Java runtime, JVM flag presets (Paper-recommended / Aikar), extra arguments, and a preview of the full launch command.
 - **Network**: per-server ports with conflict detection. RCON is configured automatically and used for silent TPS and player queries.
-- **Automation**: scheduled restarts (with in-game countdown warnings), scheduled commands and scheduled backups.
+- **Events**: per-server rules of the form *when → do*. Triggers: time of day, interval, app start, server online/stopped/crashed, player joined/left, server empty for N minutes, player count reached, TPS below a threshold, computer going to sleep or waking. Rules can be limited to certain weekdays, a time window and the server's state. Actions: start, stop, restart (with in-game countdowns), run a command, broadcast, world or full backup. Example: start Fri–Sun at 18:00 and stop once empty for 15 minutes. Older scheduled tasks are migrated automatically.
+- **Power & background**: works with systemd-logind so servers stop cleanly before sleep, shutdown and reboot. A sleep policy (block while players are online, always stop, block while running, or let it sleep) and restart-after-wake are in Preferences. Blocking only blocks sleep; the screen still turns off. Optional start at login (minimized).
 - **Players**: online list with op/deop/kick/ban/message, plus whitelist, operator and ban list management.
 - **Plugins**: list, enable/disable, delete, install via a file dialog or by dragging `.jar` files onto the window.
 - **Backups**: world or full backups. Live backups pause autosave and flush the world first. Includes retention and restore.
 - **Updates**: "new build available" detection, one-click Paper update or Minecraft version change (backup first, old jar kept).
-- **Safety**: deleting a server requires typing its name and moves files to the trash. On quit you are asked whether to stop servers (worlds saved) or keep running. Servers left over from a crashed session are detected.
+- **Safety**: deleting a server requires typing its name and is permanent (nothing goes to the system trash). Restoring a backup or keeping a temporary copy first saves a safety backup of the current worlds to the server's backups. On quit you are asked whether to stop servers (worlds saved) or keep running. Servers left over from a crashed session are detected.
 
 ## Running
 
@@ -37,6 +38,13 @@ by default (changeable in Settings); backups go to `<servers folder>/_backups/<s
 
 Command-line options (after `--`): `--no-autostart` skips auto-starting servers,
 `--profile=<name>` uses a separate settings file.
+
+Notes on Linux desktops: Godot cannot hide its main window or show a tray icon on Linux, so
+"keep running in the background" minimizes the window. A suspended computer runs nothing, so
+servers can only keep the PC awake (screen-off still works) or be stopped before sleep. logind
+limits how long apps may delay sleep/shutdown (5 s by default); Preferences → Power can copy a
+one-time command that raises it to 2 minutes. Killing the app with SIGTERM bypasses the clean
+stop (Godot cannot catch signals); servers then save via Paper's own shutdown hook.
 
 Shortcuts: `Ctrl+N` new server, `Ctrl+Enter` start/stop current server, ``Ctrl+` `` focus the
 console, `Ctrl+Tab` next server.
@@ -75,6 +83,9 @@ godot --headless --path . res://tests/integration/integration_test.tscn -- --no-
 # End-to-end: creation-time settings, game rules, live rule changes, duplicate while running,
 # temporary runs (discard + keep). Try --version=1.20.4 for the legacy setting names.
 godot --headless --path . res://tests/integration/feature_test.tscn -- --no-autostart --profile=ft --root=/tmp/sm-ft --version=26.3
+
+# End-to-end: timed/condition events and simulated sleep/wake with real inhibitor locks
+godot --headless --path . res://tests/integration/events_test.tscn -- --no-autostart --profile=ev --root=/tmp/sm-ev
 
 # UI smoke test with screenshots of every view (needs a display)
 godot --path . res://tests/integration/ui_smoke_test.tscn -- --no-autostart --profile=ui --root=/tmp/sm-ui --shots=/tmp/sm-shots

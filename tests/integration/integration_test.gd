@@ -68,8 +68,9 @@ func _ready() -> void:
 		_check(inst.last_exit_code == 0, "exit code 0")
 		if backup != "":
 			_check(await inst.backups.restore_backup(backup) == OK, "restore backup")
+			_check(inst.backups.list_backups().any(func(b: Dictionary) -> bool: return b.name.ends_with("_pre-restore.zip")), "safety backup saved before restoring")
 
-	var del := ServerManager.delete_server(inst.config.id, true, false, true)
+	var del := ServerManager.delete_server(inst.config.id, true, true)
 	_check(del == OK, "delete server (%s)" % error_string(del))
 	_finish()
 

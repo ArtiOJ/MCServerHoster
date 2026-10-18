@@ -1,17 +1,19 @@
 class_name AutomationTab
 extends ServerTab
-## Auto-start, crash recovery, scheduled tasks and backup retention for one
-## server. Edits go to a draft config and are copied over on save.
+## Auto-start, crash recovery, events (triggers → actions) and backup retention for
+## one server. Edits go to a draft config and are copied over on save.
 
-const ROW_SCENE := preload("res://scenes/components/schedule_row.tscn")
+const ROW_SCENE := preload("res://scenes/components/event_row.tscn")
 const EDITED_FIELDS: PackedStringArray = [
 	"auto_start", "auto_restart", "max_restarts", "restart_window_sec", "stop_timeout_sec",
-	"schedules", "backup_retention", "backup_full",
+	"events", "backup_retention", "backup_full",
 ]
 
 var _draft: ServerConfig
 var _loading := false
-var _rows: Array[ScheduleRow] = []
+var _rows: Array[EventRow] = []
+## Draft rules whose editor is open, so rebuilding the list keeps them expanded.
+var _expanded := {}
 
 @onready var _auto_start_check: CheckButton = %AutoStartCheck
 @onready var _auto_restart_check: CheckButton = %AutoRestartCheck
@@ -19,9 +21,10 @@ var _rows: Array[ScheduleRow] = []
 @onready var _window_spin: SpinBox = %WindowSpin
 @onready var _stop_timeout_spin: SpinBox = %StopTimeoutSpin
 @onready var _recovery_hint: Label = %RecoveryHint
-@onready var _add_menu: MenuButton = %AddTaskMenu
-@onready var _schedule_list: VBoxContainer = %ScheduleList
-@onready var _empty_label: Label = %EmptyScheduleLabel
+@onready var _add_menu: MenuButton = %AddEventMenu
+@onready var _event_list: VBoxContainer = %EventList
+@onready var _empty_label: Label = %EmptyEventsLabel
+@onready var _sleep_notice: PanelContainer = %SleepNotice
 @onready var _retention_spin: SpinBox = %RetentionSpin
 @onready var _full_check: CheckButton = %FullBackupCheck
 @onready var _dirty_label: Label = %DirtyLabel
@@ -36,7 +39,11 @@ func _ready() -> void:
 	for spin: SpinBox in [_max_restarts_spin, _window_spin, _stop_timeout_spin, _retention_spin]:
 		spin.value_changed.connect(_on_input_changed.unbind(1))
 	_full_check.toggled.connect(_on_input_changed.unbind(1))
-	_add_menu.get_popup().id_pressed.connect(_add_task)
+	var popup := _add_menu.get_popup()
+	var templates := EventRule.templates()
+	for i in templates.size():
+		popup.add_item(templates[i][0], i)
+	popup.id_pressed.connect(_add_event)
 	_revert_button.pressed.connect(_load_draft)
 	_save_button.pressed.connect(_save)
 	_refresh_timer.timeout.connect(_update_next_runs)
@@ -56,6 +63,12 @@ func _on_config_changed() -> void:
 func _load_draft() -> void:
 	if instance == null:
 		return
+	# Keep open editors open across reloads (matched by position).
+	var open_indices: Array[int] = []
+	if _draft != null:
+		for i in _draft.events.size():
+			if _expanded.has(_draft.events[i]):
+				open_indices.append(i)
 	_draft = ServerConfig.from_dict(instance.config.to_dict(), instance.config.directory)
 	_loading = true
 	_auto_start_check.button_pressed = _draft.auto_start
@@ -66,46 +79,49 @@ func _load_draft() -> void:
 	_retention_spin.value = _draft.backup_retention
 	_full_check.button_pressed = _draft.backup_full
 	_loading = false
+	_expanded.clear()
+	for i in open_indices:
+		if i < _draft.events.size():
+			_expanded[_draft.events[i]] = true
 	_build_rows()
 	_refresh()
 
 
 func _build_rows() -> void:
 	for row in _rows:
-		_schedule_list.remove_child(row)
+		_event_list.remove_child(row)
 		row.queue_free()
 	_rows.clear()
-	for entry in _draft.schedules:
-		var row: ScheduleRow = ROW_SCENE.instantiate()
-		row.setup(entry)
-		_schedule_list.add_child(row)
+	for rule in _draft.events:
+		var row: EventRow = ROW_SCENE.instantiate()
+		row.setup(rule, instance.scheduler)
+		_event_list.add_child(row)
+		row.set_expanded(_expanded.has(rule))
 		row.changed.connect(_refresh)
-		row.remove_requested.connect(_remove_task.bind(entry))
+		row.remove_requested.connect(_remove_event.bind(rule))
+		row.expanded_changed.connect(func(on: bool) -> void:
+			if on:
+				_expanded[rule] = true
+			else:
+				_expanded.erase(rule))
 		_rows.append(row)
 	_empty_label.visible = _rows.is_empty()
 	_update_next_runs()
 
 
-func _add_task(kind: int) -> void:
+func _add_event(template_index: int) -> void:
 	if _draft == null:
 		return
-	var entry := ScheduleEntry.new()
-	entry.kind = kind as ScheduleEntry.Kind
-	match entry.kind:
-		ScheduleEntry.Kind.RESTART:
-			entry.time_of_day = "04:00"
-		ScheduleEntry.Kind.BACKUP:
-			entry.time_of_day = "03:00"
-		ScheduleEntry.Kind.COMMAND:
-			entry.mode = ScheduleEntry.Mode.INTERVAL
-			entry.interval_minutes = 60
-	_draft.schedules.append(entry)
+	var rule := EventRule.from_template(EventRule.templates()[template_index][1])
+	_draft.events.append(rule)
+	_expanded[rule] = true
 	_build_rows()
 	_refresh()
 
 
-func _remove_task(entry: ScheduleEntry) -> void:
-	_draft.schedules.erase(entry)
+func _remove_event(rule: EventRule) -> void:
+	_draft.events.erase(rule)
+	_expanded.erase(rule)
 	_build_rows()
 	_refresh()
 
@@ -130,31 +146,25 @@ func _refresh() -> void:
 	_window_spin.editable = _draft.auto_restart
 	_recovery_hint.text = ("After a crash the server restarts after 5 s, then 15 s, then 60 s. If it crashes more than %d time(s) within %s, automatic restarts pause until you start it manually." % [_draft.max_restarts, Fmt.duration(_draft.restart_window_sec)]) \
 		if _draft.auto_restart else "Crashed servers stay stopped until you start them."
-	var invalid := _rows.any(func(r: ScheduleRow) -> bool: return not r.is_valid())
+	var invalid := _rows.any(func(r: EventRow) -> bool: return not r.is_valid())
+	_sleep_notice.visible = _draft.events.any(func(r: EventRule) -> bool:
+		return r.trigger == EventRule.Trigger.SYSTEM_SLEEP or r.trigger == EventRule.Trigger.SYSTEM_WAKE)
 	var dirty := _is_dirty()
 	_save_button.disabled = not dirty or invalid
 	_revert_button.disabled = not dirty
-	_dirty_label.text = "Fix the highlighted time before saving" if invalid else ("Unsaved changes" if dirty else "")
+	_dirty_label.text = "Fix the highlighted times before saving" if invalid else ("Unsaved changes" if dirty else "")
 	_update_next_runs()
 
 
 func _update_next_runs() -> void:
 	if _draft == null or instance == null:
 		return
-	var now := int(Time.get_unix_time_from_system())
-	var saved := instance.config.schedules
+	var saved := instance.config.events
 	for i in _rows.size():
-		var entry: ScheduleEntry = _draft.schedules[i]
-		var text := ""
-		if not entry.enabled:
-			text = "Disabled"
-		elif i < saved.size() and saved[i].to_dict() == entry.to_dict():
-			text = "Next: " + Fmt.datetime(instance.scheduler.next_run_of(saved[i]))
-		else:
-			text = "Next: %s (after saving)" % Fmt.datetime(entry.next_run_after(now, now))
-		if entry.enabled and entry.kind != ScheduleEntry.Kind.BACKUP and not instance.is_online():
-			text += " · only while online"
-		_rows[i].set_next_run(text)
+		var rule: EventRule = _draft.events[i]
+		# Unchanged rules can use the live scheduler's exact next run (interval alignment etc.).
+		_rows[i].saved_rule = saved[i] if i < saved.size() and saved[i].to_dict() == rule.to_dict() else null
+		_rows[i].refresh_next_run()
 
 
 func _edited_values(cfg: ServerConfig) -> Dictionary:
@@ -170,7 +180,7 @@ func _is_dirty() -> bool:
 
 
 func _save() -> void:
-	if instance == null or _rows.any(func(r: ScheduleRow) -> bool: return not r.is_valid()):
+	if instance == null or _rows.any(func(r: EventRow) -> bool: return not r.is_valid()):
 		return
 	var c := instance.config
 	c.auto_start = _draft.auto_start
@@ -180,10 +190,10 @@ func _save() -> void:
 	c.stop_timeout_sec = _draft.stop_timeout_sec
 	c.backup_retention = _draft.backup_retention
 	c.backup_full = _draft.backup_full
-	var schedules: Array[ScheduleEntry] = []
-	for entry in _draft.schedules:
-		schedules.append(ScheduleEntry.from_dict(entry.to_dict()))
-	c.schedules = schedules
+	var events: Array[EventRule] = []
+	for rule in _draft.events:
+		events.append(EventRule.from_dict(rule.to_dict()))
+	c.events = events
 	instance.save_config()
 	Notifier.success("Saved automation settings for %s." % c.display_name)
 	_load_draft()

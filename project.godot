@@ -25,6 +25,7 @@ JavaRuntimes="*res://scripts/autoload/java_runtimes.gd"
 PaperApi="*res://scripts/autoload/paper_api.gd"
 Notifier="*res://scripts/autoload/notifier.gd"
 ServerManager="*res://scripts/autoload/server_manager.gd"
+PowerManager="*res://scenes/runtime/power_manager.tscn"
 
 [display]
 

@@ -47,6 +47,7 @@ func list_backups() -> Array[Dictionary]:
 			"size": file.get_length() if file != null else 0,
 			"time": FileAccess.get_modified_time(path),
 			"full": f.ends_with("_full.zip"),
+			"safety": f.ends_with("_pre-restore.zip") or f.ends_with("_pre-keep.zip"),
 		})
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.time > b.time)
 	return out
@@ -77,22 +78,26 @@ func on_console_line(plain: String) -> void:
 		_world_saved = true
 
 
-## Creates a backup. Returns the archive path, or "" on failure.
-func create_backup(full: bool) -> String:
+## Creates a backup of [param source_dir] (default: the folder the server runs in).
+## [param tag] names automatic safety backups (e.g. "pre-restore"). Returns the archive
+## path, or "" on failure.
+func create_backup(full: bool, source_dir := "", tag := "") -> String:
 	if busy:
 		Notifier.warn("A backup of %s is already running." % instance.config.display_name)
 		return ""
 	_set_busy(true)
+	var base := source_dir if source_dir != "" else instance.working_directory()
 	var stamp := Fmt.file_stamp(int(Time.get_unix_time_from_system()))
-	var out_path := backup_dir().path_join("%s_%s.zip" % [stamp, "full" if full else "world"])
+	var kind := tag if tag != "" else ("full" if full else "world")
+	var out_path := backup_dir().path_join("%s_%s.zip" % [stamp, kind])
 	DirAccess.make_dir_recursive_absolute(backup_dir())
 
-	var was_online := await pause_saving()
+	var was_online := await pause_saving() if base == instance.working_directory() else false
 
-	var roots := PackedStringArray([""]) if full else world_dirs()
+	var roots := PackedStringArray([""]) if full else world_dirs(base)
 	_progress = 0.0
 	_thread = Thread.new()
-	_thread.start(_zip_worker.bind(instance.working_directory(), roots, out_path))
+	_thread.start(_zip_worker.bind(base, roots, out_path))
 	while _thread.is_alive():
 		await get_tree().create_timer(0.15).timeout
 		_mutex.lock()
@@ -120,13 +125,18 @@ func create_backup(full: bool) -> String:
 	return out_path
 
 
-## Restores a backup into the server folder. The server must be stopped. Existing
-## world folders contained in the archive are moved to the system trash first.
+## Restores a backup into the server folder. The server must be stopped. A safety
+## backup of the current worlds is saved first; then the world folders contained in
+## the archive are deleted and replaced.
 func restore_backup(path: String) -> Error:
 	if busy:
 		return ERR_BUSY
 	if instance.is_process_alive():
 		return ERR_ALREADY_IN_USE
+	if not world_dirs().is_empty():
+		instance.log_system("Saving a safety backup of the current worlds before restoring…")
+		if await create_backup(false, "", "pre-restore") == "":
+			return FAILED
 	_set_busy(true)
 	var reader := ZIPReader.new()
 	var err := reader.open(path)
@@ -142,7 +152,7 @@ func restore_backup(path: String) -> Error:
 	for d in top_dirs:
 		var abs_dir := instance.working_directory().path_join(d)
 		if DirAccess.dir_exists_absolute(abs_dir):
-			OS.move_to_trash(abs_dir)
+			await FileOps.run_async(self, func() -> Error: return FileOps.remove_tree(abs_dir))
 
 	_progress = 0.0
 	_thread = Thread.new()
@@ -178,11 +188,13 @@ func _prune() -> void:
 		DirAccess.remove_absolute(all[i].path)
 
 
-func world_dirs() -> PackedStringArray:
-	var level := instance.get_properties().get_value("level-name", "world")
+## World folders present in [param base] (default: the folder the server runs in).
+func world_dirs(base := "") -> PackedStringArray:
+	var dir := base if base != "" else instance.working_directory()
+	var level := ServerProperties.load_file(dir.path_join("server.properties")).get_value("level-name", "world")
 	var out := PackedStringArray()
 	for d in [level, level + "_nether", level + "_the_end"]:
-		if DirAccess.dir_exists_absolute(instance.working_directory().path_join(d)):
+		if DirAccess.dir_exists_absolute(dir.path_join(d)):
 			out.append(d)
 	return out
 

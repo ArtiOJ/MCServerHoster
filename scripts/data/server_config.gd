@@ -79,7 +79,8 @@ const AIKAR_LARGE_HEAP := {
 @export var max_restarts := 3
 @export var restart_window_sec := 600
 @export var stop_timeout_sec := 60
-@export var schedules: Array[ScheduleEntry] = []
+## Automation rules (triggers → actions). Older configs' scheduled tasks are migrated into these.
+@export var events: Array[EventRule] = []
 
 @export_group("Game rules")
 ## Game rule changes waiting to be applied on the next start (catalog id -> value).
@@ -148,9 +149,9 @@ func _aikar_flags() -> PackedStringArray:
 
 
 func to_dict() -> Dictionary:
-	var sched: Array = []
-	for s in schedules:
-		sched.append(s.to_dict())
+	var event_dicts: Array = []
+	for e in events:
+		event_dicts.append(e.to_dict())
 	return {
 		"format": FORMAT_VERSION,
 		"id": id, "display_name": display_name, "color": color.to_html(false), "created_unix": created_unix,
@@ -165,7 +166,7 @@ func to_dict() -> Dictionary:
 		"port": port, "rcon_port": rcon_port, "rcon_password": rcon_password,
 		"auto_start": auto_start, "auto_restart": auto_restart, "max_restarts": max_restarts,
 		"restart_window_sec": restart_window_sec, "stop_timeout_sec": stop_timeout_sec,
-		"schedules": sched,
+		"events": event_dicts,
 		"backup_retention": backup_retention, "backup_full": backup_full,
 		"pending_gamerules": pending_gamerules, "known_gamerules": known_gamerules,
 		"temp_run_dir": temp_run_dir,
@@ -205,11 +206,16 @@ static func from_dict(d: Dictionary, dir: String) -> ServerConfig:
 	c.max_restarts = maxi(int(d.get("max_restarts", 3)), 0)
 	c.restart_window_sec = maxi(int(d.get("restart_window_sec", 600)), 30)
 	c.stop_timeout_sec = maxi(int(d.get("stop_timeout_sec", 60)), 5)
-	var sched: Array[ScheduleEntry] = []
-	for s in d.get("schedules", []):
-		if s is Dictionary:
-			sched.append(ScheduleEntry.from_dict(s))
-	c.schedules = sched
+	var rules: Array[EventRule] = []
+	if d.has("events"):
+		for e in d.events:
+			if e is Dictionary:
+				rules.append(EventRule.from_dict(e))
+	else:
+		for s in d.get("schedules", []):
+			if s is Dictionary:
+				rules.append(EventRule.from_schedule(ScheduleEntry.from_dict(s)))
+	c.events = rules
 	c.backup_retention = maxi(int(d.get("backup_retention", 10)), 0)
 	c.backup_full = bool(d.get("backup_full", false))
 	c.pending_gamerules = _string_dict(d.get("pending_gamerules", {}))
