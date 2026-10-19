@@ -9,17 +9,20 @@ signal duplicate_requested(instance: ServerInstance)
 signal temp_decision_requested(instance: ServerInstance)
 signal import_world_requested(instance: ServerInstance)
 
-const TAB_ICONS: Array[Texture2D] = [
-	preload("res://assets/icons/activity.svg"),
-	preload("res://assets/icons/terminal.svg"),
-	preload("res://assets/icons/settings.svg"),
-	preload("res://assets/icons/sliders.svg"),
-	preload("res://assets/icons/clock.svg"),
-	preload("res://assets/icons/users.svg"),
-	preload("res://assets/icons/puzzle.svg"),
-	preload("res://assets/icons/archive.svg"),
-	preload("res://assets/icons/globe.svg"),
-]
+## Tab node name -> icon (matched by name so tabs can be reordered or added freely).
+const TAB_ICONS := {
+	"Overview": preload("res://assets/icons/activity.svg"),
+	"Console": preload("res://assets/icons/terminal.svg"),
+	"Logs": preload("res://assets/icons/log.svg"),
+	"Settings": preload("res://assets/icons/settings.svg"),
+	"Resources": preload("res://assets/icons/sliders.svg"),
+	"Automation": preload("res://assets/icons/clock.svg"),
+	"Players": preload("res://assets/icons/users.svg"),
+	"Plugins": preload("res://assets/icons/puzzle.svg"),
+	"Worlds": preload("res://assets/icons/map.svg"),
+	"Backups": preload("res://assets/icons/archive.svg"),
+	"Network": preload("res://assets/icons/globe.svg"),
+}
 
 var instance: ServerInstance
 
@@ -30,8 +33,9 @@ var instance: ServerInstance
 
 
 func _ready() -> void:
-	for i in mini(TAB_ICONS.size(), _tabs.get_tab_count()):
-		_tabs.set_tab_icon(i, TAB_ICONS[i])
+	for tab in _tabs.get_children():
+		if TAB_ICONS.has(str(tab.name)):
+			_tabs.set_tab_icon(tab.get_index(), TAB_ICONS[str(tab.name)])
 	_header.update_requested.connect(func() -> void: update_requested.emit(instance))
 	_header.delete_requested.connect(func() -> void: delete_requested.emit(instance))
 	_header.duplicate_requested.connect(func() -> void: duplicate_requested.emit(instance))

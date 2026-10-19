@@ -11,6 +11,8 @@
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/plugins_tab.tscn" id="9"]
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/backups_tab.tscn" id="10"]
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/network_tab.tscn" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/server_view/tabs/logs_tab.tscn" id="12"]
+[ext_resource type="PackedScene" path="res://scenes/server_view/tabs/worlds_tab.tscn" id="13"]
 
 [node name="ServerView" type="VBoxContainer"]
 anchors_preset = 15
@@ -39,6 +41,10 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
+[node name="Logs" parent="Tabs" instance=ExtResource("12")]
+visible = false
+layout_mode = 2
+
 [node name="Settings" parent="Tabs" instance=ExtResource("5")]
 visible = false
 layout_mode = 2
@@ -57,6 +63,10 @@ layout_mode = 2
 
 [node name="Plugins" parent="Tabs" instance=ExtResource("9")]
 unique_name_in_owner = true
+visible = false
+layout_mode = 2
+
+[node name="Worlds" parent="Tabs" instance=ExtResource("13")]
 visible = false
 layout_mode = 2
 

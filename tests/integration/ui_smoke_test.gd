@@ -60,12 +60,12 @@ func _ready() -> void:
 	sleeper.config.events.append(EventRule.from_template({"trigger": EventRule.Trigger.TIME, "time_of_day": "18:00", "weekdays": (1 << 5) | (1 << 6) | 1, "action": EventRule.Action.START}))
 	sleeper.save_config()
 	main.show_server(sleeper.config.id)
-	tabs.current_tab = 4
+	tabs.current_tab = _tab(tabs, "Automation")
 	await _shot("10_automation_wake")
 	main.show_dashboard()
 	await _shot("11_dashboard_asleep")
 	main.show_server(inst.config.id)
-	tabs.current_tab = 1
+	tabs.current_tab = _tab(tabs, "Console")
 
 	var wizard: NewServerWizard = main.get_node("%NewServerWizard")
 	wizard.open()
@@ -127,6 +127,13 @@ func _ready() -> void:
 		ServerManager.delete_server(i.config.id, true, true)
 	print("UI smoke test finished")
 	get_tree().quit()
+
+
+func _tab(tabs: TabContainer, title: String) -> int:
+	for i in tabs.get_tab_count():
+		if tabs.get_tab_title(i) == title:
+			return i
+	return 0
 
 
 func _frames(n: int) -> void:
