@@ -418,7 +418,7 @@ static func _ufw_port_matches(spec: String, port: int) -> bool:
 ## Opens [param port] (TCP) in the active firewall. ufw goes through pkexec, which shows
 ## the desktop's normal password prompt; firewalld asks polkit itself. Returns
 ## {ok: bool, message: String}. The rule set is re-read afterwards.
-func allow_in_firewall(port: int) -> Dictionary:
+func allow_in_firewall(port: int, comment := "Minecraft server (Server Manager)") -> Dictionary:
 	var fw := firewall_port_status(port)
 	if not fw.active or fw.allowed == "yes":
 		return {"ok": true, "message": "Port %d is already allowed." % port}
@@ -428,7 +428,7 @@ func allow_in_firewall(port: int) -> Dictionary:
 			var pkexec := PlatformBackend.find_in_path("pkexec")
 			if pkexec == "":
 				return {"ok": false, "message": "pkexec is not installed; run the command in a terminal instead."}
-			var args := PackedStringArray(["ufw", "allow", "%d/tcp" % port, "comment", "Minecraft server (Server Manager)"])
+			var args := PackedStringArray(["ufw", "allow", "%d/tcp" % port, "comment", comment])
 			code = await FileOps.run_async(self, func() -> int: return PlatformBackend.execute(pkexec, args))
 		"firewalld":
 			code = await FileOps.run_async(self, func() -> int:
@@ -553,6 +553,8 @@ func stale_firewall_rules() -> Array[Dictionary]:
 	var used: Array = []
 	for inst in ServerManager.get_instances():
 		used.append(inst.config.port)
+	if RemoteAccess.enabled:
+		used.append(RemoteAccess.port)
 	return cleanup_candidates(firewall_rules(), used, Array(AppSettings.firewall_app_ports), Array(AppSettings.previous_game_ports))
 
 

@@ -256,7 +256,7 @@ enp12s0 unplugged; `rtcwake`, `pkexec`, `iw` available.
 - Tests: pattern builder, wake-time computation, helper argument validation, PowerManager with a
   mock helper path (no real sleep in automated tests).
 
-## 10. Remote access (phase 1 in progress)
+## 10. Remote access (phase 1 built and tested; later phases planned)
 
 Another person running Server Manager connects to this computer with an **access key**
 (a shared secret) and controls servers according to the key's role.
@@ -287,7 +287,7 @@ Another person running Server Manager connects to this computer with an **access
 - Secrets are stored in `user://remote/*.json` (mode 600).
 
 **Protocol** (after the 1-byte mode prefix 'B' bootstrap / 'T' TLS): frames are a 4-byte
-big-endian length + UTF-8 JSON. Requests `{id, op, server?, args}` → `{re, ok, result|error}`;
+little-endian length + UTF-8 JSON. Requests `{id, op, server?, args}` → `{re, ok, result|error}`;
 events `{ev, server?, …}` pushed by the host (server snapshot, stats, console batches,
 added/removed, progress of long operations). Protocol version must match.
 

@@ -159,6 +159,11 @@ func public_address() -> String:
 	return ""
 
 
+## The message of the day shown in the server list.
+func motd() -> String:
+	return "A Minecraft Server"
+
+
 ## The Java runtime that will run the server, in words.
 func java_description() -> String:
 	return ""

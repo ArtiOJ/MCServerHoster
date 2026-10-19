@@ -215,6 +215,10 @@ func public_address() -> String:
 	return str(_data.get("public_address", ""))
 
 
+func motd() -> String:
+	return str(_data.get("motd", "A Minecraft Server"))
+
+
 func java_description() -> String:
 	return str(_data.get("java", ""))
 

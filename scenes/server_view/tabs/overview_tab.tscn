@@ -18,6 +18,7 @@ theme_override_constants/margin_top = 18
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 18
 script = ExtResource("1")
+remote_ready = true
 
 [node name="Scroll" type="ScrollContainer" parent="."]
 layout_mode = 2

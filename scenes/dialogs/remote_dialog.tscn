@@ -1,0 +1,422 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/dialogs/remote_dialog.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/components/port_field.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/copy.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/check.svg" id="5"]
+
+[node name="RemoteDialog" type="AcceptDialog"]
+title = "Remote access"
+size = Vector2i(900, 640)
+ok_button_text = "Close"
+script = ExtResource("1")
+
+[node name="Tabs" type="TabContainer" parent="."]
+unique_name_in_owner = true
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 892.0
+offset_bottom = 591.0
+current_tab = 0
+
+[node name="Share" type="MarginContainer" parent="Tabs"]
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+metadata/_tab_index = 0
+
+[node name="VBox" type="VBoxContainer" parent="Tabs/Share"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ShareIntro" type="Label" parent="Tabs/Share/VBox"]
+custom_minimum_size = Vector2(600, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Give someone an access key so they can manage servers on this computer from their own Server Manager. Each key has a role and can be revoked at any time."
+autowrap_mode = 3
+
+[node name="Grid" type="GridContainer" parent="Tabs/Share/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="EnableLabel" type="Label" parent="Tabs/Share/VBox/Grid"]
+layout_mode = 2
+tooltip_text = "Listen for connections from people who have an access key"
+mouse_filter = 1
+text = "Allow connections"
+
+[node name="EnableRow" type="HBoxContainer" parent="Tabs/Share/VBox/Grid"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="EnableCheck" type="CheckButton" parent="Tabs/Share/VBox/Grid/EnableRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Listen for connections from people who have an access key"
+
+[node name="ListenStatus" type="Label" parent="Tabs/Share/VBox/Grid/EnableRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="PortLabel" type="Label" parent="Tabs/Share/VBox/Grid"]
+layout_mode = 2
+tooltip_text = "TCP port other Server Managers connect to. Press Enter to apply."
+mouse_filter = 1
+text = "Port"
+
+[node name="PortRow" type="HBoxContainer" parent="Tabs/Share/VBox/Grid"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="PortField" parent="Tabs/Share/VBox/Grid/PortRow" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "TCP port other Server Managers connect to. Press Enter to apply."
+placeholder_text = "25590"
+
+[node name="PortHint" type="Label" parent="Tabs/Share/VBox/Grid/PortRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+
+[node name="NameLabel" type="Label" parent="Tabs/Share/VBox/Grid"]
+layout_mode = 2
+tooltip_text = "What people who connect see this computer as"
+mouse_filter = 1
+text = "Computer name"
+
+[node name="NameEdit" type="LineEdit" parent="Tabs/Share/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "What people who connect see this computer as"
+max_length = 48
+select_all_on_focus = true
+
+[node name="ReachNotice" type="PanelContainer" parent="Tabs/Share/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Row" type="HBoxContainer" parent="Tabs/Share/VBox/ReachNotice"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ReachLabel" type="Label" parent="Tabs/Share/VBox/ReachNotice/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(420, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="FirewallButton" type="Button" parent="Tabs/Share/VBox/ReachNotice/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Add a firewall rule for this port. Your desktop asks for your password."
+text = "Allow in firewall"
+icon = ExtResource("5")
+
+[node name="KeysHeader" type="HBoxContainer" parent="Tabs/Share/VBox"]
+layout_mode = 2
+
+[node name="KeysTitle" type="Label" parent="Tabs/Share/VBox/KeysHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SectionHeader"
+text = "Access keys"
+
+[node name="NewKeyButton" type="Button" parent="Tabs/Share/VBox/KeysHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = "New access key…"
+icon = ExtResource("3")
+
+[node name="KeysScroll" type="ScrollContainer" parent="Tabs/Share/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="GrantList" type="VBoxContainer" parent="Tabs/Share/VBox/KeysScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="NoKeysLabel" type="Label" parent="Tabs/Share/VBox/KeysScroll/GrantList"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "No access keys yet. Create one for each person you want to let in."
+autowrap_mode = 3
+
+[node name="TrustNote" type="Label" parent="Tabs/Share/VBox"]
+custom_minimum_size = Vector2(600, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Only give keys to people you trust: they can do everything their role allows, from anywhere this port is reachable. Their actions are noted in each server's console."
+autowrap_mode = 3
+
+[node name="Connect" type="MarginContainer" parent="Tabs"]
+visible = false
+layout_mode = 2
+theme_override_constants/margin_left = 16
+theme_override_constants/margin_top = 14
+theme_override_constants/margin_right = 16
+theme_override_constants/margin_bottom = 14
+metadata/_tab_index = 1
+
+[node name="VBox" type="VBoxContainer" parent="Tabs/Connect"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ConnectIntro" type="Label" parent="Tabs/Connect/VBox"]
+custom_minimum_size = Vector2(600, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Paste an invite code you were given to manage servers on someone else's computer. As a system admin you switch to that computer at the top of the sidebar; as a server admin its servers appear under Remote servers."
+autowrap_mode = 3
+
+[node name="ConnectHeader" type="HBoxContainer" parent="Tabs/Connect/VBox"]
+layout_mode = 2
+
+[node name="ConnectTitle" type="Label" parent="Tabs/Connect/VBox/ConnectHeader"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SectionHeader"
+text = "Computers"
+
+[node name="AddLinkButton" type="Button" parent="Tabs/Connect/VBox/ConnectHeader"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = "Add computer…"
+icon = ExtResource("3")
+
+[node name="LinksScroll" type="ScrollContainer" parent="Tabs/Connect/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="LinkList" type="VBoxContainer" parent="Tabs/Connect/VBox/LinksScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="NoLinksLabel" type="Label" parent="Tabs/Connect/VBox/LinksScroll/LinkList"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "No computers added yet."
+
+[node name="KeyDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "New access key"
+size = Vector2i(560, 460)
+ok_button_text = "Create key"
+
+[node name="VBox" type="VBoxContainer" parent="KeyDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 552.0
+offset_bottom = 411.0
+theme_override_constants/separation = 10
+
+[node name="Grid" type="GridContainer" parent="KeyDialog/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="PersonLabel" type="Label" parent="KeyDialog/VBox/Grid"]
+layout_mode = 2
+text = "For"
+
+[node name="PersonEdit" type="LineEdit" parent="KeyDialog/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Who the key is for. Shown in the list of keys and next to everything they do."
+placeholder_text = "Their name"
+max_length = 40
+
+[node name="RoleLabel" type="Label" parent="KeyDialog/VBox/Grid"]
+layout_mode = 2
+text = "Role"
+
+[node name="RoleOption" type="OptionButton" parent="KeyDialog/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+selected = 1
+item_count = 2
+popup/item_0/text = "System admin"
+popup/item_0/id = 0
+popup/item_1/text = "Server admin"
+popup/item_1/id = 1
+
+[node name="RoleHint" type="Label" parent="KeyDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(520, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="ServersLabel" type="Label" parent="KeyDialog/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Servers they can manage"
+
+[node name="ServersScroll" type="ScrollContainer" parent="KeyDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 120)
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="ServerChecks" type="VBoxContainer" parent="KeyDialog/VBox/ServersScroll"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="KeyWarning" type="Label" parent="KeyDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(520, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="InviteDialog" type="AcceptDialog" parent="."]
+unique_name_in_owner = true
+title = "Invite code"
+size = Vector2i(600, 400)
+ok_button_text = "Done"
+
+[node name="VBox" type="VBoxContainer" parent="InviteDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 592.0
+offset_bottom = 351.0
+theme_override_constants/separation = 10
+
+[node name="InviteIntro" type="Label" parent="InviteDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="InviteText" type="TextEdit" parent="InviteDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+editable = false
+wrap_mode = 1
+
+[node name="CopyInviteButton" type="Button" parent="InviteDialog/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"AccentButton"
+text = "Copy invite code"
+icon = ExtResource("4")
+
+[node name="InviteHint" type="Label" parent="InviteDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="RevokeDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Revoke access key?"
+ok_button_text = "Revoke"
+dialog_autowrap = true
+
+[node name="AddLinkDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Add a computer"
+size = Vector2i(600, 380)
+ok_button_text = "Connect"
+dialog_hide_on_ok = false
+
+[node name="VBox" type="VBoxContainer" parent="AddLinkDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 592.0
+offset_bottom = 331.0
+theme_override_constants/separation = 8
+
+[node name="CodeLabel" type="Label" parent="AddLinkDialog/VBox"]
+layout_mode = 2
+text = "Invite code"
+
+[node name="CodeEdit" type="TextEdit" parent="AddLinkDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 96)
+layout_mode = 2
+placeholder_text = "smr1:…"
+wrap_mode = 1
+
+[node name="AddressLabel" type="Label" parent="AddLinkDialog/VBox"]
+layout_mode = 2
+tooltip_text = "Only needed when the addresses in the invite don't work for you, e.g. a domain name or the other network's internet address"
+mouse_filter = 1
+text = "Address (optional)"
+
+[node name="AddressEdit" type="LineEdit" parent="AddLinkDialog/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Only needed when the addresses in the invite don't work for you, e.g. a domain name or the other network's internet address"
+placeholder_text = "Leave empty to use the addresses in the invite"
+
+[node name="AddError" type="Label" parent="AddLinkDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(560, 0)
+layout_mode = 2
+theme_override_colors/font_color = Color(0.878, 0.333, 0.333, 1)
+autowrap_mode = 3
+
+[node name="AddressDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Computer address"
+size = Vector2i(560, 220)
+ok_button_text = "Save and connect"
+
+[node name="VBox" type="VBoxContainer" parent="AddressDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 552.0
+offset_bottom = 171.0
+theme_override_constants/separation = 8
+
+[node name="AddressIntro" type="Label" parent="AddressDialog/VBox"]
+custom_minimum_size = Vector2(520, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Addresses to try in order, separated by commas. Add :port when it differs from the invite's port."
+autowrap_mode = 3
+
+[node name="LinkAddressEdit" type="LineEdit" parent="AddressDialog/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "192.168.1.20, mc.example.com:25590"
+
+[node name="RemoveLinkDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Remove computer?"
+ok_button_text = "Remove"
+dialog_autowrap = true

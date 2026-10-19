@@ -1,9 +1,10 @@
 class_name NewServerWizard
 extends Window
 ## Step-by-step creation of a new Paper server: name → version → resources →
-## gameplay → EULA → download & install.
+## gameplay → EULA → download & install. Can also create the server on another computer
+## you are system admin of (the download and setup happen there).
 
-signal server_created(instance: ServerInstance)
+signal server_created(handle: ServerHandle)
 
 enum Page { BASICS, VERSION, RESOURCES, GAMEPLAY, REVIEW, INSTALL }
 
@@ -21,7 +22,9 @@ var _version_info := {}
 var _build := {}
 var _request_serial := 0
 var _installing := false
-var _created: ServerInstance
+var _created: ServerHandle
+## Where the server is created: this computer (ServerManager) or a RemoteLink.
+var _target: ServerSource
 ## Rows in the "More settings" section and the version they were built for.
 var _more_rows: Array[PropertyRow] = []
 var _more_sections := {}
@@ -61,6 +64,9 @@ var _pending_icon: Image
 @onready var _next_button: Button = %NextButton
 @onready var _icon_view: ServerIconView = %IconView
 @onready var _icon_editor: IconEditorDialog = %IconEditorDialog
+@onready var _world_separator: HSeparator = %WorldSeparator
+@onready var _world_label: Label = %WorldLabel
+@onready var _world_row: HBoxContainer = %WorldRow
 @onready var _world_zip_button: Button = %WorldZipButton
 @onready var _world_folder_button: Button = %WorldFolderButton
 @onready var _world_clear_button: Button = %WorldClearButton
@@ -93,20 +99,31 @@ func _ready() -> void:
 	_world_zip_dialog.file_selected.connect(_choose_world)
 	_world_folder_dialog.dir_selected.connect(_choose_world)
 	_world_clear_button.pressed.connect(_clear_world)
-	var host_mb := PlatformBackend.get_current().host_memory_bytes() / 1048576
-	_ram_field.max_value = maxi(1024, (host_mb / 256) * 256)
 
 
-func open() -> void:
+func open(target: ServerSource = null) -> void:
+	_target = target if target != null else ServerManager
+	var remote := _target.is_remote_source()
+	title = "New server" if not remote else "New server on %s" % _target.source_name()
+	_world_separator.visible = not remote
+	_world_label.visible = not remote
+	_world_row.visible = not remote
+	if remote:
+		var host_bytes := int(_target.host_stats().get("mem_total", 0))
+		if host_bytes > 0:
+			_ram_field.max_value = maxi(1024, (host_bytes / 1048576 / 256) * 256)
+	else:
+		var host_mb := PlatformBackend.get_current().host_memory_bytes() / 1048576
+		_ram_field.max_value = maxi(1024, (host_mb / 256) * 256)
 	_created = null
 	_installing = false
 	_build = {}
 	_version_info = {}
 	_name_edit.text = _suggest_name()
-	_color_picker.color = COLORS[ServerManager.get_instances().size() % COLORS.size()]
+	_color_picker.color = COLORS[_target.get_handles().size() % COLORS.size()]
 	_pending_icon = null
 	_ram_field.value = clampi(AppSettings.default_ram_mb, 1024, int(_ram_field.max_value))
-	_port_spin.port = ServerManager.allocate_game_port()
+	_port_spin.port = ServerManager.allocate_game_port() if not remote else _first_free_remote_port()
 	_auto_start_check.button_pressed = false
 	_eula_check.button_pressed = false
 	_show_pre.button_pressed = AppSettings.show_unstable_versions
@@ -129,7 +146,7 @@ func open() -> void:
 
 
 func _suggest_name() -> String:
-	var n := ServerManager.get_instances().size() + 1
+	var n := (_target.get_handles().size() if _target != null else ServerManager.get_instances().size()) + 1
 	return "Survival" if n == 1 else "Server %d" % n
 
 
@@ -155,7 +172,8 @@ func _update_nav() -> void:
 		Page.VERSION:
 			can_next = not _build.is_empty() and _world_problem() == ""
 		Page.RESOURCES:
-			can_next = _port_spin.is_valid() and ServerManager.port_owner(_port_spin.port) == null
+			var clash := ServerManager.port_owner(_port_spin.port) if not _target.is_remote_source() else _remote_port_owner(_port_spin.port)
+			can_next = _port_spin.is_valid() and clash == null
 		Page.REVIEW:
 			can_next = _eula_check.button_pressed
 		Page.INSTALL:
@@ -201,7 +219,10 @@ func _on_cancel() -> void:
 
 
 func _on_name_changed(text: String) -> void:
-	_folder_label.text = "Folder: " + AppSettings.servers_root.path_join(Fmt.slugify(text))
+	if _target != null and _target.is_remote_source():
+		_folder_label.text = "Created in the servers folder on %s" % _target.source_name()
+	else:
+		_folder_label.text = "Folder: " + AppSettings.servers_root.path_join(Fmt.slugify(text))
 	_refresh_icon_view()
 	_update_nav()
 
@@ -268,7 +289,9 @@ func _on_version_selected(idx: int) -> void:
 	var lines := PackedStringArray()
 	lines.append("Paper %s — build #%d (%s), %s" % [version, _build.id, str(_build.channel).to_lower(), Fmt.bytes(_build.size)])
 	var java := JavaRuntimes.best_for(info.java_min)
-	if java != null:
+	if _target.is_remote_source():
+		lines.append("Requires Java %d+ on %s" % [info.java_min, _target.source_name()])
+	elif java != null:
 		lines.append("Requires Java %d+ → will use %s" % [info.java_min, java.display_name()])
 	else:
 		lines.append("⚠ Requires Java %d+, which is not installed. You can still create the server and install Java later." % info.java_min)
@@ -289,14 +312,14 @@ func _on_version_selected(idx: int) -> void:
 
 func _check_port() -> void:
 	var port := _port_spin.port
-	var clash := ServerManager.port_owner(port)
+	var clash := ServerManager.port_owner(port) if not _target.is_remote_source() else _remote_port_owner(port)
 	if not _port_spin.is_valid():
 		_port_status.text = "✕ " + _port_spin.error_text()
 		_port_status.add_theme_color_override("font_color", Color("e05555"))
 	elif clash != null:
 		_port_status.text = "✕ Used by %s" % clash.config.display_name
 		_port_status.add_theme_color_override("font_color", Color("e05555"))
-	elif not PlatformBackend.is_port_free(port):
+	elif not _target.is_remote_source() and not PlatformBackend.is_port_free(port):
 		_port_status.text = "⚠ Another program is listening on this port"
 		_port_status.add_theme_color_override("font_color", Color("f2b84b"))
 	else:
@@ -324,7 +347,10 @@ func _summary_text() -> String:
 		lines.append("%d additional setting%s changed" % [extra, "" if extra == 1 else "s"])
 	if _world.get("ok", false):
 		lines.append("Starting world:  %s (Minecraft %s) — its game mode and difficulty are applied" % [_world_title(), _world.version if _world.version != "" else "unknown"])
-	lines.append("Folder:  %s" % AppSettings.servers_root.path_join(Fmt.slugify(_name_edit.text)))
+	if _target.is_remote_source():
+		lines.append("Computer:  %s (created in its servers folder)" % _target.source_name())
+	else:
+		lines.append("Folder:  %s" % AppSettings.servers_root.path_join(Fmt.slugify(_name_edit.text)))
 	return "\n".join(lines)
 
 
@@ -417,6 +443,9 @@ func _install() -> void:
 	_install_progress.value = 0.0
 	_set_page(Page.INSTALL)
 	var ram := int(_ram_field.value)
+	if _target.is_remote_source():
+		await _install_remote(ram)
+		return
 	var res: Dictionary = await ServerManager.create_server({
 		"name": _name_edit.text.strip_edges(),
 		"color": _color_picker.color,
@@ -427,17 +456,16 @@ func _install() -> void:
 		"ram_min_mb": clampi(ram / 4, 512, ram),
 		"port": _port_spin.port,
 		"settings": settings_spec(),
+		"auto_start": _auto_start_check.button_pressed,
 	}, func(stage: String, fraction: float) -> void:
 		_install_status.text = stage
 		_install_progress.value = fraction * 100.0)
 	_installing = false
 	if res.ok:
 		_created = res.instance
-		_created.config.auto_start = _auto_start_check.button_pressed
-		_created.save_config()
 		if _pending_icon != null and ServerIcon.save(_created.config.directory, _pending_icon) == OK:
 			_created.config_changed.emit()
-		var world_ok := await _import_world_into(_created)
+		var world_ok := await _import_world_into(_created as ServerInstance)
 		_install_status.text = "%s is ready." % _created.config.display_name
 		_install_progress.value = 100.0
 		Notifier.success("Created %s." % _created.config.display_name)
@@ -448,6 +476,53 @@ func _install() -> void:
 		_install_error.text = res.error
 		_install_error.visible = true
 	_update_nav()
+
+
+## Creates the server on another computer: it downloads Paper and sets everything up
+## itself; the build is identified by number only.
+func _install_remote(ram: int) -> void:
+	var link := _target as RemoteLink
+	var spec := {
+		"name": _name_edit.text.strip_edges(), "color": _color_picker.color.to_html(false),
+		"version": _selected_version(), "build_id": int(_build.id),
+		"ram_max_mb": ram, "ram_min_mb": clampi(ram / 4, 512, ram), "port": _port_spin.port,
+		"settings": settings_spec(), "auto_start": _auto_start_check.button_pressed,
+	}
+	_install_status.text = "Asking %s to create the server…" % link.source_name()
+	var res: Dictionary = await link.create_server_remote(spec, func(stage: String, fraction: float) -> void:
+		_install_status.text = stage
+		if fraction >= 0.0:
+			_install_progress.value = fraction * 100.0)
+	_installing = false
+	if res.ok and res.get("instance") != null:
+		_created = res.instance
+		if _pending_icon != null:
+			await _created.set_icon_png(_pending_icon.save_png_to_buffer())
+		_install_status.text = "%s is ready on %s." % [_created.config.display_name, link.source_name()]
+		_install_progress.value = 100.0
+		Notifier.success("Created %s on %s." % [_created.config.display_name, link.source_name()])
+		if _start_now_check.button_pressed:
+			_created.start()
+	else:
+		_install_status.text = "Installation failed."
+		_install_error.text = str(res.get("error", "The other computer did not confirm the new server."))
+		_install_error.visible = true
+	_update_nav()
+
+
+## Servers on the other computer using [param port], or null (its own check is final).
+func _remote_port_owner(port: int) -> ServerHandle:
+	for h in _target.get_handles():
+		if h.config.port == port:
+			return h
+	return null
+
+
+func _first_free_remote_port() -> int:
+	var port := ServerManager.FIRST_GAME_PORT
+	while _remote_port_owner(port) != null:
+		port += 1
+	return port
 
 
 # --- Starting world ---------------------------------------------------------

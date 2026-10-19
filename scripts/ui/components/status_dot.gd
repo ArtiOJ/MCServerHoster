@@ -31,6 +31,7 @@ func _draw() -> void:
 	draw_circle(size * 0.5, r, color, true, -1.0, true)
 
 
-func show_state(inst: ServerInstance) -> void:
-	color = inst.state_color()
-	pulsing = inst.state in [ServerInstance.State.STARTING, ServerInstance.State.STOPPING, ServerInstance.State.INSTALLING]
+func show_state(handle: ServerHandle) -> void:
+	color = handle.state_color()
+	var connected := not handle.is_remote() or (handle as RemoteServer).is_connected_to_host()
+	pulsing = connected and handle.state in [ServerHandle.State.STARTING, ServerHandle.State.STOPPING, ServerHandle.State.INSTALLING]

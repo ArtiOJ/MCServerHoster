@@ -34,7 +34,7 @@ extends ConfirmationDialog
 @onready var _category_checks := {
 	"crash": %NotifyCrashCheck, "server_state": %NotifyStateCheck, "players": %NotifyPlayersCheck,
 	"wake": %NotifyWakeCheck, "backup": %NotifyBackupCheck, "update": %NotifyUpdateCheck,
-	"power": %NotifyPowerCheck, "event": %NotifyEventCheck,
+	"power": %NotifyPowerCheck, "event": %NotifyEventCheck, "remote": %NotifyRemoteCheck,
 }
 @onready var _dir_dialog: FileDialog = %DirDialog
 @onready var _java_dialog: FileDialog = %JavaDialog

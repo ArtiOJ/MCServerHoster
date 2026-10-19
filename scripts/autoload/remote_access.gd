@@ -77,6 +77,9 @@ func set_enabled(on: bool, new_port := -1) -> void:
 	_save()
 	if on:
 		_listen()
+		# Invites list the internet address too when it is known.
+		if NetworkService.public_ip == "" and not NetworkService.looking_up_public_ip:
+			NetworkService.refresh_public_ip()
 	else:
 		_stop_listening()
 		for session in sessions():
@@ -179,7 +182,7 @@ func record_failure(address: String) -> void:
 	if times.size() >= FAILURE_LIMIT:
 		_blocked[address] = now + BLOCK_SEC
 		_failures.erase(address)
-		Notifier.warn("Blocked %s for %d minutes after repeated failed remote sign-ins." % [address, BLOCK_SEC / 60])
+		Notifier.warn("Blocked %s for %d minutes after repeated failed remote sign-ins." % [address, BLOCK_SEC / 60], Notifier.Category.REMOTE)
 
 
 func record_success(session: RemoteSession) -> void:
@@ -187,13 +190,13 @@ func record_success(session: RemoteSession) -> void:
 	session.grant.last_used_unix = int(Time.get_unix_time_from_system())
 	_save()
 	sessions_changed.emit()
-	Notifier.info("%s connected remotely (%s)." % [session.grant.name, session.grant.role_name().to_lower()])
+	Notifier.info("%s connected remotely (%s)." % [session.grant.name, session.grant.role_name().to_lower()], Notifier.Category.REMOTE)
 
 
 func on_session_closed(session: RemoteSession, was_ready: bool) -> void:
 	if was_ready:
 		sessions_changed.emit()
-		Notifier.info("%s disconnected." % session.grant.name)
+		Notifier.info("%s disconnected." % session.grant.name, Notifier.Category.REMOTE)
 
 
 ## Everything a client shows about a server.
@@ -209,7 +212,7 @@ func snapshot(inst: ServerInstance) -> Dictionary:
 		"update_build": inst.update_available_build, "orphan_pid": inst.orphan_pid,
 		"last_exit_code": inst.last_exit_code, "startup_seconds": inst.startup_seconds,
 		"address": inst.connect_address(), "public_address": inst.public_address(),
-		"java": inst.java_description(), "cores": OS.get_processor_count(),
+		"java": inst.java_description(), "cores": OS.get_processor_count(), "motd": inst.motd(),
 		"problem": inst.start_problem() if not inst.is_busy() else "",
 	}
 	data.merge(live_state(inst))
@@ -290,6 +293,12 @@ func _on_server_removed(server_id: String) -> void:
 
 
 func _flush_events() -> void:
+	if sessions().is_empty():
+		# Nobody to tell: drop what piled up instead of building snapshots for no one.
+		_console_batches.clear()
+		_dirty_snapshots.clear()
+		_dirty_stats.clear()
+		return
 	if not _console_batches.is_empty():
 		var batches := _console_batches
 		_console_batches = {}
@@ -346,6 +355,7 @@ func _listen() -> void:
 	if err != OK:
 		listen_error = "Port %d could not be opened (%s). Another program may be using it." % [port, error_string(err)]
 		_server = null
+		Notifier.warn("Remote access is off: " + listen_error, Notifier.Category.REMOTE)
 	else:
 		listen_error = ""
 	status_changed.emit()

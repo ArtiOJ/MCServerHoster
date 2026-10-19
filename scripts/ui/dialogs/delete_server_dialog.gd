@@ -2,7 +2,7 @@ class_name DeleteServerDialog
 extends ConfirmationDialog
 ## Confirms deleting a server; the user must type the server's name.
 
-var _instance: ServerInstance
+var _instance: ServerHandle
 
 @onready var _message: Label = %Message
 @onready var _name_edit: LineEdit = %NameEdit
@@ -20,10 +20,11 @@ func _ready() -> void:
 	confirmed.connect(_on_confirmed)
 
 
-func open(inst: ServerInstance) -> void:
+func open(inst: ServerHandle) -> void:
 	_instance = inst
 	title = "Delete %s?" % inst.config.display_name
-	_message.text = "This permanently deletes \"%s\". It cannot be undone.\nFolder: %s\n\nType the server name to confirm." % [inst.config.display_name, inst.config.directory]
+	var folder := inst.folder_path() + (" on " + inst.host_name() if inst.is_remote() else "")
+	_message.text = "This permanently deletes \"%s\". It cannot be undone.\nFolder: %s\n\nType the server name to confirm." % [inst.config.display_name, folder]
 	_name_edit.text = ""
 	_name_edit.placeholder_text = inst.config.display_name
 	_delete_files.button_pressed = true
@@ -40,12 +41,12 @@ func _validate() -> void:
 func _on_confirmed() -> void:
 	if _instance == null:
 		return
-	var display := _instance.config.display_name
-	var err := ServerManager.delete_server(_instance.config.id, _delete_files.button_pressed, _delete_backups.button_pressed)
+	var inst := _instance
 	_instance = null
-	if err == OK:
+	var display := inst.config.display_name
+	var source: ServerSource = (inst as RemoteServer).link if inst is RemoteServer else ServerManager
+	var res: Dictionary = await source.delete_handle(inst, _delete_files.button_pressed, _delete_backups.button_pressed)
+	if res.ok:
 		Notifier.success("Deleted %s." % display)
-	elif err == ERR_BUSY:
-		Notifier.error("Stop %s before deleting it." % display)
 	else:
-		Notifier.error("Could not delete %s: %s" % [display, error_string(err)])
+		Notifier.error(str(res.get("error", "Could not delete %s." % display)))

@@ -28,6 +28,9 @@ func _ready() -> void:
 	if not created.ok:
 		return _finish()
 	var inst: ServerInstance = created.instance
+	# With the wake helper installed, a timed Start event legitimately holds a sleep lock to arm
+	# the wake alarm; this test checks the server locks only (wake_sleep_test covers waking).
+	AppSettings.wake_for_events = false
 
 	# Timed START at the next minute, a broadcast when online, and stop-when-empty after 6 s.
 	var bias := int(Time.get_time_zone_from_system().get("bias", 0)) * 60
@@ -73,7 +76,8 @@ func _ready() -> void:
 	# Stop when empty.
 	empty_stop.enabled = true
 	inst.save_config()
-	await _wait_for(func() -> bool: return not inst.is_process_alive(), 30.0)
+	# The process can be gone a moment before the manager handles its exit and leaves STOPPING.
+	await _wait_for(func() -> bool: return inst.state == ServerInstance.State.STOPPED, 30.0)
 	_check(inst.state == ServerInstance.State.STOPPED, "SERVER_EMPTY event stopped the idle server")
 	await get_tree().create_timer(2.5).timeout
 	_check(not _inhibitors().contains("Stopping Minecraft servers cleanly"), "no locks once all servers stopped")

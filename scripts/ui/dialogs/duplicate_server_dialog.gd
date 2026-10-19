@@ -2,9 +2,9 @@ class_name DuplicateServerDialog
 extends ConfirmationDialog
 ## Copies a server into a new, independent server with its own ports.
 
-signal duplicated(instance: ServerInstance)
+signal duplicated(handle: ServerHandle)
 
-var _instance: ServerInstance
+var _instance: ServerHandle
 var _busy := false
 
 @onready var _name_edit: LineEdit = %NameEdit
@@ -23,7 +23,7 @@ func _ready() -> void:
 	close_requested.connect(_on_close_requested)
 
 
-func open(inst: ServerInstance) -> void:
+func open(inst: ServerHandle) -> void:
 	_instance = inst
 	_busy = false
 	title = "Duplicate %s" % inst.config.display_name
@@ -42,7 +42,8 @@ func open(inst: ServerInstance) -> void:
 func _refresh() -> void:
 	if _instance == null:
 		return
-	var folder := AppSettings.servers_root.path_join(ServerManager.unique_id(_name_edit.text.strip_edges()))
+	var folder := "in the servers folder on " + _instance.host_name() if _instance.is_remote() \
+			else AppSettings.servers_root.path_join(ServerManager.unique_id(_name_edit.text.strip_edges()))
 	var lines := PackedStringArray(["Folder: " + folder, "New game and RCON ports are assigned automatically."])
 	if _instance.is_online():
 		lines.append("The server is running: its worlds are flushed to disk before copying.")
@@ -58,7 +59,8 @@ func _on_confirmed() -> void:
 	_progress.visible = true
 	var source := _instance
 	var display_name := _name_edit.text.strip_edges()
-	var res: Dictionary = await ServerManager.duplicate_server(source, display_name,
+	var target: ServerSource = (source as RemoteServer).link if source is RemoteServer else ServerManager
+	var res: Dictionary = await target.duplicate_handle(source, display_name,
 			_worlds_check.button_pressed, _plugins_check.button_pressed,
 			func(text: String) -> void: _status.text = text)
 	_busy = false

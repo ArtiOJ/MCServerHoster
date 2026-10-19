@@ -187,7 +187,7 @@ func _after_wake() -> void:
 
 ## True when a wake-up would be armed before sleeping (used to hold the sleep delay lock).
 func _wake_wanted() -> bool:
-	if not WakeHelper.is_installed() and not wake_runner.is_valid():
+	if not _can_wake():
 		return false
 	var instances := ServerManager.get_instances()
 	if AppSettings.wake_for_events and not WakeHelper.flagged_event_times(instances).is_empty():
@@ -245,7 +245,7 @@ func _disarm_wake() -> void:
 ## Arms or clears Wi-Fi wake-on-WLAN to match the settings and servers. Called on every policy
 ## tick; only runs the helper when something changed.
 func refresh_wake() -> void:
-	if _wowlan_busy or asleep or (not WakeHelper.is_installed() and not wake_runner.is_valid()):
+	if _wowlan_busy or asleep or not _can_wake():
 		return
 	var plan := plan_wake()
 	var want := {"phy": plan.phy, "pattern": plan.wowlan} if plan.wowlan != "" else {}
@@ -263,6 +263,13 @@ func refresh_wake() -> void:
 
 
 ## The helper call used for arming; tests replace it through [member wake_runner].
+## True when wake-ups can be armed: through the installed helper in normal runs, or through
+## [member wake_runner]. Test runs (`--no-autostart`) never reach the real helper, so they
+## cannot change the computer's wake alarm or Wi-Fi settings.
+func _can_wake() -> bool:
+	return wake_runner.is_valid() or (WakeHelper.is_installed() and AppSettings.autostart_enabled)
+
+
 func _runner() -> Callable:
 	if wake_runner.is_valid():
 		return wake_runner

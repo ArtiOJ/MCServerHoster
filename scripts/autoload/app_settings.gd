@@ -20,7 +20,7 @@ const NOTIFY_WHEN_NAMES: PackedStringArray = ["Always", "When the window isn't f
 ## Backup failures are always shown; this toggle controls the success messages.
 const DEFAULT_NOTIFY_CATEGORIES := {
 	"crash": true, "server_state": false, "players": false, "wake": true,
-	"backup": true, "update": true, "power": true, "event": true,
+	"backup": true, "update": true, "power": true, "event": true, "remote": true,
 }
 
 const DEFAULT_SETTINGS_PATH := "user://settings.json"

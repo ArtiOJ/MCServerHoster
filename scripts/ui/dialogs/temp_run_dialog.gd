@@ -4,7 +4,7 @@ extends ConfirmationDialog
 
 const ACTION_KEEP := "keep"
 
-var _instance: ServerInstance
+var _instance: ServerHandle
 var _busy := false
 var _keep_button: Button
 
@@ -33,12 +33,12 @@ func is_busy() -> bool:
 	return _busy
 
 
-func open(inst: ServerInstance) -> void:
+func open(inst: ServerHandle) -> void:
 	_instance = inst
 	_busy = false
 	title = "Temporary run of %s" % inst.config.display_name
 	_progress.visible = false
-	var running := inst.is_process_alive() or inst.state == ServerInstance.State.INSTALLING
+	var running := inst.is_process_alive() or inst.state == ServerHandle.State.INSTALLING
 	if running:
 		_message.text = "%s is running as a temporary copy. Stop it first, then choose whether to keep or discard what changed." % inst.config.display_name
 	else:

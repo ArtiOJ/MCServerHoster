@@ -1,0 +1,61 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/components/grant_row.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/components/status_dot.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/copy.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/trash.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/server.svg" id="5"]
+
+[node name="GrantRow" type="PanelContainer"]
+theme_type_variation = &"CardPanel"
+script = ExtResource("1")
+
+[node name="HBox" type="HBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Dot" parent="HBox" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="Text" type="VBoxContainer" parent="HBox"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="NameLabel" type="Label" parent="HBox/Text"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Name"
+
+[node name="DetailLabel" type="Label" parent="HBox/Text"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(240, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="CopyButton" type="Button" parent="HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Copy the invite code again. It contains the secret key: send it privately."
+text = "Copy invite"
+icon = ExtResource("3")
+
+[node name="ServersButton" type="Button" parent="HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Choose which servers this key opens. Changes apply immediately, also to a connected session."
+text = "Servers…"
+icon = ExtResource("5")
+
+[node name="RevokeButton" type="Button" parent="HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Delete this key. Anyone connected with it is disconnected right away and can't connect again."
+theme_type_variation = &"DangerButton"
+text = "Revoke"
+icon = ExtResource("4")

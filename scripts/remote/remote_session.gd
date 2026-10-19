@@ -339,7 +339,7 @@ func _server_request(op: String, inst: ServerInstance, args: Dictionary, req_id:
 			var name := inst.config.display_name
 			var err := ServerManager.delete_server(inst.config.id, bool(args.get("files", true)), bool(args.get("backups", false)))
 			if err == OK:
-				Notifier.info("%s (remote) deleted %s." % [grant.name, name])
+				Notifier.info("%s (remote) deleted %s." % [grant.name, name], Notifier.Category.REMOTE)
 			return {"ok": err == OK, "error": "" if err == OK else ("Stop the server before deleting it." if err == ERR_BUSY else "Could not delete the server (%s)." % error_string(err))}
 		"duplicate":
 			var copy_name := str(args.get("name", "")).strip_edges().left(64)
@@ -401,6 +401,7 @@ func _create_server(args: Dictionary, req_id: int) -> Dictionary:
 		"cpu_cores": clampi(int(spec_in.get("cpu_cores", 0)), 0, 4096),
 		"properties": _string_dict(spec_in.get("properties", {})),
 		"settings": _string_dict(spec_in.get("settings", {})),
+		"auto_start": bool(spec_in.get("auto_start", false)),
 	}
 	var wanted_port := int(spec_in.get("port", 0))
 	if wanted_port > 0 and wanted_port <= 65535 and ServerManager.port_owner(wanted_port) == null:
@@ -410,7 +411,7 @@ func _create_server(args: Dictionary, req_id: int) -> Dictionary:
 		return {"ok": false, "error": res.get("error", "Could not create the server.")}
 	var inst: ServerInstance = res.instance
 	inst.log_system("Created remotely by %s." % grant.name)
-	Notifier.info("%s (remote) created %s." % [grant.name, inst.config.display_name])
+	Notifier.info("%s (remote) created %s." % [grant.name, inst.config.display_name], Notifier.Category.REMOTE)
 	return {"ok": true, "server": inst.config.id}
 
 

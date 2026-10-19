@@ -115,6 +115,7 @@ func create_server(spec: Dictionary, on_progress := Callable()) -> Dictionary:
 	cfg.paper_build = int(spec.build.id)
 	cfg.build_channel = str(spec.build.channel)
 	cfg.eula_accepted = true
+	cfg.auto_start = bool(spec.get("auto_start", false))
 	cfg.ram_max_mb = int(spec.get("ram_max_mb", AppSettings.default_ram_mb))
 	cfg.ram_min_mb = clampi(int(spec.get("ram_min_mb", cfg.ram_max_mb / 2)), 256, cfg.ram_max_mb)
 	cfg.cpu_cores = int(spec.get("cpu_cores", 0))

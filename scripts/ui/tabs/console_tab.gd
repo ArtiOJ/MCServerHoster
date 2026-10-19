@@ -45,7 +45,7 @@ func _ready() -> void:
 		_output.scroll_following = on
 		if on:
 			_output.scroll_to_line(_output.get_line_count()))
-	_clear_button.pressed.connect(func() -> void: instance.clear_console())
+	_clear_button.pressed.connect(func() -> void: handle.clear_console())
 	_copy_button.pressed.connect(_copy_visible)
 	_command_edit.text_submitted.connect(_submit)
 	_command_edit.gui_input.connect(_on_command_input)
@@ -53,9 +53,9 @@ func _ready() -> void:
 
 
 func _on_bound() -> void:
-	watch(instance.console_line_added, _on_line_added)
-	watch(instance.console_cleared, _rebuild)
-	watch(instance.state_changed, _update_input_state.unbind(1))
+	watch(handle.console_line_added, _on_line_added)
+	watch(handle.console_cleared, _rebuild)
+	watch(handle.state_changed, _update_input_state.unbind(1))
 	_history_index = -1
 	_rebuild()
 	_update_input_state()
@@ -68,15 +68,17 @@ func focus_input() -> void:
 
 
 func _update_input_state() -> void:
-	var alive := instance.can_send_commands()
+	var alive := handle.can_send_commands()
 	_command_edit.editable = alive
 	_send_button.disabled = not alive
 	_offline_hint.visible = not alive
-	if instance.is_read_only():
+	if handle is RemoteServer and not (handle as RemoteServer).is_connected_to_host():
+		_offline_hint.text = "Not connected to %s. Commands can be sent again once the connection is back." % handle.host_name()
+	elif handle.is_read_only():
 		_offline_hint.text = "Re-attached without RCON: showing logs/latest.log read-only. Restart the server from here for full control."
 	else:
 		_offline_hint.text = "The server is offline. Start it to send commands."
-	_command_edit.placeholder_text = "Type a command — Tab completes, ↑/↓ browse history" if alive else ("Read-only" if instance.is_read_only() else "Server is not running")
+	_command_edit.placeholder_text = "Type a command — Tab completes, ↑/↓ browse history" if alive else ("Read-only" if handle.is_read_only() else "Server is not running")
 
 
 func _passes(entry: Dictionary) -> bool:
@@ -112,11 +114,11 @@ func _on_line_added(entry: Dictionary) -> void:
 
 
 func _rebuild() -> void:
-	if instance == null:
+	if handle == null:
 		return
 	_output.clear()
 	var parts := PackedStringArray()
-	for entry in instance.console_lines:
+	for entry in handle.console_lines:
 		if _passes(entry):
 			parts.append(_format(entry))
 	_has_text = not parts.is_empty()
@@ -127,7 +129,7 @@ func _rebuild() -> void:
 
 func _copy_visible() -> void:
 	var lines := PackedStringArray()
-	for entry in instance.console_lines:
+	for entry in handle.console_lines:
 		if _passes(entry):
 			lines.append(entry.plain)
 	DisplayServer.clipboard_set("\n".join(lines))
@@ -137,7 +139,7 @@ func _copy_visible() -> void:
 func _submit(text: String) -> void:
 	if text.strip_edges() == "":
 		return
-	if instance.send_command(text):
+	if handle.send_command(text):
 		_command_edit.clear()
 		_history_index = -1
 		_draft = ""
@@ -165,7 +167,7 @@ func _on_command_input(event: InputEvent) -> void:
 
 
 func _browse_history(direction: int) -> void:
-	var history := instance.command_history
+	var history := handle.command_history
 	if history.is_empty():
 		return
 	if _history_index == -1:
@@ -190,7 +192,7 @@ func _complete() -> void:
 		var text := _command_edit.text
 		var words := text.split(" ")
 		var current := words[-1]
-		var candidates := COMMANDS if words.size() == 1 else instance.players
+		var candidates := COMMANDS if words.size() == 1 else handle.players
 		_completion_prefix = text.substr(0, text.length() - current.length())
 		_completion_matches.clear()
 		for c in candidates:

@@ -1,13 +1,14 @@
 class_name ServerView
 extends VBoxContainer
 ## Detail view for one server: header with controls plus tabbed panels.
-## Switching servers re-binds every tab to the new ServerInstance.
+## Switching servers re-binds every tab; for a server on another computer, tabs that
+## cannot show it yet are hidden.
 
-signal update_requested(instance: ServerInstance)
-signal delete_requested(instance: ServerInstance)
-signal duplicate_requested(instance: ServerInstance)
-signal temp_decision_requested(instance: ServerInstance)
-signal import_world_requested(instance: ServerInstance)
+signal update_requested(handle: ServerHandle)
+signal delete_requested(handle: ServerHandle)
+signal duplicate_requested(handle: ServerHandle)
+signal temp_decision_requested(handle: ServerHandle)
+signal import_world_requested(handle: ServerHandle)
 
 ## Tab node name -> icon (matched by name so tabs can be reordered or added freely).
 const TAB_ICONS := {
@@ -24,7 +25,7 @@ const TAB_ICONS := {
 	"Network": preload("res://assets/icons/globe.svg"),
 }
 
-var instance: ServerInstance
+var instance: ServerHandle
 var _fitting := false
 
 @onready var _header: ServerHeader = %Header
@@ -67,12 +68,18 @@ func _set_tab_titles(show: bool) -> void:
 		_tabs.set_tab_title(i, str(_tabs.get_child(i).name) if show else "")
 
 
-func show_instance(inst: ServerInstance) -> void:
+func show_instance(inst: ServerHandle) -> void:
 	instance = inst
 	_header.bind(inst)
 	for tab in _tabs.get_children():
 		if tab is ServerTab:
-			tab.bind(inst)
+			var shown: bool = tab.bind(inst)
+			_tabs.set_tab_hidden(tab.get_index(), not shown)
+	if _tabs.is_tab_hidden(_tabs.current_tab):
+		_tabs.current_tab = 0
+	_fit_tabs.call_deferred()
+
+
 
 
 func focus_console() -> void:

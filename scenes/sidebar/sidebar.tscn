@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="4"]
 [ext_resource type="Texture2D" path="res://assets/icons/settings.svg" id="5"]
 [ext_resource type="Texture2D" path="res://assets/icons/upload.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/globe.svg" id="7"]
 
 [node name="Sidebar" type="PanelContainer"]
 custom_minimum_size = Vector2(264, 0)
@@ -44,6 +45,13 @@ theme_type_variation = &"MutedLabel"
 theme_override_font_sizes/font_size = 12
 text = "0 of 0 running"
 
+[node name="HostOption" type="OptionButton" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Which computer's servers to show. Other computers appear here when you are their system admin."
+fit_to_longest_item = false
+
 [node name="Spacer" type="Control" parent="VBox"]
 custom_minimum_size = Vector2(0, 6)
 layout_mode = 2
@@ -60,16 +68,38 @@ icon = ExtResource("3")
 alignment = 0
 
 [node name="Caption" type="Label" parent="VBox"]
+unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"SidebarCaption"
 text = "SERVERS"
+text_overrun_behavior = 3
 
 [node name="Scroll" type="ScrollContainer" parent="VBox"]
 layout_mode = 2
 size_flags_vertical = 3
 horizontal_scroll_mode = 0
 
-[node name="ServerList" type="VBoxContainer" parent="VBox/Scroll"]
+[node name="Lists" type="VBoxContainer" parent="VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="ServerList" type="VBoxContainer" parent="VBox/Scroll/Lists"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="RemoteCaption" type="Label" parent="VBox/Scroll/Lists"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Servers on other computers that you were given access to"
+mouse_filter = 1
+theme_type_variation = &"SidebarCaption"
+text = "REMOTE SERVERS"
+
+[node name="RemoteList" type="VBoxContainer" parent="VBox/Scroll/Lists"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
@@ -96,6 +126,15 @@ layout_mode = 2
 tooltip_text = "Add a server you already have (Paper, Spigot, vanilla…) from any folder"
 text = "Import Server"
 icon = ExtResource("6")
+
+[node name="RemoteButton" type="Button" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Let others control servers on this computer, or connect to someone else's"
+theme_type_variation = &"SidebarItem"
+text = "Remote access"
+icon = ExtResource("7")
+alignment = 0
 
 [node name="SettingsButton" type="Button" parent="VBox"]
 unique_name_in_owner = true

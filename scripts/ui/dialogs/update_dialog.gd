@@ -3,7 +3,7 @@ extends ConfirmationDialog
 ## Updates a server to the newest Paper build, or moves it to another Minecraft
 ## version, optionally backing up the world first.
 
-var _instance: ServerInstance
+var _instance: ServerHandle
 var _build := {}
 var _info := {}
 var _serial := 0
@@ -28,7 +28,7 @@ func _ready() -> void:
 	canceled.connect(func() -> void: _serial += 1)
 
 
-func open(inst: ServerInstance) -> void:
+func open(inst: ServerHandle) -> void:
 	_instance = inst
 	_busy = false
 	_build = {}
@@ -96,7 +96,8 @@ func _on_version_selected() -> void:
 			warnings.append("Downgrading Minecraft is not supported and can corrupt worlds. Only continue if you will restore an older backup.")
 		else:
 			warnings.append("Worlds are upgraded on first start and cannot be opened by %s afterwards. Plugins may need updates." % _instance.config.mc_version)
-	if JavaRuntimes.best_for(info.java_min) == null:
+	# Java can only be checked for servers on this computer.
+	if not _instance.is_remote() and JavaRuntimes.best_for(info.java_min) == null:
 		warnings.append("Java %d+ is required but not installed." % info.java_min)
 	if _build.channel != "STABLE":
 		warnings.append("This is an experimental build.")
@@ -117,22 +118,14 @@ func _on_confirmed() -> void:
 	_progress.visible = true
 	_progress.value = 0
 	var inst := _instance
-	if _backup_check.button_pressed and not inst.backups.world_dirs().is_empty():
-		_status.text = "Backing up worlds…"
-		var path: String = await inst.backups.create_backup(false)
-		if path == "":
-			_status.text = "Backup failed; update cancelled."
-			_busy = false
-			_set_controls_enabled(true)
-			return
-	_status.text = "Downloading…"
-	var res: Dictionary = await inst.install_build(_selected_version(), _build, _info, func(done: int, total: int) -> void:
-		_progress.value = 100.0 * done / maxf(total, 1.0)
-		_status.text = "Downloading… %s / %s" % [Fmt.bytes(done), Fmt.bytes(total)])
+	_status.text = "Starting…"
+	var res: Dictionary = await inst.update_paper(_selected_version(), int(_build.id), _backup_check.button_pressed, func(text: String, fraction: float) -> void:
+		_status.text = text
+		_progress.value = 100.0 * clampf(fraction, 0.0, 1.0))
 	_busy = false
 	_set_controls_enabled(true)
 	if res.ok:
-		Notifier.success("%s now runs Paper %s build #%d." % [inst.config.display_name, inst.config.mc_version, inst.config.paper_build])
+		Notifier.success("%s now runs Paper %s build #%d." % [inst.config.display_name, _selected_version(), int(_build.id)])
 		hide()
 	else:
 		_status.text = res.error

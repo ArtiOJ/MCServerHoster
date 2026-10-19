@@ -486,9 +486,10 @@ func _deny(reason: String) -> void:
 	_drop_channel()
 	_fail_pending(reason)
 	error = reason
+	# Without access (e.g. a revoked key) the servers are of no use; they come back with access.
+	for id in _servers.keys():
+		_remove_server(id)
 	_set_status(Status.DENIED)
-	for s in _servers.values():
-		s.notify_link_changed()
 
 
 func _give_up(reason: String) -> void:

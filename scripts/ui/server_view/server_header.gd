@@ -13,7 +13,7 @@ enum StartItem { START, START_TEMPORARY }
 
 const TEMP_START_TOOLTIP := "Run a throwaway copy of this server for testing. It shows as this server while running; when it stops you choose whether to keep or discard what changed."
 
-var instance: ServerInstance
+var instance: ServerHandle
 
 @onready var _color_bar: ColorRect = %ColorBar
 @onready var _name_label: Label = %NameLabel
@@ -44,7 +44,7 @@ func _ready() -> void:
 	start_popup.id_pressed.connect(_on_start_menu)
 
 
-func bind(inst: ServerInstance) -> void:
+func bind(inst: ServerHandle) -> void:
 	if instance != null and is_instance_valid(instance):
 		instance.state_changed.disconnect(_on_state_changed)
 		instance.config_changed.disconnect(_refresh)
@@ -56,7 +56,7 @@ func bind(inst: ServerInstance) -> void:
 	_refresh()
 
 
-func _on_state_changed(_state: ServerInstance.State) -> void:
+func _on_state_changed(_state: ServerHandle.State) -> void:
 	_refresh()
 
 
@@ -75,13 +75,17 @@ func _refresh() -> void:
 	_temp_badge.visible = instance.is_temporary()
 	_update_button.visible = instance.update_available_build > 0
 	_update_button.text = "Update to #%d" % instance.update_available_build
-	_info_label.text = "Paper %s · build #%d · port %d · %s" % [cfg.mc_version, cfg.paper_build, cfg.port, cfg.directory]
+	_info_label.text = "Paper %s · build #%d · port %d · %s" % [cfg.mc_version, cfg.paper_build, cfg.port, instance.folder_path()]
+	if instance.is_remote():
+		_info_label.text = "On %s · %s" % [instance.host_name(), _info_label.text]
 
 	var s := instance.state
 	var alive := instance.is_process_alive()
-	var installing := s == ServerInstance.State.INSTALLING
-	_start_button.visible = not alive and s != ServerInstance.State.STOPPING
-	_start_button.disabled = installing or instance.orphan_pid > 0
+	var installing := s == ServerHandle.State.INSTALLING
+	# A server on another computer can only be controlled while connected to it.
+	var reachable := not instance.is_remote() or (instance as RemoteServer).is_connected_to_host()
+	_start_button.visible = not alive and s != ServerHandle.State.STOPPING
+	_start_button.disabled = installing or instance.orphan_pid > 0 or not reachable
 	_start_button.tooltip_text = "Keep or discard the temporary copy first (⋮ menu), or resume it from the Start options." \
 			if instance.is_temporary() else "Start the server (Ctrl+Enter)"
 	_start_menu.visible = _start_button.visible
@@ -90,20 +94,33 @@ func _refresh() -> void:
 	var temp_idx := start_popup.get_item_index(StartItem.START_TEMPORARY)
 	start_popup.set_item_text(temp_idx, "Resume temporary copy" if instance.is_temporary() else "Start temporary copy")
 	start_popup.set_item_disabled(start_popup.get_item_index(StartItem.START), instance.is_temporary())
-	_stop_button.visible = alive or s == ServerInstance.State.CRASHED
-	_stop_button.disabled = s == ServerInstance.State.STOPPING
-	_stop_button.text = "Cancel restart" if s == ServerInstance.State.CRASHED else "Stop"
-	_restart_button.disabled = installing or s == ServerInstance.State.STOPPING or instance.orphan_pid > 0
+	_stop_button.visible = alive or s == ServerHandle.State.CRASHED
+	_stop_button.disabled = s == ServerHandle.State.STOPPING or not reachable
+	_stop_button.text = "Cancel restart" if s == ServerHandle.State.CRASHED else "Stop"
+	_restart_button.disabled = installing or s == ServerHandle.State.STOPPING or instance.orphan_pid > 0 or not reachable
 	_kill_button.visible = alive
-	_kill_button.disabled = not alive
+	_kill_button.disabled = not alive or not reachable
+	_update_button.disabled = not reachable
 
 	var popup := _more_button.get_popup()
-	popup.set_item_disabled(popup.get_item_index(MenuItem.UPDATE), alive or installing)
-	popup.set_item_disabled(popup.get_item_index(MenuItem.DELETE), alive or installing)
-	popup.set_item_disabled(popup.get_item_index(MenuItem.STOP_ORPHAN), instance.orphan_pid <= 0)
-	popup.set_item_disabled(popup.get_item_index(MenuItem.DUPLICATE), installing)
-	popup.set_item_disabled(popup.get_item_index(MenuItem.IMPORT_WORLD), installing)
-	popup.set_item_disabled(popup.get_item_index(MenuItem.TEMP_DECISION), not instance.is_temporary() or alive or installing)
+	_set_menu_item(popup, MenuItem.OPEN_FOLDER, instance.supports(ServerHandle.FEATURE_OPEN_FOLDER), "The folder is on " + instance.host_name())
+	_set_menu_item(popup, MenuItem.UPDATE, reachable and not alive and not installing)
+	_set_menu_item(popup, MenuItem.CHECK_UPDATES, reachable)
+	_set_menu_item(popup, MenuItem.DELETE, instance.supports(ServerHandle.FEATURE_DELETE) and reachable and not alive and not installing,
+			"Only a system admin of %s can delete servers." % instance.host_name() if not instance.supports(ServerHandle.FEATURE_DELETE) else "")
+	_set_menu_item(popup, MenuItem.STOP_ORPHAN, reachable and instance.orphan_pid > 0)
+	_set_menu_item(popup, MenuItem.DUPLICATE, instance.supports(ServerHandle.FEATURE_DUPLICATE) and reachable and not installing,
+			"Only a system admin of %s can duplicate servers." % instance.host_name() if not instance.supports(ServerHandle.FEATURE_DUPLICATE) else "")
+	_set_menu_item(popup, MenuItem.IMPORT_WORLD, instance.supports(ServerHandle.FEATURE_IMPORT_WORLD) and not installing,
+			"Importing worlds onto another computer isn't available yet." if not instance.supports(ServerHandle.FEATURE_IMPORT_WORLD) else "")
+	_set_menu_item(popup, MenuItem.TEMP_DECISION, reachable and instance.is_temporary() and not alive and not installing)
+	_set_menu_item(popup, MenuItem.CHANGE_ICON, reachable)
+
+
+static func _set_menu_item(popup: PopupMenu, id: int, enabled: bool, why_not := "") -> void:
+	var idx := popup.get_item_index(id)
+	popup.set_item_disabled(idx, not enabled)
+	popup.set_item_tooltip(idx, why_not if not enabled else "")
 
 
 func _on_start_menu(id: int) -> void:
@@ -132,15 +149,20 @@ func is_icon_editor_open() -> bool:
 func _on_menu(id: int) -> void:
 	match id:
 		MenuItem.OPEN_FOLDER:
-			OS.shell_open(instance.config.directory)
+			OS.shell_open(instance.folder_path())
 		MenuItem.COPY_ADDRESS:
-			DisplayServer.clipboard_set(instance.connect_address())
-			Notifier.info("Copied %s to the clipboard." % instance.connect_address())
+			# Someone on another computer usually isn't on the server's network.
+			var address := instance.public_address() if instance.is_remote() and instance.public_address() != "" else instance.connect_address()
+			DisplayServer.clipboard_set(address)
+			Notifier.info("Copied %s to the clipboard." % address)
 		MenuItem.UPDATE:
 			update_requested.emit()
 		MenuItem.CHECK_UPDATES:
 			Notifier.info("Checking PaperMC for updates…")
-			await ServerManager.check_updates()
+			if instance is RemoteServer:
+				await (instance as RemoteServer).check_updates()
+			else:
+				await ServerManager.check_updates()
 			if instance.update_available_build > 0:
 				Notifier.success("Paper build #%d is available for %s." % [instance.update_available_build, instance.config.mc_version])
 			else:

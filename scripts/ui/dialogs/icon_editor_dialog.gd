@@ -12,7 +12,7 @@ const ACTION_REMOVE := "remove"
 const DIALOG_SIZE := Vector2i(940, 640)
 const MOTD_COLOR := "#aaaaaa"
 
-var _instance: ServerInstance
+var _instance: ServerHandle
 var _pending := false
 var _display_name := ""
 var _full: Image
@@ -58,19 +58,19 @@ func _ready() -> void:
 
 
 ## Edits the icon of an existing server.
-func open(inst: ServerInstance) -> void:
+func open(inst: ServerHandle) -> void:
 	_instance = inst
 	_pending = false
 	_display_name = inst.config.display_name
-	_reset(inst.get_properties().get_value("motd", "A Minecraft Server"), inst.get_properties().get_int("max-players", 20))
+	_reset(inst.motd(), inst.max_players if inst.max_players > 0 else 20)
 	title = "Server icon — %s" % _display_name
 	_remove_button.text = "Remove icon"
-	_remove_button.visible = ServerIcon.info(inst.config.directory).exists
-	var info := ServerIcon.info(inst.config.directory)
+	var info := inst.icon_info()
+	_remove_button.visible = info.exists
 	if info.exists and not info.valid:
 		_set_status("The current server-icon.png is %d×%d. Minecraft only shows 64×64 icons, so it's being ignored. Choose an image to replace it." % [info.size.x, info.size.y], true)
 	elif info.exists:
-		_show_current(ServerIcon.load_texture(inst.config.directory))
+		_show_current(inst.icon_texture())
 	popup_centered(DIALOG_SIZE)
 
 
@@ -176,11 +176,12 @@ func _on_save() -> void:
 		icon_ready.emit(icon)
 		hide()
 		return
-	var err := ServerIcon.save(_instance.config.directory, icon)
+	_set_controls_enabled(false)
+	var err: Error = await _instance.set_icon_png(icon.save_png_to_buffer())
+	_set_controls_enabled(true)
 	if err != OK:
 		_set_status("Could not save the icon: %s" % error_string(err), true)
 		return
-	_instance.config_changed.emit()
 	var note := " Restart the server to show it in the server list." if _instance.is_process_alive() else ""
 	Notifier.success("Saved the icon for %s.%s" % [_instance.config.display_name, note])
 	icon_saved.emit()
@@ -192,11 +193,10 @@ func _on_remove() -> void:
 		icon_ready.emit(null)
 		hide()
 		return
-	var err := ServerIcon.remove(_instance.config.directory)
+	var err: Error = await _instance.set_icon_png(PackedByteArray())
 	if err != OK:
 		_set_status("Could not remove the icon: %s" % error_string(err), true)
 		return
-	_instance.config_changed.emit()
 	Notifier.info("Removed the icon of %s." % _instance.config.display_name)
 	icon_saved.emit()
 	hide()

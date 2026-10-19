@@ -2,12 +2,12 @@ class_name ServerCard
 extends PanelContainer
 ## Compact summary of one server on the dashboard, with a quick start/stop toggle.
 
-signal open_requested(server_id: String)
+signal open_requested(handle_key: String)
 
 const PLAY_ICON := preload("res://assets/icons/play.svg")
 const STOP_ICON := preload("res://assets/icons/stop.svg")
 
-var instance: ServerInstance
+var instance: ServerHandle
 
 @onready var _color_bar: ColorRect = %ColorBar
 @onready var _icon_view: ServerIconView = %IconView
@@ -21,7 +21,7 @@ var instance: ServerInstance
 
 
 func _ready() -> void:
-	_open_button.pressed.connect(func() -> void: open_requested.emit(instance.config.id))
+	_open_button.pressed.connect(func() -> void: open_requested.emit(instance.key()))
 	_toggle_button.pressed.connect(func() -> void:
 		if instance.is_process_alive():
 			instance.stop()
@@ -29,7 +29,7 @@ func _ready() -> void:
 			instance.start())
 
 
-func bind(inst: ServerInstance) -> void:
+func bind(inst: ServerHandle) -> void:
 	instance = inst
 	inst.state_changed.connect(_refresh.unbind(1))
 	inst.stats_updated.connect(_refresh)
@@ -41,7 +41,7 @@ func bind(inst: ServerInstance) -> void:
 func _gui_input(event: InputEvent) -> void:
 	var mb := event as InputEventMouseButton
 	if mb != null and mb.double_click and mb.button_index == MOUSE_BUTTON_LEFT:
-		open_requested.emit(instance.config.id)
+		open_requested.emit(instance.key())
 
 
 func _refresh() -> void:
@@ -57,7 +57,7 @@ func _refresh() -> void:
 	_info_label.text = "Paper %s · port %d · %s heap" % [cfg.mc_version, cfg.port, Fmt.megabytes(cfg.ram_max_mb)]
 	if instance.is_process_alive():
 		var players := "%d/%d players" % [instance.players.size(), instance.max_players] if instance.is_online() else "starting"
-		_stats_label.text = "%s · CPU %.0f%% · RAM %s" % [players, instance.monitor.cpu_percent, Fmt.bytes(instance.monitor.rss_bytes)]
+		_stats_label.text = "%s · CPU %.0f%% · RAM %s" % [players, instance.cpu_percent(), Fmt.bytes(instance.rss_bytes())]
 	else:
 		_stats_label.text = "Starts when a player joins" if instance.is_asleep() else "Offline"
 	if instance.is_temporary():
@@ -66,4 +66,5 @@ func _refresh() -> void:
 	_toggle_button.text = "Stop" if alive else "Start"
 	_toggle_button.icon = STOP_ICON if alive else PLAY_ICON
 	_toggle_button.theme_type_variation = &"" if alive else &"AccentButton"
-	_toggle_button.disabled = instance.state in [ServerInstance.State.STOPPING, ServerInstance.State.INSTALLING]
+	_toggle_button.disabled = instance.state in [ServerHandle.State.STOPPING, ServerHandle.State.INSTALLING] \
+			or (instance.is_remote() and not (instance as RemoteServer).is_connected_to_host())

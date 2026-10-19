@@ -7,10 +7,10 @@ signal notified(message: String, level: Level)
 
 enum Level { INFO, SUCCESS, WARNING, ERROR }
 ## What a notification is about; each category can be toggled in Preferences.
-enum Category { GENERAL, CRASH, SERVER_STATE, PLAYERS, WAKE, BACKUP, UPDATE, POWER, EVENT }
+enum Category { GENERAL, CRASH, SERVER_STATE, PLAYERS, WAKE, BACKUP, UPDATE, POWER, EVENT, REMOTE }
 
 ## Settings keys per category (see AppSettings.DEFAULT_NOTIFY_CATEGORIES). GENERAL has no toggle.
-const CATEGORY_KEYS: PackedStringArray = ["", "crash", "server_state", "players", "wake", "backup", "update", "power", "event"]
+const CATEGORY_KEYS: PackedStringArray = ["", "crash", "server_state", "players", "wake", "backup", "update", "power", "event", "remote"]
 const APP_NAME := "Server Manager"
 ## Identical messages are delivered to the desktop at most once in this window.
 const RATE_LIMIT_MS := 10000

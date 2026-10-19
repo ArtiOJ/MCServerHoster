@@ -15,6 +15,7 @@
 [ext_resource type="PackedScene" path="res://scenes/dialogs/temp_run_dialog.tscn" id="13"]
 [ext_resource type="PackedScene" path="res://scenes/dialogs/import_server_dialog.tscn" id="import_server"]
 [ext_resource type="PackedScene" path="res://scenes/dialogs/import_world_dialog.tscn" id="import_world"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/remote_dialog.tscn" id="remote_dialog"]
 
 [node name="Main" type="Control"]
 layout_mode = 3
@@ -110,6 +111,10 @@ unique_name_in_owner = true
 visible = false
 
 [node name="ImportWorldDialog" parent="." instance=ExtResource("import_world")]
+unique_name_in_owner = true
+visible = false
+
+[node name="RemoteDialog" parent="." instance=ExtResource("remote_dialog")]
 unique_name_in_owner = true
 visible = false
 

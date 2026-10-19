@@ -131,6 +131,10 @@ func connect_address() -> String:
 	return ip if config.port == 25565 else "%s:%d" % [ip, config.port]
 
 
+func motd() -> String:
+	return get_properties().get_value("motd", "A Minecraft Server")
+
+
 func public_address() -> String:
 	return NetworkService.public_address(config.port)
 
