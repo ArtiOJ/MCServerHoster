@@ -221,12 +221,64 @@ layout_mode = 2
 size_flags_horizontal = 0
 tooltip_text = "Always open with the window minimized. Launches at login are minimized regardless."
 
+[node name="WakeEventsLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Wake the computer from sleep shortly before events that have “Wake computer” ticked (Start events by default), e.g. “Start at 18:00 on weekends”. Needs the one-time setup below."
+text = "Wake for events"
+
+[node name="WakeEventsCheck" type="CheckButton" parent="Scroll/VBox/PowerGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Wake the computer from sleep shortly before events that have “Wake computer” ticked (Start events by default), e.g. “Start at 18:00 on weekends”. Needs the one-time setup below."
+
+[node name="WakeConnectLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Experimental. While asleep, the Wi-Fi card watches for a player connecting to a server that uses “Start on connect” and wakes the computer. Whether this works depends on your hardware keeping Wi-Fi powered during sleep — try it once. The first connection attempt usually times out; players reconnect after a few seconds."
+text = "Wake on connection"
+
+[node name="WakeConnectCheck" type="CheckButton" parent="Scroll/VBox/PowerGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Experimental. While asleep, the Wi-Fi card watches for a player connecting to a server that uses “Start on connect” and wakes the computer. Whether this works depends on your hardware keeping Wi-Fi powered during sleep — try it once. The first connection attempt usually times out; players reconnect after a few seconds."
+text = "Experimental"
+
 [node name="PowerStatus" type="Label" parent="Scroll/VBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(600, 0)
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
 autowrap_mode = 3
+
+[node name="WakeRow" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="WakeStatus" type="Label" parent="Scroll/VBox/WakeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(380, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="SetupWakeButton" type="Button" parent="Scroll/VBox/WakeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Install the small helper that lets Server Manager set the wake-up alarm (asks for your password once)."
+theme_type_variation = &"AccentButton"
+text = "Set up waking…"
+
+[node name="RemoveWakeButton" type="Button" parent="Scroll/VBox/WakeRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Uninstall the wake-up helper (asks for your password)."
+text = "Remove"
 
 [node name="LimitNotice" type="PanelContainer" parent="Scroll/VBox"]
 unique_name_in_owner = true
@@ -466,6 +518,13 @@ unique_name_in_owner = true
 layout_mode = 2
 text = "Add Java…"
 icon = ExtResource("4")
+
+[node name="WakeSetupDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Set up waking from sleep"
+size = Vector2i(620, 300)
+ok_button_text = "Install"
+dialog_autowrap = true
 
 [node name="DirDialog" type="FileDialog" parent="."]
 unique_name_in_owner = true

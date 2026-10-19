@@ -18,6 +18,12 @@ extends ConfirmationDialog
 @onready var _login_check: CheckButton = %LoginCheck
 @onready var _minimized_check: CheckButton = %MinimizedCheck
 @onready var _power_status: Label = %PowerStatus
+@onready var _wake_events_check: CheckButton = %WakeEventsCheck
+@onready var _wake_connect_check: CheckButton = %WakeConnectCheck
+@onready var _wake_status: Label = %WakeStatus
+@onready var _setup_wake_button: Button = %SetupWakeButton
+@onready var _remove_wake_button: Button = %RemoveWakeButton
+@onready var _wake_setup_dialog: ConfirmationDialog = %WakeSetupDialog
 @onready var _limit_notice: PanelContainer = %LimitNotice
 @onready var _copy_limit_button: Button = %CopyLimitButton
 @onready var _desktop_notify_check: CheckButton = %DesktopNotifyCheck
@@ -36,10 +42,21 @@ extends ConfirmationDialog
 
 
 func _ready() -> void:
+	_setup_wake_button.pressed.connect(_start_wake_setup)
+	_remove_wake_button.pressed.connect(_remove_wake)
+	_wake_setup_dialog.confirmed.connect(_install_wake)
+	for c: CheckButton in [_wake_events_check, _wake_connect_check]:
+		c.toggled.connect(func(_on: bool) -> void:
+			AppSettings.wake_for_events = _wake_events_check.button_pressed
+			AppSettings.wake_on_connection = _wake_connect_check.button_pressed
+			_refresh_wake())
 	confirmed.connect(_apply)
 	# Interface size previews live; Cancel puts the saved size back.
 	_ui_scale_option.item_selected.connect(func(index: int) -> void: _preview_scale(UiScale.OPTIONS[index]))
-	canceled.connect(func() -> void: _preview_scale(AppSettings.ui_scale))
+	canceled.connect(func() -> void:
+		_preview_scale(AppSettings.ui_scale)
+		AppSettings.wake_for_events = _saved_wake[0]
+		AppSettings.wake_on_connection = _saved_wake[1])
 	_browse_button.pressed.connect(_browse_root)
 	_dir_dialog.dir_selected.connect(func(dir: String) -> void: _root_edit.text = dir)
 	_rescan_button.pressed.connect(JavaRuntimes.rescan)
@@ -72,6 +89,10 @@ func open() -> void:
 	_sleep_option.disabled = not PowerManager.supported
 	_wake_check.disabled = not PowerManager.supported
 	_power_status.text = PowerManager.status_text()
+	_saved_wake = [AppSettings.wake_for_events, AppSettings.wake_on_connection]
+	_wake_events_check.button_pressed = AppSettings.wake_for_events
+	_wake_connect_check.button_pressed = AppSettings.wake_on_connection
+	_refresh_wake()
 	_limit_notice.visible = PowerManager.supported and PowerManager.max_delay_sec < 60.0
 	_desktop_notify_check.button_pressed = AppSettings.desktop_notifications
 	_notify_when_option.select(AppSettings.notify_when)
@@ -146,6 +167,54 @@ func _fill_java_list() -> void:
 		_java_list.set_item_disabled(idx, true)
 
 
+var _wake_busy := false
+## Wake settings when the dialog opened (toggles apply live for the status line; Cancel restores).
+var _saved_wake := [true, false]
+
+
+func _refresh_wake() -> void:
+	var installed := WakeHelper.is_installed()
+	var available := PowerManager.supported and OS.get_name() == "Linux"
+	_setup_wake_button.visible = not installed
+	_remove_wake_button.visible = installed
+	for c: Control in [_setup_wake_button, _remove_wake_button]:
+		(c as Button).disabled = _wake_busy or not available
+	_wake_events_check.disabled = not available
+	_wake_connect_check.disabled = not available or not WakeHelper.wake_interface().get("wireless", false)
+	_wake_status.text = "Waiting for your password…" if _wake_busy else PowerManager.describe_wake()
+
+
+func _start_wake_setup() -> void:
+	_wake_setup_dialog.dialog_text = "To wake this computer from sleep, Server Manager needs to set its wake-up alarm, which only root can do. This installs:\n\n%s\n\nYour password is asked once now. Nothing else on the system is changed, and “Remove” uninstalls both files." % WakeHelper.install_summary()
+	_wake_setup_dialog.popup_centered()
+
+
+func _install_wake() -> void:
+	_wake_busy = true
+	_refresh_wake()
+	var staging := ProjectSettings.globalize_path("user://wake-setup")
+	var result: Dictionary = await FileOps.run_async(self, func() -> Dictionary: return WakeHelper.install(staging))
+	_wake_busy = false
+	_refresh_wake()
+	if result.ok:
+		Notifier.success(result.message)
+		PowerManager.update_locks()
+	else:
+		Notifier.error(result.message)
+
+
+func _remove_wake() -> void:
+	_wake_busy = true
+	_refresh_wake()
+	var result: Dictionary = await FileOps.run_async(self, WakeHelper.uninstall)
+	_wake_busy = false
+	_refresh_wake()
+	if result.ok:
+		Notifier.success(result.message)
+	else:
+		Notifier.error(result.message)
+
+
 func _apply() -> void:
 	var root := _root_edit.text.strip_edges()
 	if root != "" and root != AppSettings.servers_root:
@@ -163,6 +232,8 @@ func _apply() -> void:
 	UiScale.apply(get_tree().root)
 	AppSettings.sleep_policy = clampi(_sleep_option.selected, 0, AppSettings.SleepPolicy.size() - 1) as AppSettings.SleepPolicy
 	AppSettings.restart_after_wake = _wake_check.button_pressed
+	AppSettings.wake_for_events = _wake_events_check.button_pressed
+	AppSettings.wake_on_connection = _wake_connect_check.button_pressed
 	AppSettings.start_minimized = _minimized_check.button_pressed
 	AppSettings.desktop_notifications = _desktop_notify_check.button_pressed
 	AppSettings.notify_when = clampi(_notify_when_option.selected, 0, AppSettings.NotifyWhen.size() - 1) as AppSettings.NotifyWhen

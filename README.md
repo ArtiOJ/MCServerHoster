@@ -26,6 +26,7 @@ install, configure, start/stop, monitor, back up and update them from one interf
 - **Worlds tab**: every world in the server with version, seed, size and last played; switch the active world, export a singleplayer-ready `.zip`, reset or regenerate with a new seed (safety backup first), delete, import, and manage datapacks (enable/disable live through RCON).
 - **Player lists while offline**: whitelist, operators (with levels), player bans (with reasons) and IP bans can be edited while the server is stopped. UUIDs come from the server's user cache, Mojang (online mode) or the offline-mode algorithm.
 - **Server icon**: pick or drop any image, crop it square, and it is scaled down cleanly to Minecraft's 64×64 `server-icon.png`, with a "Pixel art" mode and a server-list preview. GIF/AVIF/HEIC/ICO/TIFF/JXL/PSD are converted with ImageMagick, ffmpeg, vips or similar when installed.
+- **Waking from sleep**: after a one-time setup (Preferences → Power, one password prompt; installs a small root helper that can only set the wake alarm and Wi-Fi wake-up, plus a polkit rule so it needs no password afterwards), the computer wakes about 90 s before events with "Wake computer" ticked (Start events by default). Experimental: wake on a player connecting to a start-on-connect server through Wi-Fi wake-on-WLAN (hardware dependent).
 - **Interface size**: Automatic or 75–200 % in Preferences, applied live. Server tabs switch to icons only when the window is too narrow for their names.
 - **Firewall housekeeping**: rules left open for ports no server uses anymore are listed in the Network tab and can be removed. Rules you added yourself are only removed with an explicit confirmation.
 - **Failure reasons**: failed boots and crashes are explained in plain language (port in use, Java too old, out of memory, killed by the memory cap, EULA, missing jar).
@@ -105,7 +106,7 @@ godot --headless --path . res://tests/integration/wake_test.tscn -- --no-autosta
 
 # More end-to-end suites: reattach_test (run --phase=1 then --phase=2), server_import_test,
 # world_import_test (--version=1.21.11|26.3 [--legacy-zip=<map.zip>]), failure_test, port_test,
-# worlds_test, player_lists_test, server_icon_test
+# worlds_test, player_lists_test, server_icon_test, wake_sleep_test (simulated sleep, no Java)
 
 # UI smoke test with screenshots of every view (needs a display)
 godot --path . res://tests/integration/ui_smoke_test.tscn -- --no-autostart --profile=ui --root=/tmp/sm-ui --shots=/tmp/sm-shots

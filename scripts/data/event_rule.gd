@@ -49,6 +49,8 @@ const WARNING_SECONDS := 30
 ## Warn players in chat before a STOP/RESTART.
 @export var warn_players := true
 @export var delay_seconds := 0
+## Wake the computer from sleep shortly before this (timed) event runs.
+@export var wake_computer := false
 
 
 func is_timed() -> bool:
@@ -169,7 +171,7 @@ func to_dict() -> Dictionary:
 		"weekdays": weekdays, "interval_minutes": interval_minutes, "threshold": threshold,
 		"window_enabled": window_enabled, "window_start": window_start, "window_end": window_end,
 		"state_filter": state_filter, "action": action, "text": text, "warn_players": warn_players,
-		"delay_seconds": delay_seconds,
+		"delay_seconds": delay_seconds, "wake_computer": wake_computer,
 	}
 
 
@@ -190,6 +192,9 @@ static func from_dict(d: Dictionary) -> EventRule:
 	r.text = str(d.get("text", ""))
 	r.warn_players = bool(d.get("warn_players", true))
 	r.delay_seconds = maxi(int(d.get("delay_seconds", 0)), 0)
+	# Starting a server at a set time only makes sense if the computer is awake, so Start
+	# events wake it unless told otherwise.
+	r.wake_computer = bool(d.get("wake_computer", r.action == Action.START))
 	return r
 
 
@@ -231,6 +236,7 @@ static func templates() -> Array:
 
 static func from_template(values: Dictionary) -> EventRule:
 	var d := EventRule.new().to_dict()
+	d.erase("wake_computer")  # Let from_dict pick the per-action default unless given.
 	d.merge(values, true)
 	return from_dict(d)
 

@@ -43,6 +43,7 @@ var _day_buttons: Array[Button] = []
 @onready var _action_option: OptionButton = %ActionOption
 @onready var _text_edit: LineEdit = %ActionTextEdit
 @onready var _warn_check: CheckButton = %WarnCheck
+@onready var _wake_check: CheckButton = %WakeComputerCheck
 @onready var _delay_spin: SpinBox = %DelaySpin
 @onready var _name_edit: LineEdit = %NameEdit
 
@@ -77,6 +78,7 @@ func _ready() -> void:
 	_action_option.item_selected.connect(func(i: int) -> void: _edit(func() -> void: rule.action = i as EventRule.Action))
 	_text_edit.text_changed.connect(func(t: String) -> void: _edit(func() -> void: rule.text = t))
 	_warn_check.toggled.connect(func(on: bool) -> void: _edit(func() -> void: rule.warn_players = on))
+	_wake_check.toggled.connect(func(on: bool) -> void: _edit(func() -> void: rule.wake_computer = on))
 	_delay_spin.value_changed.connect(func(v: float) -> void: _edit(func() -> void: rule.delay_seconds = int(v)))
 	_name_edit.text_changed.connect(func(t: String) -> void: _edit(func() -> void: rule.label = t))
 	if rule != null:
@@ -174,6 +176,7 @@ func _load_fields() -> void:
 	_action_option.select(rule.action)
 	_text_edit.text = rule.text
 	_warn_check.button_pressed = rule.warn_players
+	_wake_check.button_pressed = rule.wake_computer
 	_delay_spin.value = rule.delay_seconds
 	_name_edit.text = rule.label
 	_suppress = false
@@ -221,6 +224,7 @@ func _update_view() -> void:
 	_text_edit.tooltip_text = "Shown as a notification (see Preferences → Notifications). {server} becomes the server name, {players} the number of players online." \
 		if a == EventRule.Action.NOTIFY else "Console command (without the leading /) or chat message. Only sent while the server is online."
 	_warn_check.visible = a == EventRule.Action.STOP or a == EventRule.Action.RESTART
+	_wake_check.visible = rule.is_timed()
 
 	_mark(_time_edit, t != EventRule.Trigger.TIME or _valid_time(rule.time_of_day))
 	_mark(_window_start, not rule.window_enabled or _valid_time(rule.window_start))

@@ -41,6 +41,10 @@ var restart_after_wake := true
 var start_at_login := false
 ## Start with the window minimized (always the case when launched at login).
 var start_minimized := false
+## Wake the computer from sleep for events flagged "wake computer" (needs the wake helper).
+var wake_for_events := true
+## Experimental: wake on an incoming connection to a start-on-connect server (Wi-Fi WoWLAN).
+var wake_on_connection := false
 ## LAN address the user confirmed is reserved for this computer in the router.
 var reserved_lan_ip := ""
 ## Show notifications on the desktop (in addition to the in-app toasts).
@@ -127,6 +131,8 @@ func load_settings() -> void:
 	start_at_login = bool(data.get("start_at_login", start_at_login))
 	start_minimized = bool(data.get("start_minimized", start_minimized))
 	reserved_lan_ip = str(data.get("reserved_lan_ip", reserved_lan_ip))
+	wake_for_events = bool(data.get("wake_for_events", wake_for_events))
+	wake_on_connection = bool(data.get("wake_on_connection", wake_on_connection))
 	desktop_notifications = bool(data.get("desktop_notifications", desktop_notifications))
 	notify_when = clampi(int(data.get("notify_when", notify_when)), 0, NotifyWhen.size() - 1) as NotifyWhen
 	notify_categories = DEFAULT_NOTIFY_CATEGORIES.duplicate()
@@ -158,6 +164,8 @@ func save_settings() -> void:
 		"start_at_login": start_at_login,
 		"start_minimized": start_minimized,
 		"reserved_lan_ip": reserved_lan_ip,
+		"wake_for_events": wake_for_events,
+		"wake_on_connection": wake_on_connection,
 		"desktop_notifications": desktop_notifications,
 		"notify_when": notify_when,
 		"notify_categories": notify_categories,

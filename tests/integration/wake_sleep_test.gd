@@ -1,0 +1,95 @@
+extends Node
+## Waking from sleep without sleeping: the root helper is replaced by a recorder and the
+## computer's sleep is simulated by feeding PowerManager logind's PrepareForSleep lines.
+## Checks the real inhibitor lock (held to arm the wake-up even with no server running),
+## the RTC alarm time and the Wi-Fi wake pattern. No Java or network needed.
+## Usage: godot --headless --path . res://tests/integration/wake_sleep_test.tscn -- --no-autostart --profile=ws --root=<dir>
+
+var _failures := PackedStringArray()
+var _calls: Array = []
+
+
+func _ready() -> void:
+	var root := ProjectSettings.globalize_path("user://wake-sleep-test")
+	for arg in OS.get_cmdline_user_args():
+		if arg.begins_with("--root="):
+			root = arg.get_slice("=", 1)
+	FileOps.remove_path(root)
+	AppSettings.servers_root = root
+	AppSettings.server_dirs = PackedStringArray()
+	AppSettings.wake_for_events = true
+	AppSettings.wake_on_connection = true
+	var dir := root.path_join("wake")
+	DirAccess.make_dir_recursive_absolute(dir)
+	var cfg := ServerConfig.new()
+	cfg.id = "wake"
+	cfg.directory = dir
+	cfg.display_name = "Wake"
+	cfg.mc_version = "1.21.11"
+	cfg.port = 25999
+	cfg.wake_on_connect = true
+	var bias := int(Time.get_time_zone_from_system().get("bias", 0)) * 60
+	var local := int(Time.get_unix_time_from_system()) + bias + 20 * 60
+	cfg.events = [EventRule.from_template({"trigger": EventRule.Trigger.TIME, "action": EventRule.Action.START,
+			"time_of_day": "%02d:%02d" % [posmod(local, 86400) / 3600, posmod(local, 3600) / 60]})]
+	cfg.save()
+	var inst: ServerInstance = ServerManager.import_server(dir).instance
+	await get_tree().process_frame
+
+	PowerManager.wake_runner = func(args: Array) -> Dictionary:
+		_calls.append(args)
+		return {"ok": true, "message": "ok"}
+	PowerManager.update_locks()
+	await get_tree().create_timer(0.5).timeout
+	_check(_inhibitors().contains("Stopping Minecraft servers cleanly") or _inhibitors().contains("Server Manager"), "sleep delay lock held although no server runs")
+
+	var due := inst.scheduler.next_run_of(inst.config.events[0])
+	PowerManager.handle_monitor_line("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (true,)")
+	await _wait_for(func() -> bool: return _calls.size() >= 1, 5.0)
+	await get_tree().create_timer(0.3).timeout
+	var alarm := _calls.filter(func(c: Array) -> bool: return c[0] == "alarm")
+	_check(alarm.size() == 1 and int(alarm[0][1]) == due - WakeHelper.LEAD_SEC, "RTC alarm set %d s before the start event" % WakeHelper.LEAD_SEC)
+	var iface := WakeHelper.wake_interface()
+	var wowlan := _calls.filter(func(c: Array) -> bool: return c[0] == "wowlan")
+	if iface.get("wireless", false):
+		_check(wowlan.size() == 1 and wowlan[0][3] == WakeHelper.tcp_pattern(iface.mac, 25999), "Wi-Fi wake pattern armed for port 25999 on %s" % iface.phy)
+	else:
+		_check(wowlan.is_empty(), "no Wi-Fi wake on a wired connection")
+	await get_tree().create_timer(0.5).timeout
+	_check(not _inhibitors().contains("Stopping Minecraft servers cleanly"), "delay lock released so the computer can sleep")
+
+	_calls.clear()
+	PowerManager.handle_monitor_line("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (false,)")
+	await _wait_for(func() -> bool: return _calls.size() >= (2 if iface.get("wireless", false) else 1), 5.0)
+	_check(_calls.has(["alarm", "clear"]), "alarm cleared after waking")
+	if iface.get("wireless", false):
+		_check(_calls.any(func(c: Array) -> bool: return c[0] == "wowlan" and c[2] == "off"), "Wi-Fi wake disabled after waking")
+
+	AppSettings.wake_for_events = false
+	AppSettings.wake_on_connection = false
+	PowerManager.update_locks()
+	await get_tree().create_timer(0.5).timeout
+	_check(not _inhibitors().contains("Stopping Minecraft servers cleanly"), "no lock when waking is switched off and no server runs")
+	PowerManager.wake_runner = Callable()
+	ServerManager.delete_server(inst.config.id, true, true)
+	FileOps.remove_path(root)
+	print("\nWake sleep test: %s" % ("OK" if _failures.is_empty() else "%d failure(s)" % _failures.size()))
+	get_tree().quit(0 if _failures.is_empty() else 1)
+
+
+func _inhibitors() -> String:
+	var out: Array = []
+	OS.execute("systemd-inhibit", ["--list", "--no-pager", "--no-legend"], out)
+	return str(out[0]) if not out.is_empty() else ""
+
+
+func _wait_for(cond: Callable, timeout_sec: float) -> void:
+	var deadline := Time.get_ticks_msec() + int(timeout_sec * 1000)
+	while not cond.call() and Time.get_ticks_msec() < deadline:
+		await get_tree().create_timer(0.1).timeout
+
+
+func _check(ok: bool, message: String) -> void:
+	print(("PASS " if ok else "FAIL ") + message)
+	if not ok:
+		_failures.append(message)

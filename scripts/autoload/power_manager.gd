@@ -35,6 +35,12 @@ var _delay_lock := {}
 var _block_lock := {}
 var _stopped_for_sleep := PackedStringArray()
 var _handling := false
+## What was armed for the current sleep: {alarm: unix time or -1, wowlan: pattern or "", phy}.
+var wake_plan := {}
+## Last problem arming a wake-up ("" when fine), shown in Preferences.
+var wake_error := ""
+## Test hook: when set, called instead of the real helper with (args: Array) -> Dictionary.
+var wake_runner := Callable()
 static var _re_signal := RegEx.create_from_string("PrepareFor(Sleep|Shutdown) \\((true|false)")
 
 @onready var _poll_timer: Timer = $PollTimer
@@ -85,6 +91,9 @@ func update_locks() -> void:
 		delay_what.append("shutdown")
 		if policy != AppSettings.SleepPolicy.PAUSE:
 			delay_what.append("sleep")
+	if not delay_what.has("sleep") and _wake_wanted():
+		# Hold sleep briefly even with no server running, to arm the wake-up first.
+		delay_what.append("sleep")
 	_set_lock(_delay_lock, ":".join(delay_what), "delay", "Stopping Minecraft servers cleanly")
 	var block := false
 	match policy:
@@ -125,6 +134,7 @@ func _before_sleep() -> void:
 	for inst in ServerManager.get_instances():
 		inst.scheduler.fire(EventRule.Trigger.SYSTEM_SLEEP)
 	if AppSettings.sleep_policy == AppSettings.SleepPolicy.PAUSE:
+		await _arm_wake()
 		_release(_delay_lock)
 		return
 	_stopped_for_sleep.clear()
@@ -138,6 +148,7 @@ func _before_sleep() -> void:
 		# Shown after wake-up: the server finishes saving once the computer runs again.
 		Notifier.warn("A server was still stopping when the computer went to sleep (logind allows %s). Consider raising the limit in Preferences → Power." % Fmt.duration(int(max_delay_sec)),
 				Notifier.Category.POWER)
+	await _arm_wake()
 	_release(_delay_lock)
 
 
@@ -146,6 +157,7 @@ func _after_wake() -> void:
 		return
 	asleep = false
 	_handling = false
+	_disarm_wake()
 	update_locks()
 	if AppSettings.restart_after_wake:
 		var restarted := PackedStringArray()
@@ -161,6 +173,92 @@ func _after_wake() -> void:
 	resumed.emit()
 	for inst in ServerManager.get_instances():
 		inst.scheduler.fire(EventRule.Trigger.SYSTEM_WAKE)
+
+
+# --- Waking from sleep -------------------------------------------------------------
+
+## True when a wake-up would be armed before sleeping (used to hold the sleep delay lock).
+func _wake_wanted() -> bool:
+	if not WakeHelper.is_installed() and not wake_runner.is_valid():
+		return false
+	var instances := ServerManager.get_instances()
+	if AppSettings.wake_for_events and not WakeHelper.flagged_event_times(instances).is_empty():
+		return true
+	return AppSettings.wake_on_connection and WakeHelper.connect_port(instances) >= 0
+
+
+## Works out the wake-up for this sleep: {alarm: unix time or -1, wowlan: pattern or "", phy}.
+func plan_wake() -> Dictionary:
+	var instances := ServerManager.get_instances()
+	var plan := {"alarm": -1, "wowlan": "", "phy": ""}
+	if AppSettings.wake_for_events:
+		plan.alarm = WakeHelper.wake_time(WakeHelper.flagged_event_times(instances), int(Time.get_unix_time_from_system()))
+	if AppSettings.wake_on_connection:
+		var port := WakeHelper.connect_port(instances)
+		var iface := WakeHelper.wake_interface()
+		if port >= 0 and iface.get("wireless", false):
+			plan.phy = iface.phy
+			plan.wowlan = WakeHelper.tcp_pattern(iface.mac, port)
+	return plan
+
+
+func _arm_wake() -> void:
+	wake_plan = {}
+	wake_error = ""
+	if not _wake_wanted():
+		return
+	var plan := plan_wake()
+	var errors := PackedStringArray()
+	if plan.alarm > 0:
+		var r: Dictionary = await FileOps.run_async(self, _runner().bind(["alarm", str(plan.alarm)]))
+		if not r.ok:
+			errors.append("wake alarm: " + str(r.message))
+	if plan.wowlan != "":
+		var r: Dictionary = await FileOps.run_async(self, _runner().bind(["wowlan", plan.phy, "on", plan.wowlan]))
+		if not r.ok:
+			errors.append("Wi-Fi wake-up: " + str(r.message))
+	wake_plan = plan
+	wake_error = "; ".join(errors)
+	if wake_error != "":
+		Notifier.warn("Could not prepare waking up (%s)." % wake_error, Notifier.Category.POWER)
+
+
+func _disarm_wake() -> void:
+	var plan := wake_plan
+	wake_plan = {}
+	if int(plan.get("alarm", -1)) > 0:
+		FileOps.run_async(self, _runner().bind(["alarm", "clear"]))
+	if str(plan.get("wowlan", "")) != "":
+		FileOps.run_async(self, _runner().bind(["wowlan", plan.phy, "off"]))
+
+
+## The helper call used for arming; tests replace it through [member wake_runner].
+func _runner() -> Callable:
+	if wake_runner.is_valid():
+		return wake_runner
+	return func(args: Array) -> Dictionary:
+		if str(args[0]) == "alarm":
+			return WakeHelper.set_alarm(-1 if args[1] == "clear" else str(args[1]).to_int())
+		return WakeHelper.set_wowlan(str(args[1]), str(args[3]) if args[2] == "on" else "")
+
+
+## What the current settings would arm, for the Preferences status line.
+func describe_wake() -> String:
+	if not WakeHelper.is_installed():
+		return "Waking from sleep needs a one-time setup (one password prompt)."
+	var plan := plan_wake()
+	var parts := PackedStringArray()
+	if plan.alarm > 0:
+		parts.append("next wake-up %s" % Fmt.datetime(plan.alarm))
+	elif AppSettings.wake_for_events:
+		parts.append("no upcoming events ask to wake the computer")
+	if plan.wowlan != "":
+		parts.append("Wi-Fi watches for connections to port %s" % ("any" if WakeHelper.connect_port(ServerManager.get_instances()) == 0 else str(WakeHelper.connect_port(ServerManager.get_instances()))))
+	elif AppSettings.wake_on_connection:
+		var iface := WakeHelper.wake_interface()
+		parts.append("connection wake-up needs a server with Start on connect" if iface.get("wireless", false)
+				else "connection wake-up currently works only over Wi-Fi")
+	return "Ready · " + "; ".join(parts) if not parts.is_empty() else "Ready."
 
 
 func _before_shutdown() -> void:

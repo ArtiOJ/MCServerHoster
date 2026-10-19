@@ -294,6 +294,13 @@ tooltip_text = "Warn online players in chat before stopping or restarting. Timed
 button_pressed = true
 text = "Warn players"
 
+[node name="WakeComputerCheck" type="CheckButton" parent="VBox/Editor/Grid/DoRow"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "If the computer is asleep, wake it shortly before this event runs (needs “Wake for events” and the one-time setup in Preferences → Power)."
+text = "Wake computer"
+
 [node name="DelayLabel" type="Label" parent="VBox/Editor/Grid"]
 layout_mode = 2
 theme_type_variation = &"MutedLabel"

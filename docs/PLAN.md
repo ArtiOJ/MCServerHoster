@@ -234,7 +234,7 @@ Phases 0–7 implemented. Remaining stretch goals: full detach/reattach (console
 Hangar/Modrinth plugin search, in-app YAML config editor, import of existing non-managed servers,
 Windows/macOS backends.
 
-## 9. Next: wake the computer from sleep (designed, not built)
+## 9. Wake the computer from sleep (built; needs a real sleep test by the user)
 
 Findings on the user's machine: RTC `rtc_cmos` with alarm support, suspend mode `deep`;
 Wi-Fi (wlan0, phy0) supports WoWLAN magic packet + 1 pattern (≤128 bytes, offset 0); Ethernet
