@@ -13,6 +13,8 @@ const SLEEP_POLICY_NAMES: PackedStringArray = [
 	"Block sleep while any server runs", "Let it sleep (servers pause)",
 ]
 const AUTOSTART_FILE := "server-manager.desktop"
+## Windows: the per-user registry key of programs started at login.
+const WINDOWS_RUN_KEY := "HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run"
 ## When desktop notifications are shown (see Notifier).
 enum NotifyWhen { ALWAYS, UNFOCUSED, NEVER }
 const NOTIFY_WHEN_NAMES: PackedStringArray = ["Always", "When the window isn't focused", "Never"]
@@ -96,8 +98,10 @@ func _acquire_instance_lock() -> void:
 	if FileAccess.file_exists(path):
 		var pid := FileAccess.get_file_as_string(path).strip_edges().to_int()
 		var backend := PlatformBackend.get_current()
-		if pid > 0 and pid != OS.get_process_id() and backend.is_pid_alive(pid) \
-				and backend.process_executable(pid) in ["", OS.get_executable_path()]:
+		var exe := backend.process_executable(pid) if pid > 0 and pid != OS.get_process_id() and backend.is_pid_alive(pid) else "-"
+		# Windows paths aren't case-sensitive.
+		var same := exe == "" or (exe.to_lower() == OS.get_executable_path().to_lower() if OS.get_name() == "Windows" else exe == OS.get_executable_path())
+		if exe != "-" and same:
 			other_instance_pid = pid
 			return
 	var f := FileAccess.open(path, FileAccess.WRITE)
@@ -211,8 +215,11 @@ func launched_minimized() -> bool:
 	return start_minimized or OS.get_cmdline_user_args().has("--start-minimized")
 
 
-## Creates or removes the XDG autostart entry to match [member start_at_login].
+## Creates or removes the login autostart entry to match [member start_at_login]: an XDG
+## autostart file on Linux, the user's Run registry key on Windows.
 func apply_autostart() -> Error:
+	if OS.get_name() == "Windows":
+		return _apply_windows_autostart()
 	var config_home := OS.get_environment("XDG_CONFIG_HOME")
 	if config_home == "":
 		config_home = OS.get_environment("HOME").path_join(".config")
@@ -239,6 +246,17 @@ func apply_autostart() -> Error:
 	return OK
 
 
+func _apply_windows_autostart() -> Error:
+	var script := "Remove-ItemProperty -Path '%s' -Name 'Server Manager' -ErrorAction SilentlyContinue; 'ok'" % WINDOWS_RUN_KEY
+	if start_at_login:
+		var command := "\"%s\"" % OS.get_executable_path().replace("/", "\\")
+		if not OS.has_feature("template"):
+			command += " --path \"%s\"" % ProjectSettings.globalize_path("res://").trim_suffix("/").replace("/", "\\")
+		command += " -- --start-minimized"
+		script = "Set-ItemProperty -Path '%s' -Name 'Server Manager' -Value '%s'; if ($?) { 'ok' }" % [WINDOWS_RUN_KEY, command.replace("'", "''")]
+	return OK if WindowsBackend.run_powershell(script).ends_with("ok") else FAILED
+
+
 static func _desktop_quote(arg: String) -> String:
 	for c in " \t\"'\\$`":
 		if arg.contains(c):
@@ -260,9 +278,10 @@ func unregister_server_dir(dir: String) -> void:
 
 
 static func _default_servers_root() -> String:
-	var home := OS.get_environment("HOME")
+	var home := OS.get_environment("USERPROFILE") if OS.get_name() == "Windows" else OS.get_environment("HOME")
 	if home == "":
-		home = OS.get_environment("USERPROFILE")
+		home = OS.get_environment("HOME") if OS.get_name() == "Windows" else OS.get_environment("USERPROFILE")
+	home = home.replace("\\", "/")
 	if home == "":
 		return ProjectSettings.globalize_path("user://servers")
 	return home.path_join("MinecraftServers")

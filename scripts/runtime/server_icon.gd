@@ -126,6 +126,9 @@ static func available_converters(fmt: String) -> Array[Dictionary]:
 	var names := Array(GENERIC_CONVERTERS)
 	names.append_array(SPECIFIC_CONVERTERS.get(fmt, []))
 	for n in names:
+		# Windows has its own convert.exe (it converts FAT drives to NTFS); never call it.
+		if n == "convert" and OS.get_name() == "Windows":
+			continue
 		var p := PlatformBackend.find_in_path(n)
 		if p != "":
 			out.append({"name": n, "path": p})

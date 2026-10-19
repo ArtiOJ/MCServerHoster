@@ -93,10 +93,10 @@ func terminate() -> void:
 		PlatformBackend.get_current().terminate(pid)
 
 
-## Immediate kill.
+## Immediate kill (with whatever the process started, e.g. Java under the Windows launcher).
 func kill() -> void:
 	if is_running():
-		OS.kill(pid)
+		PlatformBackend.get_current().kill_tree(pid)
 
 
 func _poll() -> void:

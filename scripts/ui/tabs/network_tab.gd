@@ -194,7 +194,8 @@ func _refresh() -> void:
 		_firewall_label.text = "%s is active; whether it allows port %d couldn't be checked. If players can't connect, allow it:" % [fw.name, port]
 	else:
 		var extra := " Players on the internet are blocked too." if fw.allowed == "lan" else ""
-		_firewall_label.text = "✕ " + str(fw.detail) + extra + " Run this once in a terminal on %s (needs its password):" % host
+		var how := "in PowerShell as administrator" if fw.name == NetworkService.WINDOWS_FIREWALL else "in a terminal (needs the password)"
+		_firewall_label.text = "✕ " + str(fw.detail) + extra + " Or run this once on %s %s:" % [host, how]
 		_firewall_label.add_theme_color_override("font_color", Color("f2b84b") if fw.allowed == "lan" else Color("e05555"))
 	_firewall_command.text = str(i.firewall_command)
 	_firewall_row.visible = fw.active and fw.allowed != "yes"

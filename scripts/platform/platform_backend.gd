@@ -1,19 +1,26 @@
 class_name PlatformBackend
 extends RefCounted
 ## OS-specific operations: building the launch command (with resource limits),
-## process/host statistics and Java discovery. Only Linux is implemented; other
-## platforms get a degraded but functional generic backend.
+## process/host statistics and Java discovery. Linux and Windows have their own
+## backends; other platforms get a degraded but functional generic one.
 
 static var _current: PlatformBackend
 
 
 static func get_current() -> PlatformBackend:
 	if _current == null:
-		_current = LinuxBackend.new() if OS.get_name() == "Linux" else PlatformBackend.new()
+		match OS.get_name():
+			"Linux":
+				_current = LinuxBackend.new()
+			"Windows":
+				_current = WindowsBackend.new()
+			_:
+				_current = PlatformBackend.new()
 	return _current
 
 
-## Returns {"path": String, "args": PackedStringArray} ready for OS.execute_with_pipe().
+## Returns {"path": String, "args": PackedStringArray} ready for OS.execute_with_pipe(), plus
+## {"script": text, "script_path": path} when a launcher file must be written first (Windows).
 func build_launch_command(config: ServerConfig, java_executable: String, _working_dir := "") -> Dictionary:
 	var args := config.build_jvm_args()
 	args.append_array(config.build_server_args())
@@ -46,6 +53,27 @@ func terminate(pid: int) -> void:
 	OS.kill(pid)
 
 
+## Ends a process and everything it started (the server's launcher and its Java).
+func kill_tree(pid: int) -> void:
+	if pid > 0:
+		OS.kill(pid)
+
+
+## Stops watching a process whose statistics were sampled (it exited).
+func forget_process(_pid: int) -> void:
+	pass
+
+
+## Keeps the computer from going to sleep by itself while [param on] (Windows; Linux uses logind).
+func set_sleep_block(_on: bool) -> void:
+	pass
+
+
+## Sleep/resume notices since the last call ("sleep", "wake"), where the OS reports them here.
+func take_power_events() -> Array[String]:
+	return []
+
+
 ## {"cpu_seconds": float, "rss_bytes": int} or empty when unavailable.
 func sample_process(_pid: int) -> Dictionary:
 	return {}
@@ -70,6 +98,12 @@ func is_pid_alive(pid: int) -> bool:
 ## computer's IPv4 on that interface, "dynamic": assigned by DHCP}. Empty when unknown.
 func default_route() -> Dictionary:
 	return {}
+
+
+## True while [param pid] is still the server running in [param dir] (not a reused PID).
+func is_server_process(pid: int, dir: String) -> bool:
+	var cwd := process_cwd(pid)
+	return is_pid_alive(pid) and (cwd == "" or cwd == dir)
 
 
 ## Executable path of a running process, or "" if unknown.
@@ -110,21 +144,25 @@ func java_executable_in(home: String) -> String:
 ## instead of OS.execute(): on Linux, Godot 4.7's OS.execute() hands the command to a shell
 ## inside double quotes, so `$`, backticks, `"` and `\` in arguments would be expanded or
 ## eaten (a file name like `$(rm …).png` would even run a command). Escaping those four
-## characters makes the shell pass each argument through unchanged.
+## characters makes the shell pass each argument through unchanged. Windows has no such
+## shell step (Godot quotes each argument itself), so arguments go through as they are.
 static func execute(path: String, args, output: Array = [], read_stderr := false) -> int:
 	var safe := PackedStringArray()
 	for a in args:
-		safe.append(str(a).replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$").replace("`", "\\`"))
+		safe.append(str(a) if OS.get_name() == "Windows" else str(a).replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$").replace("`", "\\`"))
 	return OS.execute(path, safe, output, read_stderr)
 
 
-## Resolves an executable name through PATH. Returns "" if not found.
+## Resolves an executable name through PATH (on Windows also trying .exe/.cmd/.bat).
+## Returns "" if not found.
 static func find_in_path(name: String) -> String:
-	var sep := ";" if OS.get_name() == "Windows" else ":"
-	for dir in OS.get_environment("PATH").split(sep, false):
-		var candidate := dir.path_join(name)
-		if FileAccess.file_exists(candidate):
-			return candidate
+	var windows := OS.get_name() == "Windows"
+	var suffixes := ["", ".exe", ".cmd", ".bat"] if windows and name.get_extension() == "" else [""]
+	for dir in OS.get_environment("PATH").split(";" if windows else ":", false):
+		for suffix in suffixes:
+			var candidate := dir.replace("\\", "/").path_join(name + suffix)
+			if FileAccess.file_exists(candidate):
+				return candidate
 	return ""
 
 

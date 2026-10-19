@@ -1,0 +1,31 @@
+# Maintainer: Artifabrian
+# Built by packaging/build.sh, which exports the game binary first and places
+# server-manager-$pkgver-linux-x86_64.tar.gz next to this file.
+pkgname=server-manager
+pkgver=0.1.0
+pkgrel=1
+pkgdesc="Install, configure, run and monitor Paper Minecraft servers"
+arch=('x86_64')
+url="https://github.com/ArtiOJ/MCServerHoster"
+license=('MIT')
+depends=('java-runtime' 'libxcursor' 'libxinerama' 'libxrandr' 'libxi' 'libglvnd' 'fontconfig' 'hicolor-icon-theme')
+optdepends=(
+  'libnotify: desktop notifications'
+  'iw: waking the computer over Wi-Fi'
+  'ufw: firewall checks and rules (or firewalld)'
+  'imagemagick: server icons from more image formats'
+)
+options=('!strip' '!debug')
+source=("$pkgname-$pkgver-linux-x86_64.tar.gz")
+sha256sums=('SKIP')
+
+package() {
+  cd "$srcdir/$pkgname"
+  install -Dm755 server-manager "$pkgdir/opt/$pkgname/server-manager"
+  install -dm755 "$pkgdir/usr/bin"
+  ln -s "/opt/$pkgname/server-manager" "$pkgdir/usr/bin/server-manager"
+  install -Dm644 server-manager.desktop "$pkgdir/usr/share/applications/server-manager.desktop"
+  install -Dm644 server-manager.svg "$pkgdir/usr/share/icons/hicolor/scalable/apps/server-manager.svg"
+  install -Dm644 server-manager-256.png "$pkgdir/usr/share/icons/hicolor/256x256/apps/server-manager.png"
+  install -Dm644 LICENSE "$pkgdir/usr/share/licenses/$pkgname/LICENSE"
+}

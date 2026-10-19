@@ -35,6 +35,7 @@ func track(pid: int) -> void:
 
 func untrack() -> void:
 	stop()
+	PlatformBackend.get_current().forget_process(_pid)
 	_pid = -1
 	cpu_percent = 0.0
 	cpu_cores_used = 0.0

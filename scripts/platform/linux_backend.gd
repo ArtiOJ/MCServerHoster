@@ -179,6 +179,10 @@ func default_route() -> Dictionary:
 	return {}
 
 
+func is_server_process(pid: int, dir: String) -> bool:
+	return process_cwd(pid) == dir
+
+
 func process_executable(pid: int) -> String:
 	var dir := DirAccess.open("/proc/%d" % pid)
 	return dir.read_link("/proc/%d/exe" % pid) if dir != null else ""

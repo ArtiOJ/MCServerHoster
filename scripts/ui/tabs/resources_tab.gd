@@ -105,12 +105,14 @@ func _apply_host_limits() -> void:
 	_quota_field.max_value = cores * 100
 	var host := "this computer" if not handle.is_remote() else handle.host_name()
 	var unsupported := PackedStringArray()
+	# Windows simply has no equivalent; on Linux the missing tool is named.
+	var windows := str(_info.get("os", "")) == "Windows"
 	_quota_field.set_editable(bool(_info.get("quota", false)))
 	if not _info.get("quota", false):
-		unsupported.append("CPU quota (needs systemd-run and cgroups v2)")
+		unsupported.append("CPU quota" if windows else "CPU quota (needs systemd-run and cgroups v2)")
 	_hard_cap_check.disabled = not _info.get("memory_cap", false)
 	if not _info.get("memory_cap", false):
-		unsupported.append("hard memory limit (needs systemd-run and cgroups v2)")
+		unsupported.append("hard memory limit" if windows else "hard memory limit (needs systemd-run and cgroups v2)")
 	_affinity_edit.editable = bool(_info.get("affinity", false))
 	if not _info.get("affinity", false):
 		unsupported.append("core pinning (needs taskset)")

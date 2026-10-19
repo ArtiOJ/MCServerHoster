@@ -4,6 +4,10 @@ extends Node
 ## sleep while servers are in use. Blocking only affects sleep: the screen can still
 ## turn off and lock as usual.
 ##
+## Windows can't delay sleep for an app, so there sleep is only blocked (through the
+## Windows backend's helper, which also reports sleep and wake-up), servers simply pause
+## while asleep, and scheduled wake-ups are kept armed as a Task Scheduler task.
+##
 ## Mechanism: `gdbus monitor` reports logind's PrepareForSleep/PrepareForShutdown
 ## signals; `systemd-inhibit … cat` holds an inhibitor lock for as long as its stdin
 ## pipe stays open, so closing the pipe releases the lock instantly.
@@ -47,6 +51,10 @@ var wake_runner := Callable()
 ## on (not only at sleep time) so NetworkManager sees it and keeps Wi-Fi connected during sleep.
 var _armed_wowlan := {}
 var _wowlan_busy := false
+var _windows := OS.get_name() == "Windows"
+## Wake-up time currently armed on Windows (unix time, -1 = none).
+var _armed_alarm := -1
+var _alarm_busy := false
 static var _re_signal := RegEx.create_from_string("PrepareFor(Sleep|Shutdown) \\((true|false)")
 
 @onready var _poll_timer: Timer = $PollTimer
@@ -54,6 +62,17 @@ static var _re_signal := RegEx.create_from_string("PrepareFor(Sleep|Shutdown) \\
 
 
 func _ready() -> void:
+	if _windows:
+		supported = true
+		max_delay_sec = 0.0
+		_poll_timer.wait_time = 1.0
+		_poll_timer.timeout.connect(_poll_windows)
+		_policy_timer.timeout.connect(update_locks)
+		ServerManager.server_state_changed.connect(func(_i: ServerInstance) -> void: update_locks())
+		AppSettings.changed.connect(update_locks)
+		_poll_timer.start()
+		update_locks()
+		return
 	_gdbus = PlatformBackend.find_in_path("gdbus")
 	_inhibit = PlatformBackend.find_in_path("systemd-inhibit")
 	supported = OS.get_name() == "Linux" and _gdbus != "" and _inhibit != ""
@@ -69,6 +88,12 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	if _windows:
+		PlatformBackend.get_current().set_sleep_block(false)
+		# Nobody would handle the wake-up unless the app starts with the session.
+		if _armed_alarm > 0 and not AppSettings.start_at_login:
+			_runner().call(["alarm", "clear"])
+		return
 	if not _armed_wowlan.is_empty():
 		# Nothing listens while the app is closed, so stop waking the computer for connections.
 		_runner().call(["wowlan", _armed_wowlan.phy, "off"])
@@ -81,6 +106,10 @@ func _exit_tree() -> void:
 
 ## Human-readable state for the Preferences dialog.
 func status_text() -> String:
+	if _windows:
+		var why := "while players are online" if AppSettings.sleep_policy == AppSettings.SleepPolicy.BLOCK_WHILE_PLAYERS else "while a server runs"
+		return ("Sleep is blocked right now." if _block_lock.get("what", "") != "" else "Sleep is allowed right now.") \
+				+ " Windows can't let apps stop servers before sleeping, so servers pause while it sleeps; choose a blocking option to keep it awake %s." % why
 	if not supported:
 		return "Sleep and shutdown handling needs systemd-logind (gdbus and systemd-inhibit were not found)."
 	var parts := PackedStringArray()
@@ -101,20 +130,39 @@ func update_locks() -> void:
 		delay_what.append("shutdown")
 		if policy != AppSettings.SleepPolicy.PAUSE:
 			delay_what.append("sleep")
-	if not delay_what.has("sleep") and _wake_wanted():
+	if not delay_what.has("sleep") and _wake_wanted() and not _windows:
 		# Hold sleep briefly even with no server running, to arm the wake-up first.
 		delay_what.append("sleep")
-	_set_lock(_delay_lock, ":".join(delay_what), "delay", "Stopping Minecraft servers cleanly")
+	if not _windows:
+		_set_lock(_delay_lock, ":".join(delay_what), "delay", "Stopping Minecraft servers cleanly")
 	var block := false
 	match policy:
 		AppSettings.SleepPolicy.BLOCK_WHILE_PLAYERS:
 			block = ServerManager.get_instances().any(func(i: ServerInstance) -> bool: return i.is_online() and not i.players.is_empty())
 		AppSettings.SleepPolicy.BLOCK_WHILE_RUNNING:
 			block = alive
+	if _windows:
+		var keep_awake := block or RemoteAccess.recently_active()
+		_block_lock = {"what": "sleep"} if keep_awake else {}
+		PlatformBackend.get_current().set_sleep_block(keep_awake)
+		refresh_wake()
+		return
 	_set_lock(_block_lock, "sleep" if block else "", "block", "Minecraft servers are in use")
 	# Someone woke the computer or is working on it from elsewhere: no idle sleep meanwhile.
 	_set_lock(_idle_lock, "idle" if RemoteAccess.recently_active() else "", "block", "Servers are being managed remotely")
 	refresh_wake()
+
+
+## Windows reports sleep and wake-up through the backend's helper (often only after waking).
+func _poll_windows() -> void:
+	for event in PlatformBackend.get_current().take_power_events():
+		if event == "sleep" and not asleep:
+			asleep = true
+			sleeping.emit()
+			for inst in ServerManager.get_instances():
+				inst.scheduler.fire(EventRule.Trigger.SYSTEM_SLEEP)
+		elif event == "wake":
+			_after_wake()
 
 
 ## Parses a `gdbus monitor` line into ["Sleep"|"Shutdown", active: bool], or [] if irrelevant.
@@ -206,7 +254,7 @@ func plan_wake() -> Dictionary:
 	var plan := {"alarm": -1, "wowlan": "", "phy": ""}
 	if AppSettings.wake_for_events:
 		plan.alarm = WakeHelper.wake_time(WakeHelper.flagged_event_times(instances), int(Time.get_unix_time_from_system()))
-	if AppSettings.wake_on_connection:
+	if AppSettings.wake_on_connection and not _windows:
 		var port := WakeHelper.connect_port(instances, _remote_ports())
 		var iface := WakeHelper.wake_interface()
 		if port >= 0 and iface.get("wireless", false):
@@ -250,6 +298,9 @@ func _disarm_wake() -> void:
 ## Arms or clears Wi-Fi wake-on-WLAN to match the settings and servers. Called on every policy
 ## tick; only runs the helper when something changed.
 func refresh_wake() -> void:
+	if _windows:
+		_refresh_windows_alarm()
+		return
 	if _wowlan_busy or asleep or not _can_wake():
 		return
 	var plan := plan_wake()
@@ -265,6 +316,23 @@ func refresh_wake() -> void:
 		wake_error = ""
 	else:
 		wake_error = "Wi-Fi wake-up: " + str(r.message)
+
+
+## Windows can't arm a wake-up at the moment of sleeping, so the next one stays armed.
+func _refresh_windows_alarm() -> void:
+	if _alarm_busy or not _can_wake():
+		return
+	var want: int = plan_wake().alarm if AppSettings.wake_for_events else -1
+	if want == _armed_alarm:
+		return
+	_alarm_busy = true
+	var r: Dictionary = await FileOps.run_async(self, _runner().bind(["alarm", str(want) if want > 0 else "clear"]))
+	_alarm_busy = false
+	if r.ok:
+		_armed_alarm = want
+		wake_error = ""
+	else:
+		wake_error = "wake-up task: " + str(r.message)
 
 
 ## The helper call used for arming; tests replace it through [member wake_runner].
@@ -294,7 +362,9 @@ func _remote_ports() -> Array:
 ## set up and on, over Wi-Fi (the only wake-up this computer can arm for connections).
 func remote_wake_info() -> Dictionary:
 	var iface := WakeHelper.wake_interface()
-	var ready: bool = AppSettings.wake_on_connection and WakeHelper.is_installed() and iface.get("wireless", false) and RemoteAccess.enabled
+	# Windows: no Wi-Fi patterns, but magic packets work on any adapter set up for them.
+	var ready: bool = AppSettings.wake_on_connection and WakeHelper.is_installed() and RemoteAccess.enabled \
+			and (iface.get("wireless", false) or _windows) and str(iface.get("mac", "")) != ""
 	return {"ready": ready, "mac": str(iface.get("mac", "")) if ready else ""}
 
 
@@ -311,6 +381,8 @@ func describe_wake() -> String:
 	if plan.wowlan != "":
 		var port := WakeHelper.connect_port(ServerManager.get_instances(), _remote_ports())
 		parts.append("Wi-Fi watches for connections to %s" % ("any port" if port == 0 else "port %d" % port))
+	elif AppSettings.wake_on_connection and _windows:
+		parts.append("other Server Managers can wake it with a Wake-on-LAN packet (turn on “Wake on Magic Packet” for the network adapter in Device Manager)")
 	elif AppSettings.wake_on_connection:
 		var iface := WakeHelper.wake_interface()
 		parts.append("connection wake-up needs a server with Start on connect or remote access turned on" if iface.get("wireless", false)

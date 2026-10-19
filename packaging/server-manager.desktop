@@ -1,0 +1,11 @@
+[Desktop Entry]
+Type=Application
+Name=Server Manager
+GenericName=Minecraft Server Manager
+Comment=Install, configure, run and monitor Paper Minecraft servers
+Exec=server-manager
+Icon=server-manager
+Terminal=false
+Categories=Game;Network;Utility;
+Keywords=minecraft;paper;server;
+StartupWMClass=Server Manager

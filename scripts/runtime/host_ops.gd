@@ -57,9 +57,9 @@ static func prefs_get() -> Dictionary:
 	return {
 		"ok": true, "values": values, "runtimes": _runtimes(),
 		"power_supported": PowerManager.supported, "power_status": PowerManager.status_text(),
-		"limit_notice": PowerManager.supported and PowerManager.max_delay_sec < 60.0,
-		"wake_installed": WakeHelper.is_installed(), "wake_wireless": bool(iface.get("wireless", false)),
-		"wake_available": PowerManager.supported and OS.get_name() == "Linux",
+		"limit_notice": OS.get_name() == "Linux" and PowerManager.supported and PowerManager.max_delay_sec < 60.0,
+		"wake_installed": WakeHelper.is_installed(), "wake_wireless": bool(iface.get("wireless", false)) or OS.get_name() == "Windows",
+		"wake_available": PowerManager.supported and OS.get_name() in ["Linux", "Windows"],
 		"wake_status": PowerManager.describe_wake(), "notify_available": Notifier.is_desktop_available(),
 	}
 

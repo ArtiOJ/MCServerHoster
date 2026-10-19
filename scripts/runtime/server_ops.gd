@@ -750,7 +750,7 @@ static func resources_info(inst: ServerInstance) -> Dictionary:
 		"runtimes": runtimes, "auto_java": auto.major if auto != null else 0,
 		"resolved_java": {"major": resolved.major, "exe": resolved.executable} if resolved != null else {},
 		"others_mb": others, "running_mb": ServerManager.allocated_ram_mb(), "ports": ports,
-		"rcon_port": inst.config.rcon_port,
+		"rcon_port": inst.config.rcon_port, "os": OS.get_name(),
 	})
 
 
@@ -778,6 +778,9 @@ static func launch_preview(inst: ServerInstance, draft: Dictionary) -> Dictionar
 		warning = "No suitable Java runtime found. Install Java %d+ or pick an executable in Settings." % cfg.java_min_version
 	elif rt.major < cfg.java_min_version:
 		warning = "Java %d is too old for this server; it needs Java %d or newer." % [rt.major, cfg.java_min_version]
+	if cmd.has("script"):
+		# Windows: the launcher file is what actually runs.
+		parts = PackedStringArray([str(cmd.script).strip_edges().get_slice("\r\n", 3)])
 	return _ok({"command": " ".join(parts), "java_warning": warning})
 
 

@@ -57,6 +57,17 @@ var _known_ports := {}
 var firewall_name_override := ""
 var ufw_rules_override := ""
 
+const WINDOWS_FIREWALL := "Windows Firewall"
+## Rules this app adds on Windows are grouped under this name (so they can be found again).
+const WINDOWS_RULE_GROUP := "Server Manager"
+const WINDOWS_TTL_MSEC := 15000
+
+## Windows Firewall answers are slow (seconds), so they are fetched in the background:
+## port -> {result, msec}, and the app's own rules {rules, msec}.
+var _win_ports := {}
+var _win_rules := {}
+var _win_busy := {}
+
 @onready var _renew_timer: Timer = %RenewTimer
 
 
@@ -357,6 +368,8 @@ func firewall_port_status(port: int) -> Dictionary:
 	if not info.active:
 		return result
 	match info.name:
+		WINDOWS_FIREWALL:
+			result.merge(_windows_port_status(port), true)
 		"ufw":
 			var rules := _ufw_rules_text()
 			var policy := "DROP" if ufw_rules_override != "" else ""
@@ -425,6 +438,15 @@ func allow_in_firewall(port: int, comment := "Minecraft server (Server Manager)"
 		return {"ok": true, "message": "Port %d is already allowed." % port}
 	var code := -1
 	match fw.name:
+		WINDOWS_FIREWALL:
+			var script := "New-NetFirewallRule -DisplayName 'Server Manager (TCP %d)' -Group '%s' -Description '%s' -Direction Inbound -Protocol TCP -LocalPort %d -Action Allow -Profile Any | Out-Null" % [
+					port, WINDOWS_RULE_GROUP, comment.replace("'", "''"), port]
+			code = await FileOps.run_async(self, func() -> int: return WindowsBackend.run_elevated(script))
+			if code == WindowsBackend.UAC_CANCELLED:
+				return {"ok": false, "message": "The administrator prompt was cancelled."}
+			_win_ports.erase(port)
+			_win_rules.clear()
+			await _refresh_windows_port(port)
 		"ufw":
 			var pkexec := PlatformBackend.find_in_path("pkexec")
 			if pkexec == "":
@@ -530,6 +552,8 @@ func firewall_rules() -> Array[Dictionary]:
 	if not info.active:
 		return []
 	match info.name:
+		WINDOWS_FIREWALL:
+			return _windows_rules()
 		"ufw":
 			var text := _ufw_rules_text()
 			if ufw_rules_override == "":
@@ -593,6 +617,13 @@ func remove_firewall_rule(rule: Dictionary) -> Dictionary:
 	var port: int = rule.port
 	var code := -1
 	match info.name:
+		WINDOWS_FIREWALL:
+			var script := "Get-NetFirewallRule -Group '%s' | Where-Object { @(($_ | Get-NetFirewallPortFilter).LocalPort) -contains '%d' } | Remove-NetFirewallRule" % [WINDOWS_RULE_GROUP, port]
+			code = await FileOps.run_async(self, func() -> int: return WindowsBackend.run_elevated(script))
+			if code == WindowsBackend.UAC_CANCELLED:
+				return {"ok": false, "message": "The administrator prompt was cancelled."}
+			_win_rules.clear()
+			await _refresh_windows_rules()
 		"ufw":
 			var pkexec := PlatformBackend.find_in_path("pkexec")
 			if pkexec == "":
@@ -623,6 +654,8 @@ func remove_firewall_rule(rule: Dictionary) -> Dictionary:
 
 static func firewall_command(name: String, port: int) -> String:
 	match name:
+		WINDOWS_FIREWALL:
+			return "New-NetFirewallRule -DisplayName 'Minecraft (TCP %d)' -Direction Inbound -Protocol TCP -LocalPort %d -Action Allow" % [port, port]
 		"ufw":
 			return "sudo ufw allow %d/tcp comment 'Minecraft server'" % port
 		"firewalld":
@@ -631,6 +664,9 @@ static func firewall_command(name: String, port: int) -> String:
 
 
 func _detect_firewall() -> Dictionary:
+	if OS.get_name() == "Windows":
+		var enabled := WindowsBackend.run_powershell("@(Get-NetFirewallProfile | Where-Object Enabled).Count")
+		return {"name": WINDOWS_FIREWALL, "active": enabled.is_valid_int() and enabled.to_int() > 0}
 	if OS.get_name() != "Linux":
 		return {"name": "", "active": false}
 	var out: Array = []
@@ -736,3 +772,76 @@ func _get_json(url: String) -> Dictionary:
 	if data == null:
 		return {"ok": false, "error": "Invalid response"}
 	return {"ok": true, "data": data}
+
+
+# --- Windows Firewall ------------------------------------------------------------------
+
+## Cached verdict for [param port]; a fresh check runs in the background when it's old.
+func _windows_port_status(port: int) -> Dictionary:
+	var cached: Dictionary = _win_ports.get(port, {})
+	if cached.is_empty() or Time.get_ticks_msec() - int(cached.msec) > WINDOWS_TTL_MSEC:
+		_refresh_windows_port(port)
+	if cached.is_empty():
+		return {"allowed": "unknown", "detail": "Checking Windows Firewall…"}
+	return cached.result
+
+
+func _refresh_windows_port(port: int) -> void:
+	var key := "port%d" % port
+	if _win_busy.has(key):
+		return
+	_win_busy[key] = true
+	var script := """
+$port = '%d'
+$byPort = Get-NetFirewallPortFilter -Protocol TCP | Where-Object { @($_.LocalPort) -contains $port } | Get-NetFirewallRule |
+	Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' } | Select-Object -First 1
+if ($byPort) { 'port|' + $byPort.DisplayName; exit }
+$java = Get-NetFirewallApplicationFilter | Where-Object { $_.Program -match 'javaw?\\.exe$' } | Get-NetFirewallRule |
+	Where-Object { $_.Enabled -eq 'True' -and $_.Direction -eq 'Inbound' -and $_.Action -eq 'Allow' } | Select-Object -First 1
+if ($java) { 'java|' + $java.DisplayName } else { 'none|' }
+""" % port
+	var out: String = await FileOps.run_async(self, func() -> String: return WindowsBackend.run_powershell(script))
+	_win_busy.erase(key)
+	_win_ports[port] = {"result": windows_port_verdict(out, port), "msec": Time.get_ticks_msec()}
+	status_changed.emit()
+
+
+## Turns the check's answer ("port|rule", "java|rule", "none|") into a verdict (unit-tested).
+static func windows_port_verdict(answer: String, port: int) -> Dictionary:
+	var kind := answer.get_slice("|", 0).strip_edges()
+	var rule := answer.get_slice("|", 1).strip_edges()
+	match kind:
+		"port":
+			return {"allowed": "yes", "detail": "Windows Firewall allows port %d (rule “%s”)." % [port, rule], "source": ""}
+		"java":
+			return {"allowed": "yes", "detail": "Windows Firewall allows Java to accept connections (rule “%s”)." % rule, "source": ""}
+		"none":
+			return {"allowed": "no", "source": "",
+					"detail": "Windows Firewall has no rule allowing port %d. When the server first starts, Windows usually asks whether Java may accept connections — choose Allow, or allow the port here." % port}
+	return {"allowed": "unknown", "detail": "", "source": ""}
+
+
+## Rules this app added (group "Server Manager"), in [method parse_ufw_rules] form.
+func _windows_rules() -> Array[Dictionary]:
+	if _win_rules.is_empty() or Time.get_ticks_msec() - int(_win_rules.msec) > WINDOWS_TTL_MSEC:
+		_refresh_windows_rules()
+	var out: Array[Dictionary] = []
+	for r in _win_rules.get("rules", []):
+		out.append(r)
+	return out
+
+
+func _refresh_windows_rules() -> void:
+	if _win_busy.has("rules"):
+		return
+	_win_busy["rules"] = true
+	var script := "@(Get-NetFirewallRule -Group '%s' -ErrorAction SilentlyContinue | ForEach-Object { ($_ | Get-NetFirewallPortFilter).LocalPort }) -join ','" % WINDOWS_RULE_GROUP
+	var out: String = await FileOps.run_async(self, func() -> String: return WindowsBackend.run_powershell(script))
+	_win_busy.erase("rules")
+	var rules: Array = []
+	for spec in out.split(",", false):
+		if spec.strip_edges().is_valid_int():
+			rules.append({"action": "allow", "proto": "tcp", "port_spec": spec.strip_edges(), "port": spec.to_int(),
+					"source": "0.0.0.0/0", "app": "", "comment": APP_RULE_COMMENT, "direction": "in"})
+	_win_rules = {"rules": rules, "msec": Time.get_ticks_msec()}
+	status_changed.emit()

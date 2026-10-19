@@ -124,7 +124,7 @@ func open(source: ServerSource = null) -> void:
 	_wake_events_check.set_pressed_no_signal(AppSettings.wake_for_events and WakeHelper.is_installed())
 	_wake_connect_check.set_pressed_no_signal(AppSettings.wake_on_connection and WakeHelper.is_installed())
 	_refresh_wake()
-	_limit_notice.visible = PowerManager.supported and PowerManager.max_delay_sec < 60.0
+	_limit_notice.visible = OS.get_name() == "Linux" and PowerManager.supported and PowerManager.max_delay_sec < 60.0
 	_desktop_notify_check.button_pressed = AppSettings.desktop_notifications
 	_notify_when_option.select(AppSettings.notify_when)
 	for key in _category_checks:
@@ -205,13 +205,15 @@ var _saved_wake := [true, false]
 
 func _refresh_wake() -> void:
 	var installed := WakeHelper.is_installed()
-	var available := PowerManager.supported and OS.get_name() == "Linux"
-	_setup_wake_button.visible = not installed
-	_remove_wake_button.visible = installed
+	var windows := OS.get_name() == "Windows"
+	var available := PowerManager.supported and (OS.get_name() == "Linux" or windows)
+	# Windows needs no helper: wake-ups are the user's own scheduled tasks.
+	_setup_wake_button.visible = not installed and not windows
+	_remove_wake_button.visible = installed and not windows
 	for c: Control in [_setup_wake_button, _remove_wake_button]:
 		(c as Button).disabled = _wake_busy or not available
 	_wake_events_check.disabled = not available
-	_wake_connect_check.disabled = not available or not WakeHelper.wake_interface().get("wireless", false)
+	_wake_connect_check.disabled = not available or not (windows or WakeHelper.wake_interface().get("wireless", false))
 	_wake_status.text = "Waiting for your password…" if _wake_busy else PowerManager.describe_wake()
 
 

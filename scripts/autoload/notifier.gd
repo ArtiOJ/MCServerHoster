@@ -1,7 +1,7 @@
 extends Node
 ## App-wide user notifications. UI listens to [signal notified] and shows toasts;
 ## depending on Preferences, messages are also shown as desktop notifications
-## through `notify-send` (freedesktop notifications).
+## through `notify-send` (freedesktop notifications) or, on Windows, as toasts.
 
 signal notified(message: String, level: Level)
 
@@ -59,7 +59,7 @@ func notify(message: String, level := Level.INFO, category := Category.GENERAL, 
 
 
 func is_desktop_available() -> bool:
-	return _notify_send != ""
+	return _notify_send != "" or OS.get_name() == "Windows"
 
 
 func category_enabled(category: Category) -> bool:
@@ -102,6 +102,21 @@ static func build_command(title: String, body: String, level: Level, category: C
 	return args
 
 
+## PowerShell that shows a Windows toast (as Windows PowerShell, which every Windows
+## 10/11 has registered for notifications). Text goes in as XML-escaped literals.
+static func windows_toast_script(title: String, body: String) -> String:
+	var xml := "<toast><visual><binding template='ToastGeneric'><text>%s</text><text>%s</text></binding></visual></toast>" % [
+			title.xml_escape(true), body.xml_escape(true)]
+	return "\n".join([
+		"[Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null",
+		"[Windows.Data.Xml.Dom.XmlDocument, Windows.Data.Xml.Dom.XmlDocument, ContentType = WindowsRuntime] | Out-Null",
+		"$xml = New-Object Windows.Data.Xml.Dom.XmlDocument",
+		"$xml.LoadXml('%s')" % xml.replace("'", "''"),
+		"$app = '{1AC14E77-02E7-4E5D-B744-2EB1AE5198B7}\\WindowsPowerShell\\v1.0\\powershell.exe'",
+		"[Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier($app).Show([Windows.UI.Notifications.ToastNotification]::new($xml))",
+	])
+
+
 ## True when this message was delivered within the rate-limit window; records it otherwise.
 func is_rate_limited(key: String, now_msec: int) -> bool:
 	var last: int = _last_sent.get(key, -RATE_LIMIT_MS - 1)
@@ -112,10 +127,14 @@ func is_rate_limited(key: String, now_msec: int) -> bool:
 
 
 func _send_desktop(title: String, body: String, level: Level, category: Category, bypass_rate_limit := false) -> bool:
-	if _notify_send == "":
+	if not is_desktop_available():
 		return false
 	if not bypass_rate_limit and is_rate_limited(title + "\n" + body, Time.get_ticks_msec()):
 		return false
+	if OS.get_name() == "Windows":
+		var script := windows_toast_script(title, body)
+		return OS.create_process("powershell.exe", WindowsBackend.POWERSHELL_ARGS + PackedStringArray(["-WindowStyle", "Hidden",
+				"-EncodedCommand", Marshalls.raw_to_base64(script.to_utf16_buffer())])) > 0
 	var icon := "" if OS.has_feature("template") else ProjectSettings.globalize_path("res://icon.svg")
 	return OS.create_process(_notify_send, build_command(title, body, level, category, icon)) > 0
 

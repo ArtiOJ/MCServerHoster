@@ -64,8 +64,15 @@ const POLICY_XML := """<?xml version="1.0" encoding="UTF-8"?>
 """
 
 
-## True when the helper and its polkit action are installed and up to date.
+## Task Scheduler entry that wakes Windows for the next flagged event.
+const WINDOWS_TASK := "Server Manager wake-up"
+
+
+## True when the helper and its polkit action are installed and up to date. Windows needs
+## no setup: wake-ups are scheduled tasks of the user.
 static func is_installed() -> bool:
+	if OS.get_name() == "Windows":
+		return true
 	return FileAccess.file_exists(HELPER_PATH) and FileAccess.file_exists(POLICY_PATH) \
 			and FileAccess.get_file_as_string(HELPER_PATH) == HELPER_SCRIPT
 
@@ -102,8 +109,26 @@ static func uninstall() -> Dictionary:
 
 ## Sets the RTC wake alarm ([param epoch] = unix time) or clears it (-1). Blocking but quick.
 static func set_alarm(epoch: int) -> Dictionary:
+	if OS.get_name() == "Windows":
+		return _windows_alarm(epoch)
 	var arg := "clear" if epoch < 0 else str(epoch)
 	return _run(["alarm", arg])
+
+
+## A one-off scheduled task with "wake the computer to run this task" (needs wake timers
+## allowed in the power plan, which they are on mains power by default).
+static func _windows_alarm(epoch: int) -> Dictionary:
+	var script := "Unregister-ScheduledTask -TaskName '%s' -Confirm:$false -ErrorAction SilentlyContinue\n" % WINDOWS_TASK
+	if epoch > 0:
+		script += ("$t = New-ScheduledTaskTrigger -Once -At ([DateTimeOffset]::FromUnixTimeSeconds(%d).LocalDateTime)\n" % epoch
+			+ "$s = New-ScheduledTaskSettingsSet -WakeToRun -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries\n"
+			+ "$a = New-ScheduledTaskAction -Execute 'cmd.exe' -Argument '/c exit'\n"
+			+ "Register-ScheduledTask -TaskName '%s' -Trigger $t -Settings $s -Action $a -Force | Out-Null\n" % WINDOWS_TASK
+			+ "if ($?) { 'ok' } else { 'failed' }")
+	else:
+		script += "'ok'"
+	var out := WindowsBackend.run_powershell(script)
+	return {"ok": out.ends_with("ok"), "message": "ok" if out.ends_with("ok") else "Task Scheduler refused the wake-up task (%s)." % out}
 
 
 ## Enables wake-on-WLAN with [param pattern] (and magic packets) on [param phy], or disables it ("").
@@ -178,6 +203,10 @@ static func tcp_pattern(mac: String, port: int) -> String:
 ## {interface, wireless, phy, mac}. Empty when unknown.
 static func wake_interface() -> Dictionary:
 	var route := PlatformBackend.get_current().default_route()
+	if OS.get_name() == "Windows":
+		if route.is_empty():
+			return {}
+		return {"interface": str(route.get("interface", "")), "wireless": bool(route.get("wireless", false)), "phy": "", "mac": str(route.get("mac", ""))}
 	var iface := str(route.get("interface", ""))
 	if iface == "":
 		return {}

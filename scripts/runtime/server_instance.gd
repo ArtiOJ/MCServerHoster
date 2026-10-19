@@ -378,6 +378,15 @@ func start(temporary := false) -> Error:
 	_prepare_files()
 	var java := JavaRuntimes.resolve_for(config)
 	var cmd := PlatformBackend.get_current().build_launch_command(config, java.executable, working_directory())
+	if cmd.has("script"):
+		DirAccess.make_dir_recursive_absolute(str(cmd.script_path).get_base_dir())
+		var launcher := FileAccess.open(cmd.script_path, FileAccess.WRITE)
+		if launcher == null:
+			log_system("Could not write %s: %s" % [cmd.script_path, error_string(FileAccess.get_open_error())], LogParser.Level.ERROR)
+			wake_listener.update.call_deferred()
+			return FAILED
+		launcher.store_string(cmd.script)
+		launcher.close()
 	var label := " as a TEMPORARY COPY" if is_temporary() else ""
 	log_system("Starting %s%s (Paper %s #%d, %s)…" % [config.display_name, label, config.mc_version, config.paper_build, java.display_name()])
 	var err := process.launch(cmd.path, cmd.args)
@@ -850,10 +859,11 @@ func stop_orphan() -> void:
 	log_system("Stopping server left over from a previous session (PID %d)…" % orphan_pid)
 	PlatformBackend.get_current().terminate(orphan_pid)
 	var deadline := Time.get_ticks_msec() + config.stop_timeout_sec * 1000
-	while PlatformBackend.get_current().process_cwd(orphan_pid) == working_directory() and Time.get_ticks_msec() < deadline:
+	var backend := PlatformBackend.get_current()
+	while backend.is_server_process(orphan_pid, working_directory()) and Time.get_ticks_msec() < deadline:
 		await get_tree().create_timer(0.5).timeout
-	if PlatformBackend.get_current().process_cwd(orphan_pid) == working_directory():
-		OS.kill(orphan_pid)
+	if backend.is_server_process(orphan_pid, working_directory()):
+		backend.kill_tree(orphan_pid)
 	orphan_pid = -1
 	_remove_pid_file()
 	log_system("Leftover server stopped.")

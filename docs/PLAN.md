@@ -332,3 +332,24 @@ for system admins.
   "Wake" (server header, remote dashboard, the computer's row) sends magic packets and reconnects
   every 3 s for up to 2 min. It only wakes; starting is separate. Remote requests hold an idle
   inhibitor for 10 min so the woken computer doesn't doze off while someone works on it.
+
+## 11. Distribution and Windows support
+
+**Packages** (`packaging/build.sh` → `dist/`): an Arch package (`packaging/arch/PKGBUILD`,
+binary in /opt/server-manager, `server-manager` command, desktop entry, icons; depends on a
+`java-runtime`), a plain Linux tarball, a Windows installer (NSIS, per-user, no admin rights:
+Start menu and optional desktop shortcut, uninstaller that also removes the login entry and the
+wake-up task, keeps settings and servers) and a portable Windows zip. Exports embed the .pck;
+icons are rendered from icon.svg by `packaging/make_icons.gd`.
+
+**Windows backend** (`WindowsBackend`, untested on real Windows so far):
+- Servers start from `.manager\launch.cmd` (cd into the folder, then Java; `start /b /wait` adds
+  priority and core pinning). Stats, kills and re-attaching follow the cmd.exe to its java.exe.
+- One PowerShell helper per app run reports host/process stats and sleep/wake events once a
+  second and keeps the computer awake (SetThreadExecutionState) while sleep should be blocked.
+- No CPU quota or hard memory cap. Windows can't delay sleep for an app: servers pause while it
+  sleeps; event wake-ups are a scheduled task with "wake to run"; connection wake-ups are
+  Wake-on-LAN magic packets (the adapter must allow them).
+- Windows Firewall: checks for port or Java rules in the background, adds and removes the app's
+  own rules (group "Server Manager") through a UAC prompt. Toast notifications, login autostart
+  through the user's Run key.
