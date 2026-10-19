@@ -4,6 +4,7 @@
 [ext_resource type="PackedScene" path="res://scenes/components/status_dot.tscn" id="2"]
 [ext_resource type="Texture2D" path="res://assets/icons/play.svg" id="3"]
 [ext_resource type="Texture2D" path="res://assets/icons/terminal.svg" id="4"]
+[ext_resource type="PackedScene" path="res://scenes/components/server_icon_view.tscn" id="icon_view"]
 
 [node name="ServerCard" type="PanelContainer"]
 custom_minimum_size = Vector2(330, 0)
@@ -25,6 +26,11 @@ unique_name_in_owner = true
 custom_minimum_size = Vector2(4, 22)
 layout_mode = 2
 mouse_filter = 2
+
+[node name="IconView" parent="VBox/Top" instance=ExtResource("icon_view")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(32, 32)
+layout_mode = 2
 
 [node name="NameLabel" type="Label" parent="VBox/Top"]
 unique_name_in_owner = true

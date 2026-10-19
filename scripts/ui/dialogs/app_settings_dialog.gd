@@ -6,6 +6,7 @@ extends ConfirmationDialog
 @onready var _browse_button: Button = %BrowseButton
 @onready var _default_ram_spin: SpinBox = %DefaultRamSpin
 @onready var _console_lines_spin: SpinBox = %ConsoleLinesSpin
+@onready var _ui_scale_option: OptionButton = %UiScaleOption
 @onready var _exit_option: OptionButton = %ExitOption
 @onready var _updates_check: CheckButton = %UpdatesCheck
 @onready var _unstable_check: CheckButton = %UnstableCheck
@@ -36,6 +37,9 @@ extends ConfirmationDialog
 
 func _ready() -> void:
 	confirmed.connect(_apply)
+	# Interface size previews live; Cancel puts the saved size back.
+	_ui_scale_option.item_selected.connect(func(index: int) -> void: _preview_scale(UiScale.OPTIONS[index]))
+	canceled.connect(func() -> void: _preview_scale(AppSettings.ui_scale))
 	_browse_button.pressed.connect(_browse_root)
 	_dir_dialog.dir_selected.connect(func(dir: String) -> void: _root_edit.text = dir)
 	_rescan_button.pressed.connect(JavaRuntimes.rescan)
@@ -57,6 +61,7 @@ func open() -> void:
 	_root_edit.text = AppSettings.servers_root
 	_default_ram_spin.value = AppSettings.default_ram_mb
 	_console_lines_spin.value = AppSettings.console_max_lines
+	_fill_ui_scale_options()
 	_exit_option.select(AppSettings.exit_behavior)
 	_updates_check.button_pressed = AppSettings.check_updates_on_launch
 	_unstable_check.button_pressed = AppSettings.show_unstable_versions
@@ -75,6 +80,27 @@ func open() -> void:
 	_update_notify_controls()
 	_fill_java_list()
 	popup_centered()
+
+
+func _fill_ui_scale_options() -> void:
+	var automatic := UiScale.current_automatic(get_tree().root)
+	_ui_scale_option.clear()
+	var selected := 0
+	for i in UiScale.OPTIONS.size():
+		_ui_scale_option.add_item(UiScale.option_label(UiScale.OPTIONS[i], automatic), i)
+		if is_equal_approx(UiScale.OPTIONS[i], AppSettings.ui_scale):
+			selected = i
+	_ui_scale_option.select(selected)
+
+
+func _preview_scale(setting: float) -> void:
+	var root := get_tree().root
+	var wanted := UiScale.automatic_factor(DisplayServer.screen_get_scale(root.current_screen), DisplayServer.screen_get_dpi(root.current_screen)) if setting <= 0.0 else setting
+	var used := UiScale.apply(root, setting)
+	if used < wanted - 0.001:
+		Notifier.info("Interface size limited to %d %% so the window fits on this screen." % roundi(used * 100.0))
+	if visible:
+		move_to_center()
 
 
 func _update_notify_controls() -> void:
@@ -133,6 +159,8 @@ func _apply() -> void:
 	AppSettings.exit_behavior = clampi(_exit_option.selected, 0, AppSettings.ExitBehavior.size() - 1) as AppSettings.ExitBehavior
 	AppSettings.check_updates_on_launch = _updates_check.button_pressed
 	AppSettings.show_unstable_versions = _unstable_check.button_pressed
+	AppSettings.ui_scale = UiScale.OPTIONS[clampi(_ui_scale_option.selected, 0, UiScale.OPTIONS.size() - 1)]
+	UiScale.apply(get_tree().root)
 	AppSettings.sleep_policy = clampi(_sleep_option.selected, 0, AppSettings.SleepPolicy.size() - 1) as AppSettings.SleepPolicy
 	AppSettings.restart_after_wake = _wake_check.button_pressed
 	AppSettings.start_minimized = _minimized_check.button_pressed

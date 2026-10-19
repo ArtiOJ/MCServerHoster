@@ -29,6 +29,8 @@ var _more_version := "-"
 ## Analysis of the optional starting world (WorldImporter.analyze), or {}.
 var _world := {}
 var _world_serial := 0
+## Icon chosen before the server exists; saved right after creation.
+var _pending_icon: Image
 
 @onready var _step_label: Label = %StepLabel
 @onready var _title_label: Label = %PageTitle
@@ -57,6 +59,8 @@ var _world_serial := 0
 @onready var _cancel_button: Button = %CancelButton
 @onready var _back_button: Button = %BackButton
 @onready var _next_button: Button = %NextButton
+@onready var _icon_view: ServerIconView = %IconView
+@onready var _icon_editor: IconEditorDialog = %IconEditorDialog
 @onready var _world_zip_button: Button = %WorldZipButton
 @onready var _world_folder_button: Button = %WorldFolderButton
 @onready var _world_clear_button: Button = %WorldClearButton
@@ -66,6 +70,12 @@ var _world_serial := 0
 
 
 func _ready() -> void:
+	_icon_view.clicked.connect(func() -> void:
+		_icon_editor.open_pending(_name_edit.text.strip_edges(), _motd_for_preview(), _pending_icon))
+	_icon_editor.icon_ready.connect(func(icon: Image) -> void:
+		_pending_icon = icon
+		_refresh_icon_view())
+	_color_picker.color_changed.connect(func(_c: Color) -> void: _refresh_icon_view())
 	close_requested.connect(_on_cancel)
 	_cancel_button.pressed.connect(_on_cancel)
 	_back_button.pressed.connect(_on_back)
@@ -94,6 +104,7 @@ func open() -> void:
 	_version_info = {}
 	_name_edit.text = _suggest_name()
 	_color_picker.color = COLORS[ServerManager.get_instances().size() % COLORS.size()]
+	_pending_icon = null
 	_ram_field.value = clampi(AppSettings.default_ram_mb, 1024, int(_ram_field.max_value))
 	_port_spin.port = ServerManager.allocate_game_port()
 	_auto_start_check.button_pressed = false
@@ -191,6 +202,7 @@ func _on_cancel() -> void:
 
 func _on_name_changed(text: String) -> void:
 	_folder_label.text = "Folder: " + AppSettings.servers_root.path_join(Fmt.slugify(text))
+	_refresh_icon_view()
 	_update_nav()
 
 
@@ -423,6 +435,8 @@ func _install() -> void:
 		_created = res.instance
 		_created.config.auto_start = _auto_start_check.button_pressed
 		_created.save_config()
+		if _pending_icon != null and ServerIcon.save(_created.config.directory, _pending_icon) == OK:
+			_created.config_changed.emit()
 		var world_ok := await _import_world_into(_created)
 		_install_status.text = "%s is ready." % _created.config.display_name
 		_install_progress.value = 100.0
@@ -520,3 +534,17 @@ func _import_world_into(inst: ServerInstance) -> bool:
 		_install_error.visible = true
 		return false
 	return true
+
+
+# --- Server icon ------------------------------------------------------------
+
+func _refresh_icon_view() -> void:
+	var tex: Texture2D = ImageTexture.create_from_image(_pending_icon) if _pending_icon != null else null
+	_icon_view.show_texture(tex, _name_edit.text, _color_picker.color)
+
+
+func _motd_for_preview() -> String:
+	for row: PropertyRow in _main_rows.get_children():
+		if row.key == "motd":
+			return row.get_value()
+	return "A Minecraft Server"

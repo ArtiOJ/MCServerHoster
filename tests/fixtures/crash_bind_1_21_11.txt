@@ -1,0 +1,83 @@
+---- Minecraft Crash Report ----
+// Surprise! Haha. Well, this is awkward.
+
+Time: 2026-10-18 20:37:50
+Description: Exception in server tick loop
+
+java.lang.IllegalStateException: Failed to bind to port
+	at net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:315)
+	at net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:1253)
+	at net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:388)
+	at java.base/java.lang.Thread.run(Thread.java:1583)
+Caused by: io.netty.channel.unix.Errors$NativeIoException: bind(..) failed with error(-98): Address already in use
+	Suppressed: java.util.concurrent.CompletionException: Rethrowing promise failure cause
+		at io.netty.util.concurrent.DefaultPromise.rethrowIfFailed(DefaultPromise.java:686)
+		at io.netty.util.concurrent.DefaultPromise.syncUninterruptibly(DefaultPromise.java:427)
+		at io.netty.channel.DefaultChannelPromise.syncUninterruptibly(DefaultChannelPromise.java:125)
+		at io.netty.channel.DefaultChannelPromise.syncUninterruptibly(DefaultChannelPromise.java:30)
+		at net.minecraft.server.network.ServerConnectionListener.startTcpServerListener(ServerConnectionListener.java:150)
+		at net.minecraft.server.dedicated.DedicatedServer.initServer(DedicatedServer.java:310)
+		at net.minecraft.server.MinecraftServer.runServer(MinecraftServer.java:1253)
+		at net.minecraft.server.MinecraftServer.lambda$spin$2(MinecraftServer.java:388)
+		at java.base/java.lang.Thread.run(Thread.java:1583)
+
+
+A detailed walkthrough of the error, its code path and all known details is as follows:
+---------------------------------------------------------------------------------------
+
+-- System Details --
+Details:
+	Minecraft Version: 1.21.11
+	Minecraft Version ID: 1.21.11
+	Operating System: Linux (amd64) version 7.2.10-1-cachyos
+	Java Version: 21.0.12.1, Arch Linux
+	Java VM Version: OpenJDK 64-Bit Server VM (mixed mode, sharing), Arch Linux
+	Memory: 122342024 bytes (116 MiB) / 593494016 bytes (566 MiB) up to 1073741824 bytes (1024 MiB)
+	CPUs: 8
+	Processor Vendor: AuthenticAMD
+	Processor Name: AMD Ryzen 7 7800X3D 8-Core Processor
+	Identifier: AuthenticAMD Family 25 Model 97 Stepping 2
+	Microarchitecture: Zen 3
+	Frequency (GHz): -0.00
+	Number of physical packages: 1
+	Number of physical CPUs: 8
+	Number of logical CPUs: 8
+	Graphics card #0 name: AD104 [GeForce RTX 4070]
+	Graphics card #0 vendor: NVIDIA Corporation (0x10de)
+	Graphics card #0 VRAM (MiB): 16416.00
+	Graphics card #0 deviceId: 0x2786
+	Graphics card #0 versionInfo: unknown
+	Graphics card #1 name: Raphael [Radeon 610M]
+	Graphics card #1 vendor: Advanced Micro Devices, Inc. [AMD/ATI] (0x1002)
+	Graphics card #1 VRAM (MiB): 258.00
+	Graphics card #1 deviceId: 0x164e
+	Graphics card #1 versionInfo: unknown
+	Virtual memory max (MiB): 46771.71
+	Virtual memory used (MiB): 17404.13
+	Swap memory total (MiB): 31181.00
+	Swap memory used (MiB): 2885.46
+	Space in storage for jna.tmpdir (MiB): <path not set>
+	Space in storage for org.lwjgl.system.SharedLibraryExtractPath (MiB): <path not set>
+	Space in storage for io.netty.native.workdir (MiB): <path not set>
+	Space in storage for java.io.tmpdir (MiB): available: 13344.35, total: 15590.71
+	Space in storage for workdir (MiB): available: 13344.35, total: 15590.71
+	JVM Flags: 1 total; -Xmx1G
+	Debug Flags: 0 total; 
+	CraftBukkit Information: 
+   BrandInfo: Paper (papermc:paper) version 1.21.11-132-ver/1.21.11@c5eb079 (2026-05-11T11:43:09Z)
+   Running: Paper version 1.21.11-132-c5eb079 (MC: 1.21.11) (Implementing API version 1.21.11-R0.1-SNAPSHOT) false
+   Plugins: {}
+   Warnings: DEFAULT
+   Reload Count: 0
+   
+   Force Loaded Chunks: {}
+	Server Running: true
+	Player Count: 0 / 20; []
+	Active Data Packs: vanilla, file/bukkit, paper
+	Available Data Packs: file/bukkit, minecart_improvements, paper, redstone_experiments, trade_rebalance, vanilla
+	Enabled Feature Flags: minecraft:vanilla
+	World Generation: Experimental
+	World Seed: -8144137109802728394
+	Suppressed Exceptions: ~~NONE~~
+	Is Modded: Definitely; Server brand changed to 'Paper'
+	Type: Dedicated Server (map_server.txt)

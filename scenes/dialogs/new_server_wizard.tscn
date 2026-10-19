@@ -9,6 +9,8 @@
 [ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="world_folder"]
 [ext_resource type="Texture2D" path="res://assets/icons/close.svg" id="world_clear"]
 [ext_resource type="PackedScene" path="res://scenes/components/port_field.tscn" id="port_field"]
+[ext_resource type="PackedScene" path="res://scenes/components/server_icon_view.tscn" id="icon_view"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/icon_editor_dialog.tscn" id="icon_editor"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bg"]
 bg_color = Color(0.114, 0.133, 0.169, 1)
@@ -94,6 +96,13 @@ layout_mode = 2
 tooltip_text = "Accent colour used in the sidebar"
 color = Color(0.247, 0.725, 0.498, 1)
 edit_alpha = false
+
+[node name="IconView" parent="Margin/VBox/Pages/Basics/NameRow" instance=ExtResource("icon_view")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(38, 38)
+layout_mode = 2
+tooltip_text = "Optional server icon for Minecraft's server list. Click to choose and crop an image."
+clickable = true
 
 [node name="FolderLabel" type="Label" parent="Margin/VBox/Pages/Basics"]
 unique_name_in_owner = true
@@ -408,3 +417,7 @@ ok_button_text = "Select Current Folder"
 file_mode = 2
 access = 2
 use_native_dialog = true
+
+[node name="IconEditorDialog" parent="." instance=ExtResource("icon_editor")]
+unique_name_in_owner = true
+visible = false

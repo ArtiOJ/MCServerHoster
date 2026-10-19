@@ -1,6 +1,11 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/tabs/logs_tab.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/copy.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/save.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="6"]
 
 [node name="Logs" type="MarginContainer"]
 theme_override_constants/margin_left = 20
@@ -8,3 +13,163 @@ theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 16
 script = ExtResource("1")
+
+[node name="Split" type="HSplitContainer" parent="."]
+layout_mode = 2
+split_offset = 40
+
+[node name="Side" type="VBoxContainer" parent="Split"]
+custom_minimum_size = Vector2(270, 0)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Split/Side"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Split/Side/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Logs of earlier sessions (logs/*.log.gz), the current or last session (latest.log) and crash reports Paper wrote (crash-reports/)."
+theme_type_variation = &"SectionHeader"
+text = "History"
+
+[node name="RefreshButton" type="Button" parent="Split/Side/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Look for new log files and reload the selected one."
+icon = ExtResource("2")
+
+[node name="FileList" type="ItemList" parent="Split/Side"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="EmptyLabel" type="Label" parent="Split/Side"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "No logs yet — start the server once."
+autowrap_mode = 3
+
+[node name="Main" type="VBoxContainer" parent="Split"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="Toolbar" type="HBoxContainer" parent="Split/Main"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SearchEdit" type="LineEdit" parent="Split/Main/Toolbar"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Show only lines containing this text (not case-sensitive)."
+placeholder_text = "Filter lines…"
+clear_button_enabled = true
+right_icon = ExtResource("3")
+
+[node name="FilterOption" type="OptionButton" parent="Split/Main/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show only some kinds of lines. Stack-trace lines count as part of the message above them."
+selected = 0
+item_count = 3
+popup/item_0/text = "All lines"
+popup/item_0/id = 0
+popup/item_1/text = "Warnings & errors"
+popup/item_1/id = 1
+popup/item_2/text = "Errors only"
+popup/item_2/id = 2
+
+[node name="CopyButton" type="Button" parent="Split/Main/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Copy the visible lines."
+icon = ExtResource("4")
+
+[node name="SaveButton" type="Button" parent="Split/Main/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Save the whole log as a text file (e.g. to share it)."
+icon = ExtResource("5")
+
+[node name="OpenFolderButton" type="Button" parent="Split/Main/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Open the folder containing this file."
+icon = ExtResource("6")
+
+[node name="CrashCard" type="PanelContainer" parent="Split/Main"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Split/Main/CrashCard"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TitleRow" type="HBoxContainer" parent="Split/Main/CrashCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="CrashBadge" type="Label" parent="Split/Main/CrashCard/VBox/TitleRow"]
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"WarnBadge"
+text = "CRASH"
+
+[node name="CrashTitle" type="Label" parent="Split/Main/CrashCard/VBox/TitleRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SectionHeader"
+text = "Crash"
+text_overrun_behavior = 3
+
+[node name="CrashReason" type="Label" parent="Split/Main/CrashCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="CrashException" type="Label" parent="Split/Main/CrashCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="CrashMeta" type="Label" parent="Split/Main/CrashCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="Viewer" type="RichTextLabel" parent="Split/Main"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+focus_mode = 2
+theme_type_variation = &"ConsoleOutput"
+bbcode_enabled = true
+context_menu_enabled = true
+selection_enabled = true
+deselect_on_focus_loss_enabled = false
+
+[node name="StatusLabel" type="Label" parent="Split/Main"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="SaveDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Save log"
+size = Vector2i(820, 520)
+access = 2
+filters = PackedStringArray("*.log ; Log files", "*.txt ; Text files")
+use_native_dialog = true

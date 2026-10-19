@@ -9,6 +9,7 @@ var instance: ServerInstance
 @onready var _sub_label: Label = %SubLabel
 @onready var _players_label: Label = %PlayersLabel
 @onready var _color_bar: ColorRect = %ColorBar
+@onready var _icon_view: ServerIconView = %IconView
 
 
 func bind(inst: ServerInstance) -> void:
@@ -25,6 +26,7 @@ func _refresh() -> void:
 		return
 	_dot.show_state(instance)
 	_color_bar.color = instance.config.color
+	_icon_view.show_instance(instance)
 	_name_label.text = instance.config.display_name
 	var sub := "%s · %s" % [instance.state_name(), instance.config.mc_version]
 	if instance.is_temporary():

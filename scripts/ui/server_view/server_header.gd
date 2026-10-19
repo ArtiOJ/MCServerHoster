@@ -8,7 +8,7 @@ signal duplicate_requested
 signal temp_decision_requested
 signal import_world_requested
 
-enum MenuItem { OPEN_FOLDER, COPY_ADDRESS, UPDATE, CHECK_UPDATES, STOP_ORPHAN, CLEAR_CONSOLE, DELETE, DUPLICATE, TEMP_DECISION, IMPORT_WORLD }
+enum MenuItem { OPEN_FOLDER, COPY_ADDRESS, UPDATE, CHECK_UPDATES, STOP_ORPHAN, CLEAR_CONSOLE, DELETE, DUPLICATE, TEMP_DECISION, IMPORT_WORLD, CHANGE_ICON }
 enum StartItem { START, START_TEMPORARY }
 
 const TEMP_START_TOOLTIP := "Run a throwaway copy of this server for testing. It shows as this server while running; when it stops you choose whether to keep or discard what changed."
@@ -27,6 +27,8 @@ var instance: ServerInstance
 @onready var _restart_button: Button = %RestartButton
 @onready var _kill_button: Button = %KillButton
 @onready var _more_button: MenuButton = %MoreButton
+@onready var _icon_view: ServerIconView = %IconView
+@onready var _icon_editor: IconEditorDialog = %IconEditorDialog
 
 
 func _ready() -> void:
@@ -36,6 +38,7 @@ func _ready() -> void:
 	_kill_button.pressed.connect(func() -> void: instance.kill())
 	_update_button.pressed.connect(func() -> void: update_requested.emit())
 	_more_button.get_popup().id_pressed.connect(_on_menu)
+	_icon_view.clicked.connect(func() -> void: _icon_editor.open(instance))
 	var start_popup := _start_menu.get_popup()
 	start_popup.set_item_tooltip(start_popup.get_item_index(StartItem.START_TEMPORARY), TEMP_START_TOOLTIP)
 	start_popup.id_pressed.connect(_on_start_menu)
@@ -62,6 +65,7 @@ func _refresh() -> void:
 		return
 	var cfg := instance.config
 	_color_bar.color = cfg.color
+	_icon_view.show_instance(instance)
 	_name_label.text = cfg.display_name
 	_state_badge.text = instance.state_name().to_upper()
 	_state_badge.add_theme_color_override("font_color", instance.state_color())
@@ -111,6 +115,20 @@ func _on_start_menu(id: int) -> void:
 			_refresh()
 
 
+## Opens the icon editor, optionally with an image file already loaded (e.g. dropped on the window).
+func open_icon_editor(path := "") -> void:
+	if instance == null:
+		return
+	if not _icon_editor.visible:
+		_icon_editor.open(instance)
+	if path != "":
+		_icon_editor.load_file(path)
+
+
+func is_icon_editor_open() -> bool:
+	return _icon_editor.visible
+
+
 func _on_menu(id: int) -> void:
 	match id:
 		MenuItem.OPEN_FOLDER:
@@ -140,3 +158,5 @@ func _on_menu(id: int) -> void:
 			temp_decision_requested.emit()
 		MenuItem.IMPORT_WORLD:
 			import_world_requested.emit()
+		MenuItem.CHANGE_ICON:
+			_icon_editor.open(instance)

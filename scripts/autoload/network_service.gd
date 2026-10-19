@@ -11,6 +11,8 @@ extends Node
 
 signal status_changed
 signal reachability_finished(server_id: String, result: Dictionary)
+## A server's game port changed (from the Network or Resources tab, or a hand edit).
+signal port_moved(server_id: String, old_port: int, new_port: int)
 
 enum UpnpState { UNKNOWN, DISCOVERING, AVAILABLE, UNAVAILABLE }
 
@@ -19,6 +21,10 @@ const LEASE_SEC := 86400
 const USER_AGENT := "GodotServerManager/0.1 (local Minecraft server manager)"
 const IPIFY_URL := "https://api.ipify.org/?format=json"
 const MCSRVSTAT_URL := "https://api.mcsrvstat.us/3/%s:%d"
+## Comment on firewall rules this app creates; identifies them for later cleanup.
+const APP_RULE_COMMENT := "Minecraft server (Server Manager)"
+## How many old game ports are remembered for recognising stale rules.
+const MAX_PREVIOUS_PORTS := 50
 ## Minimum time between automatic retries of a failed router discovery.
 const REDISCOVER_MS := 60000
 
@@ -45,6 +51,11 @@ var _renew_ports := {}
 var _working := false
 var _last_discover_msec := -REDISCOVER_MS
 var _firewall := {}
+## Server id -> last known game port, to notice port changes and deletions.
+var _known_ports := {}
+## Tests/screenshots: pretend this firewall is active ("ufw"/"firewalld") with these ufw rules.
+var firewall_name_override := ""
+var ufw_rules_override := ""
 
 @onready var _renew_timer: Timer = %RenewTimer
 
@@ -52,7 +63,11 @@ var _firewall := {}
 func _ready() -> void:
 	_renew_timer.timeout.connect(_renew)
 	ServerManager.server_added.connect(_watch_instance)
-	ServerManager.server_removed.connect(func(_id: String) -> void: sync())
+	ServerManager.server_removed.connect(func(id: String) -> void:
+		if _known_ports.has(id):
+			remember_old_port(int(_known_ports[id]))
+			_known_ports.erase(id)
+		sync())
 	ServerManager.server_state_changed.connect(func(_i: ServerInstance) -> void: sync())
 	for inst in ServerManager.get_instances():
 		_watch_instance(inst)
@@ -214,6 +229,29 @@ func _renew() -> void:
 
 func _watch_instance(inst: ServerInstance) -> void:
 	inst.config_changed.connect(sync)
+	_known_ports[inst.config.id] = inst.config.port
+	inst.config_changed.connect(func() -> void: _check_port_change(inst))
+
+
+func _check_port_change(inst: ServerInstance) -> void:
+	if not is_instance_valid(inst):
+		return
+	var id := inst.config.id
+	var old := int(_known_ports.get(id, inst.config.port))
+	_known_ports[id] = inst.config.port
+	if old != inst.config.port:
+		remember_old_port(old)
+		port_moved.emit(id, old, inst.config.port)
+
+
+## Records a game port no managed server uses any more, so a rule left for it is recognised.
+func remember_old_port(port: int) -> void:
+	if port <= 0 or AppSettings.previous_game_ports.has(port):
+		return
+	AppSettings.previous_game_ports.append(port)
+	while AppSettings.previous_game_ports.size() > MAX_PREVIOUS_PORTS:
+		AppSettings.previous_game_ports.remove_at(0)
+	AppSettings.save_settings()
 
 
 # --- Public address ---------------------------------------------------------------
@@ -300,6 +338,8 @@ static func diagnose_nat(upnp_available: bool, router_ip: String, observed_publi
 
 ## {"name": "ufw" | "firewalld" | "", "active": bool, "command": String}
 func firewall_info(port: int) -> Dictionary:
+	if firewall_name_override != "":
+		return {"name": firewall_name_override, "active": true, "command": firewall_command(firewall_name_override, port)}
 	if _firewall.is_empty():
 		_firewall = _detect_firewall()
 	var info := _firewall.duplicate()
@@ -317,10 +357,10 @@ func firewall_port_status(port: int) -> Dictionary:
 		return result
 	match info.name:
 		"ufw":
-			var rules := PlatformBackend.read_text("/etc/ufw/user.rules")
-			var policy := ""
+			var rules := _ufw_rules_text()
+			var policy := "DROP" if ufw_rules_override != "" else ""
 			for line in PlatformBackend.read_text("/etc/default/ufw").split("\n"):
-				if line.begins_with("DEFAULT_INPUT_POLICY="):
+				if line.begins_with("DEFAULT_INPUT_POLICY=") and ufw_rules_override == "":
 					policy = line.get_slice("=", 1).strip_edges().trim_prefix("\"").trim_suffix("\"")
 			var verdict := ufw_port_verdict(rules, policy, port)
 			result.merge(verdict, true)
@@ -398,12 +438,184 @@ func allow_in_firewall(port: int) -> Dictionary:
 			return {"ok": false, "message": "Unsupported firewall."}
 	var after := firewall_port_status(port)
 	if after.allowed == "yes":
+		if not AppSettings.firewall_app_ports.has(port):
+			AppSettings.firewall_app_ports.append(port)
+			AppSettings.save_settings()
+		status_changed.emit()
 		return {"ok": true, "message": "Port %d is now allowed through %s." % [port, fw.name]}
 	if code == 126 or code == 127:
 		return {"ok": false, "message": "The password prompt was cancelled or the password was not accepted."}
 	if code == 0:
 		return {"ok": false, "message": "%s reported success, but the new rule for port %d could not be confirmed (%s). Check with: sudo ufw status" % [fw.name, port, after.detail]}
 	return {"ok": false, "message": "%s did not open the port (exit code %d)." % [fw.name, code]}
+
+
+# --- Firewall cleanup ---------------------------------------------------------------
+
+func _ufw_rules_text() -> String:
+	if ufw_rules_override != "":
+		return ufw_rules_override
+	return PlatformBackend.read_text("/etc/ufw/user.rules")
+
+
+## Decodes ufw's hex-encoded rule comment ("comment=4d69…" or just the hex).
+static func decode_ufw_comment(token: String) -> String:
+	var hex := token.trim_prefix("comment=")
+	if hex == "" or hex.length() % 2 != 0:
+		return ""
+	return hex.hex_decode().get_string_from_utf8()
+
+
+## Parses the rule tuples in a ufw rules file. Each rule:
+## {action, proto, port_spec, port (0 unless a single port), source, app, comment, direction}.
+static func parse_ufw_rules(rules_text: String) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for line in rules_text.split("\n"):
+		if not line.begins_with("### tuple ###"):
+			continue
+		var f := line.trim_prefix("### tuple ###").strip_edges().split(" ", false)
+		var comment := ""
+		while not f.is_empty() and f[-1].begins_with("comment="):
+			comment = decode_ufw_comment(f[-1])
+			f.remove_at(f.size() - 1)
+		# Plain rules have 7 fields; application-profile rules (e.g. KDE Connect) add dapp/sapp.
+		if f.size() < 7:
+			continue
+		var app := f[6].uri_decode() if f.size() >= 9 and f[6] != "-" else ""
+		out.append({
+			"action": f[0], "proto": f[1], "port_spec": f[2],
+			"port": f[2].to_int() if f[2].is_valid_int() else 0,
+			"source": f[5], "app": app, "comment": comment, "direction": f[-1],
+		})
+	return out
+
+
+## Rules that open a port no managed server uses any more and that belong to Minecraft:
+## created by this app ("app"), or a rule the user added for a port a server used before
+## or commented as Minecraft ("yours"). Unrelated rules (KDE Connect, other services) are
+## never listed. [param rules] come from [method parse_ufw_rules] (or firewalld's port list).
+static func cleanup_candidates(rules: Array[Dictionary], used_ports: Array, app_ports: Array, previous_ports: Array) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	var seen := {}
+	for r in rules:
+		var port: int = r.port
+		if port <= 0 or r.app != "" or r.direction != "in" or used_ports.has(port):
+			continue
+		if not (r.action == "allow" or str(r.action).begins_with("limit")):
+			continue
+		if r.proto != "tcp" and r.proto != "any":
+			continue
+		var origin := ""
+		if r.comment == APP_RULE_COMMENT or app_ports.has(port):
+			origin = "app"
+		elif previous_ports.has(port) or str(r.comment).containsn("minecraft"):
+			origin = "yours"
+		else:
+			continue
+		var key := "%d/%s/%s" % [port, r.proto, _source_key(r.source)]
+		if seen.has(key):
+			continue  # ufw keeps separate IPv4 and IPv6 copies of the same rule.
+		seen[key] = true
+		var rule := r.duplicate()
+		rule.origin = origin
+		out.append(rule)
+	return out
+
+
+## Firewall rules on this computer, in [method parse_ufw_rules] form. firewalld rules are
+## read from `firewall-cmd --list-ports` (no comments, so only tracked ports count as "app").
+func firewall_rules() -> Array[Dictionary]:
+	var info := firewall_info(0)
+	if not info.active:
+		return []
+	match info.name:
+		"ufw":
+			var text := _ufw_rules_text()
+			if ufw_rules_override == "":
+				text += "\n" + PlatformBackend.read_text("/etc/ufw/user6.rules")
+			return parse_ufw_rules(text)
+		"firewalld":
+			var out: Array = []
+			var rules: Array[Dictionary] = []
+			if OS.execute("firewall-cmd", ["--list-ports"], out) != 0 or out.is_empty():
+				return rules
+			for token in str(out[0]).strip_edges().split(" ", false):
+				var spec := token.get_slice("/", 0)
+				rules.append({"action": "allow", "proto": token.get_slice("/", 1), "port_spec": spec,
+						"port": spec.to_int() if spec.is_valid_int() else 0, "source": "0.0.0.0/0",
+						"app": "", "comment": "", "direction": "in"})
+			return rules
+	return []
+
+
+## Minecraft firewall rules for ports no managed server uses any more (see [method cleanup_candidates]).
+func stale_firewall_rules() -> Array[Dictionary]:
+	var used: Array = []
+	for inst in ServerManager.get_instances():
+		used.append(inst.config.port)
+	return cleanup_candidates(firewall_rules(), used, Array(AppSettings.firewall_app_ports), Array(AppSettings.previous_game_ports))
+
+
+## The rule (if any) this app opened for [param port], whether or not it is still in use.
+func app_rule_for(port: int) -> Dictionary:
+	for r in cleanup_candidates(firewall_rules(), [], Array(AppSettings.firewall_app_ports), Array(AppSettings.previous_game_ports)):
+		if r.port == port and r.origin == "app":
+			return r
+	return {}
+
+
+## "anywhere" for the IPv4/IPv6 any-address forms, otherwise the source itself.
+static func _source_key(source: String) -> String:
+	return "anywhere" if source in ["0.0.0.0/0", "::/0", "any"] else source
+
+
+## Arguments (after pkexec) that delete [param rule] with ufw.
+static func ufw_delete_args(rule: Dictionary) -> PackedStringArray:
+	var port: int = rule.port
+	var action: String = "limit" if str(rule.action).begins_with("limit") else "allow"
+	var src: String = rule.get("source", "0.0.0.0/0")
+	if _source_key(src) == "anywhere":
+		return PackedStringArray(["ufw", "delete", action, "%d/tcp" % port if rule.proto == "tcp" else str(port)])
+	var args := PackedStringArray(["ufw", "delete", action, "from", src, "to", "any", "port", str(port)])
+	if rule.proto == "tcp":
+		args.append_array(["proto", "tcp"])
+	return args
+
+
+## Deletes a firewall rule (normally a stale one). ufw goes through pkexec (the desktop's
+## password prompt); firewalld asks polkit itself. The rules are re-read afterwards.
+## Returns {ok: bool, message: String}.
+func remove_firewall_rule(rule: Dictionary) -> Dictionary:
+	var info := firewall_info(0)
+	var port: int = rule.port
+	var code := -1
+	match info.name:
+		"ufw":
+			var pkexec := PlatformBackend.find_in_path("pkexec")
+			if pkexec == "":
+				return {"ok": false, "message": "pkexec is not installed; run “sudo %s” in a terminal instead." % " ".join(ufw_delete_args(rule))}
+			var args := ufw_delete_args(rule)
+			code = await FileOps.run_async(self, func() -> int: return OS.execute(pkexec, args))
+		"firewalld":
+			code = await FileOps.run_async(self, func() -> int:
+				var c := OS.execute("firewall-cmd", ["--permanent", "--remove-port=%d/%s" % [port, "udp" if rule.proto == "udp" else "tcp"]])
+				return OS.execute("firewall-cmd", ["--reload"]) if c == 0 else c)
+		_:
+			return {"ok": false, "message": "No supported firewall is active."}
+	var still := firewall_rules().any(func(r: Dictionary) -> bool:
+		return r.port == port and r.proto == rule.proto and _source_key(r.source) == _source_key(rule.source) and r.direction == "in")
+	status_changed.emit()
+	if not still:
+		var idx := AppSettings.firewall_app_ports.find(port)
+		if idx >= 0:
+			AppSettings.firewall_app_ports.remove_at(idx)
+			AppSettings.save_settings()
+		return {"ok": true, "message": "Removed the %s rule for port %d." % [info.name, port]}
+	if code == 126 or code == 127:
+		return {"ok": false, "message": "The password prompt was cancelled or the password was not accepted."}
+	if code == 0:
+		return {"ok": false, "message": "%s reported success, but the rule for port %d is still there. Check with: sudo ufw status numbered" % [info.name, port]}
+	return {"ok": false, "message": "%s could not remove the rule for port %d (exit code %d)." % [info.name, port, code]}
 
 
 static func firewall_command(name: String, port: int) -> String:

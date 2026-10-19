@@ -163,6 +163,37 @@ tooltip_text = "Add a firewall rule for this port. Your desktop asks for your pa
 theme_type_variation = &"AccentButton"
 text = "Allow in firewall"
 
+[node name="PortMoveNotice" type="PanelContainer" parent="Scroll/Content/AddressesCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Row" type="HBoxContainer" parent="Scroll/Content/AddressesCard/VBox/PortMoveNotice"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PortMoveLabel" type="Label" parent="Scroll/Content/AddressesCard/VBox/PortMoveNotice/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="AllowNewPortButton" type="Button" parent="Scroll/Content/AddressesCard/VBox/PortMoveNotice/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Allow the new port in the firewall. Your desktop asks for your password."
+theme_type_variation = &"AccentButton"
+text = "Allow new port"
+
+[node name="RemoveOldRuleButton" type="Button" parent="Scroll/Content/AddressesCard/VBox/PortMoveNotice/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Close the old port that Server Manager opened. Your desktop asks for your password."
+text = "Remove old rule"
+
 [node name="ForwardCard" type="PanelContainer" parent="Scroll/Content"]
 layout_mode = 2
 theme_type_variation = &"CardPanel"
@@ -457,6 +488,24 @@ tooltip_text = "Add the rule for you. Your desktop asks for your password."
 theme_type_variation = &"AccentButton"
 text = "Allow in firewall"
 
+[node name="OldRulesBox" type="VBoxContainer" parent="Scroll/Content/DiagnosticsCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="OldRulesLabel" type="Label" parent="Scroll/Content/DiagnosticsCard/VBox/OldRulesBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Open firewall ports that no server uses are an unnecessary way in. Removing a rule asks for your password once per rule."
+text = "Firewall still allows old ports:"
+
+[node name="OldRulesList" type="VBoxContainer" parent="Scroll/Content/DiagnosticsCard/VBox/OldRulesBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
 [node name="SecurityCard" type="PanelContainer" parent="Scroll/Content"]
 layout_mode = 2
 theme_type_variation = &"CardPanel"
@@ -486,3 +535,11 @@ theme_type_variation = &"NoticePanel"
 unique_name_in_owner = true
 layout_mode = 2
 autowrap_mode = 3
+
+[node name="RemoveRuleConfirm" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Remove firewall rule?"
+size = Vector2i(520, 180)
+ok_button_text = "Remove rule"
+dialog_autowrap = true
+

@@ -1,0 +1,14 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/components/icon_cropper.gd" id="1"]
+
+[node name="IconCropper" type="Control"]
+clip_contents = true
+custom_minimum_size = Vector2(400, 360)
+layout_mode = 3
+anchors_preset = 0
+size_flags_horizontal = 3
+size_flags_vertical = 3
+focus_mode = 2
+mouse_default_cursor_shape = 13
+script = ExtResource("1")

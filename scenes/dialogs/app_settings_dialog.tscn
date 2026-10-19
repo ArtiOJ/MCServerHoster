@@ -101,6 +101,19 @@ rounded = true
 suffix = "lines"
 select_all_on_focus = true
 
+[node name="UiScaleLabel" type="Label" parent="Scroll/VBox/Grid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Makes all text and controls bigger or smaller. Automatic follows your screen (its scaling or pixel density). Applies right away; on a small screen the size is limited so the window still fits."
+text = "Interface size"
+
+[node name="UiScaleOption" type="OptionButton" parent="Scroll/VBox/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Makes all text and controls bigger or smaller. Automatic follows your screen (its scaling or pixel density). Applies right away; on a small screen the size is limited so the window still fits."
+
 [node name="UpdatesCheck" type="CheckButton" parent="Scroll/VBox"]
 unique_name_in_owner = true
 layout_mode = 2

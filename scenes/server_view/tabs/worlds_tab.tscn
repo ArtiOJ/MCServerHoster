@@ -1,6 +1,17 @@
 [gd_scene format=3]
 
 [ext_resource type="Script" path="res://scripts/ui/tabs/worlds_tab.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/map.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/upload.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/check.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/download.svg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/icons/undo.svg" id="8"]
+[ext_resource type="Texture2D" path="res://assets/icons/trash.svg" id="9"]
+[ext_resource type="Texture2D" path="res://assets/icons/puzzle.svg" id="10"]
+[ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/import_world_dialog.tscn" id="12"]
 
 [node name="Worlds" type="MarginContainer"]
 theme_override_constants/margin_left = 20
@@ -8,3 +19,305 @@ theme_override_constants/margin_top = 16
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 16
 script = ExtResource("1")
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="Toolbar" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ImportButton" type="Button" parent="Scroll/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Import a downloaded map, a singleplayer save or another server's world (.zip or folder)."
+theme_type_variation = &"AccentButton"
+text = "Import world…"
+icon = ExtResource("3")
+
+[node name="OpenFolderButton" type="Button" parent="Scroll/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Open the server folder"
+text = "Open folder"
+icon = ExtResource("4")
+
+[node name="RefreshButton" type="Button" parent="Scroll/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Rescan worlds and datapacks"
+icon = ExtResource("5")
+
+[node name="WorkProgress" type="ProgressBar" parent="Scroll/VBox/Toolbar"]
+unique_name_in_owner = true
+visible = false
+custom_minimum_size = Vector2(180, 0)
+layout_mode = 2
+size_flags_vertical = 4
+max_value = 1.0
+step = 0.001
+
+[node name="StatusLabel" type="Label" parent="Scroll/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="BlockedNotice" type="PanelContainer" parent="Scroll/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="BlockedLabel" type="Label" parent="Scroll/VBox/BlockedNotice"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="WorldsCard" type="PanelContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/VBox/WorldsCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Scroll/VBox/WorldsCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Scroll/VBox/WorldsCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("2")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Scroll/VBox/WorldsCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Every world stored in the server folder. The active one is what the server loads (server.properties level-name)."
+theme_type_variation = &"SectionHeader"
+text = "Worlds"
+
+[node name="ActivateButton" type="Button" parent="Scroll/VBox/WorldsCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Load this world on the next start (sets level-name)."
+text = "Make active"
+icon = ExtResource("6")
+
+[node name="ExportButton" type="Button" parent="Scroll/VBox/WorldsCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Save the world as a .zip that opens directly in Minecraft singleplayer (nether and end included)."
+text = "Export…"
+icon = ExtResource("7")
+
+[node name="ResetButton" type="Button" parent="Scroll/VBox/WorldsCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Delete the active world so a fresh one is generated on the next start. A safety backup is saved first."
+theme_type_variation = &"DangerButton"
+text = "Reset…"
+icon = ExtResource("8")
+
+[node name="DeleteButton" type="Button" parent="Scroll/VBox/WorldsCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Permanently delete this world (not the active one)."
+theme_type_variation = &"DangerButton"
+icon = ExtResource("9")
+
+[node name="WorldTree" type="Tree" parent="Scroll/VBox/WorldsCard/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 190)
+layout_mode = 2
+columns = 7
+column_titles_visible = true
+hide_root = true
+select_mode = 1
+
+[node name="WorldsSummary" type="Label" parent="Scroll/VBox/WorldsCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="PacksCard" type="PanelContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/VBox/PacksCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Scroll/VBox/PacksCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Scroll/VBox/PacksCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("10")
+stretch_mode = 5
+
+[node name="PacksTitle" type="Label" parent="Scroll/VBox/PacksCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Datapacks of the active world (its datapacks folder). New packs are enabled automatically when the world loads."
+theme_type_variation = &"SectionHeader"
+text = "Datapacks"
+
+[node name="AddZipButton" type="Button" parent="Scroll/VBox/PacksCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Install a datapack .zip"
+text = "Add .zip…"
+icon = ExtResource("11")
+
+[node name="AddFolderButton" type="Button" parent="Scroll/VBox/PacksCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Install a datapack folder"
+text = "Add folder…"
+icon = ExtResource("11")
+
+[node name="EnableButton" type="Button" parent="Scroll/VBox/PacksCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Enable the selected pack now (server must be online)."
+text = "Enable"
+
+[node name="DisableButton" type="Button" parent="Scroll/VBox/PacksCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Disable the selected pack now (server must be online)."
+text = "Disable"
+
+[node name="RemovePackButton" type="Button" parent="Scroll/VBox/PacksCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Permanently delete the selected pack from the world's datapacks folder."
+theme_type_variation = &"DangerButton"
+icon = ExtResource("9")
+
+[node name="PackTree" type="Tree" parent="Scroll/VBox/PacksCard/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 150)
+layout_mode = 2
+columns = 4
+column_titles_visible = true
+hide_root = true
+select_mode = 1
+
+[node name="PacksHint" type="Label" parent="Scroll/VBox/PacksCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="ExportDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Export world"
+size = Vector2i(820, 520)
+ok_button_text = "Save"
+access = 2
+filters = PackedStringArray("*.zip ; Zip archive")
+use_native_dialog = true
+
+[node name="PackZipDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Add datapack"
+size = Vector2i(820, 520)
+ok_button_text = "Open"
+file_mode = 0
+access = 2
+filters = PackedStringArray("*.zip ; Datapack")
+use_native_dialog = true
+
+[node name="PackFolderDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Add datapack folder"
+size = Vector2i(820, 520)
+ok_button_text = "Select Current Folder"
+file_mode = 2
+access = 2
+use_native_dialog = true
+
+[node name="ResetDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Reset world"
+size = Vector2i(520, 280)
+ok_button_text = "Reset world"
+
+[node name="VBox" type="VBoxContainer" parent="ResetDialog"]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 504.0
+offset_bottom = 224.0
+theme_override_constants/separation = 12
+
+[node name="ResetMessage" type="Label" parent="ResetDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(480, 0)
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="SeedRow" type="HBoxContainer" parent="ResetDialog/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SeedLabel" type="Label" parent="ResetDialog/VBox/SeedRow"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Seed for the new world. Leave empty for a random one."
+text = "Seed"
+
+[node name="SeedEdit" type="LineEdit" parent="ResetDialog/VBox/SeedRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Seed for the new world. Leave empty for a random one."
+placeholder_text = "random"
+
+[node name="KeepPlayersRow" type="HBoxContainer" parent="ResetDialog/VBox"]
+layout_mode = 2
+
+[node name="KeepPlayersLabel" type="Label" parent="ResetDialog/VBox/KeepPlayersRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Carry players' inventories, XP, stats and advancements into the new world. Their saved positions refer to the old terrain."
+text = "Keep player data"
+
+[node name="KeepPlayersCheck" type="CheckButton" parent="ResetDialog/VBox/KeepPlayersRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Carry players' inventories, XP, stats and advancements into the new world. Their saved positions refer to the old terrain."
+
+[node name="DeleteDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Delete world"
+size = Vector2i(480, 160)
+ok_button_text = "Delete"
+
+[node name="RemovePackDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Remove datapack"
+size = Vector2i(460, 150)
+ok_button_text = "Remove"
+
+[node name="ImportWorldDialog" parent="." instance=ExtResource("12")]
+unique_name_in_owner = true
+visible = false

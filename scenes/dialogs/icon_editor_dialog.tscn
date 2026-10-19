@@ -1,0 +1,194 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/dialogs/icon_editor_dialog.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/components/icon_cropper.tscn" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/upload.svg" id="3"]
+
+[sub_resource type="StyleBoxEmpty" id="Style_motd"]
+
+[node name="IconEditorDialog" type="ConfirmationDialog"]
+title = "Server icon"
+size = Vector2i(940, 640)
+min_size = Vector2i(820, 560)
+ok_button_text = "Save icon"
+dialog_hide_on_ok = false
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+offset_left = 16.0
+offset_top = 12.0
+offset_right = 924.0
+offset_bottom = 584.0
+theme_override_constants/separation = 12
+
+[node name="TopRow" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="ChooseButton" type="Button" parent="VBox/TopRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "PNG, JPEG, WebP, SVG, BMP and TGA open directly. GIF, AVIF, HEIC, ICO, TIFF, JPEG XL and PSD are converted with an installed tool such as ImageMagick (animations use their first frame). You can also drop an image onto this window."
+theme_type_variation = &"AccentButton"
+text = "Choose image…"
+icon = ExtResource("3")
+
+[node name="SourceLabel" type="Label" parent="VBox/TopRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text = "No image chosen"
+text_overrun_behavior = 3
+
+[node name="Body" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 16
+
+[node name="CropArea" type="PanelContainer" parent="VBox/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_type_variation = &"CardPanel"
+
+[node name="Cropper" parent="VBox/Body/CropArea" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Drag to move the square, drag a corner to resize it, scroll to zoom, arrow keys to nudge (Shift for bigger steps)."
+
+[node name="EmptyLabel" type="Label" parent="VBox/Body/CropArea"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"MutedLabel"
+text = "Choose an image to start"
+horizontal_alignment = 1
+
+[node name="Side" type="VBoxContainer" parent="VBox/Body"]
+custom_minimum_size = Vector2(300, 0)
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PreviewTitle" type="Label" parent="VBox/Body/Side"]
+layout_mode = 2
+theme_type_variation = &"CardTitle"
+text = "PREVIEW"
+
+[node name="PreviewRow" type="HBoxContainer" parent="VBox/Body/Side"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="Preview1x" type="TextureRect" parent="VBox/Body/Side/PreviewRow"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Actual size (64×64)"
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Preview2x" type="TextureRect" parent="VBox/Body/Side/PreviewRow"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(128, 128)
+layout_mode = 2
+tooltip_text = "Twice the size, to check details"
+expand_mode = 1
+stretch_mode = 5
+
+[node name="ListTitle" type="Label" parent="VBox/Body/Side"]
+layout_mode = 2
+theme_type_variation = &"CardTitle"
+text = "IN THE SERVER LIST"
+
+[node name="ListMock" type="PanelContainer" parent="VBox/Body/Side"]
+layout_mode = 2
+tooltip_text = "Roughly how the server appears in Minecraft's multiplayer list."
+theme_type_variation = &"CardPanel"
+
+[node name="Row" type="HBoxContainer" parent="VBox/Body/Side/ListMock"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="MockIcon" type="TextureRect" parent="VBox/Body/Side/ListMock/Row"]
+unique_name_in_owner = true
+texture_filter = 1
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+size_flags_vertical = 0
+expand_mode = 1
+stretch_mode = 5
+
+[node name="Text" type="VBoxContainer" parent="VBox/Body/Side/ListMock/Row"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 2
+
+[node name="NameRow" type="HBoxContainer" parent="VBox/Body/Side/ListMock/Row/Text"]
+layout_mode = 2
+
+[node name="MockName" type="Label" parent="VBox/Body/Side/ListMock/Row/Text/NameRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Server"
+text_overrun_behavior = 3
+
+[node name="MockPlayers" type="Label" parent="VBox/Body/Side/ListMock/Row/Text/NameRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "0/20"
+
+[node name="MockMotd" type="RichTextLabel" parent="VBox/Body/Side/ListMock/Row/Text"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(190, 36)
+layout_mode = 2
+mouse_filter = 2
+theme_type_variation = &"ConsoleOutput"
+theme_override_styles/normal = SubResource("Style_motd")
+bbcode_enabled = true
+scroll_active = false
+autowrap_mode = 3
+
+[node name="CropButtons" type="HBoxContainer" parent="VBox/Body/Side"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="FillButton" type="Button" parent="VBox/Body/Side/CropButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Largest square inside the image: no empty space, edges may be cut off."
+text = "Fill"
+
+[node name="FitButton" type="Button" parent="VBox/Body/Side/CropButtons"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Whole image visible, with transparent space around it."
+text = "Fit"
+
+[node name="PixelArtCheck" type="CheckButton" parent="VBox/Body/Side"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Scale with hard pixel edges instead of smoothing. Use it for pixel-art or small (e.g. 16×16) source images."
+text = "Pixel art"
+
+[node name="StatusLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(880, 0)
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="FileDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Choose an image"
+size = Vector2i(820, 520)
+ok_button_text = "Open"
+file_mode = 0
+access = 2
+use_native_dialog = true

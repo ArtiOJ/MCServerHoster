@@ -50,6 +50,13 @@ var notify_when: NotifyWhen = NotifyWhen.UNFOCUSED
 var notify_categories := DEFAULT_NOTIFY_CATEGORIES.duplicate()
 ## Server id -> newest Paper build already announced, so each update is notified once.
 var notified_update_builds := {}
+## Interface size (UI scale factor); 0 = automatic from the screen. See UiScale.
+var ui_scale := 0.0
+## Ports this app opened in the firewall (its own rules, safe to clean up later).
+var firewall_app_ports := PackedInt32Array()
+## Game ports managed servers used before (changed or deleted servers), so firewall rules
+## left behind for them can be recognised as stale.
+var previous_game_ports := PackedInt32Array()
 ## Running in tests or with `-- --no-autostart` skips auto-starting servers.
 var autostart_enabled := true
 ## `-- --profile=<name>` keeps a separate settings file (used by integration tests).
@@ -130,6 +137,9 @@ func load_settings() -> void:
 				notify_categories[key] = bool(saved_categories[key])
 	var saved_updates = data.get("notified_update_builds", {})
 	notified_update_builds = saved_updates if saved_updates is Dictionary else {}
+	ui_scale = clampf(float(data.get("ui_scale", ui_scale)), 0.0, 3.0)
+	firewall_app_ports = PackedInt32Array(data.get("firewall_app_ports", []))
+	previous_game_ports = PackedInt32Array(data.get("previous_game_ports", []))
 
 
 func save_settings() -> void:
@@ -152,6 +162,9 @@ func save_settings() -> void:
 		"notify_when": notify_when,
 		"notify_categories": notify_categories,
 		"notified_update_builds": notified_update_builds,
+		"ui_scale": ui_scale,
+		"firewall_app_ports": Array(firewall_app_ports),
+		"previous_game_ports": Array(previous_game_ports),
 	}
 	var f := FileAccess.open(settings_path, FileAccess.WRITE)
 	if f == null:

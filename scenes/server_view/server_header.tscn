@@ -8,6 +8,8 @@
 [ext_resource type="Texture2D" path="res://assets/icons/more.svg" id="6"]
 [ext_resource type="Texture2D" path="res://assets/icons/download.svg" id="7"]
 [ext_resource type="Texture2D" path="res://assets/icons/chevron_down.svg" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/components/server_icon_view.tscn" id="icon_view"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/icon_editor_dialog.tscn" id="icon_editor"]
 
 [node name="ServerHeader" type="PanelContainer"]
 theme_type_variation = &"HeaderPanel"
@@ -23,6 +25,13 @@ custom_minimum_size = Vector2(4, 44)
 layout_mode = 2
 size_flags_vertical = 4
 color = Color(0.247, 0.725, 0.498, 1)
+
+[node name="IconView" parent="HBox" instance=ExtResource("icon_view")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+tooltip_text = "Server icon shown in Minecraft's server list. Click to change it."
+clickable = true
 
 [node name="Titles" type="VBoxContainer" parent="HBox"]
 layout_mode = 2
@@ -133,7 +142,7 @@ size_flags_vertical = 4
 tooltip_text = "More actions"
 icon = ExtResource("6")
 icon_alignment = 1
-item_count = 11
+item_count = 12
 popup/item_0/text = "Open server folder"
 popup/item_0/id = 0
 popup/item_1/text = "Copy connect address"
@@ -150,9 +159,15 @@ popup/item_6/text = "Duplicate…"
 popup/item_6/id = 7
 popup/item_7/text = "Import world…"
 popup/item_7/id = 9
-popup/item_8/text = "Keep or discard temporary copy…"
-popup/item_8/id = 8
-popup/item_9/id = 100
-popup/item_9/separator = true
-popup/item_10/text = "Delete server…"
-popup/item_10/id = 6
+popup/item_8/text = "Change icon…"
+popup/item_8/id = 10
+popup/item_9/text = "Keep or discard temporary copy…"
+popup/item_9/id = 8
+popup/item_10/id = 100
+popup/item_10/separator = true
+popup/item_11/text = "Delete server…"
+popup/item_11/id = 6
+
+[node name="IconEditorDialog" parent="." instance=ExtResource("icon_editor")]
+unique_name_in_owner = true
+visible = false

@@ -33,6 +33,8 @@ func _ready() -> void:
 		return
 	get_tree().auto_accept_quit = false
 	get_window().min_size = Vector2i(1100, 680)
+	# Interface size (Preferences); also sets the scaled minimum window size.
+	UiScale.apply(get_window())
 	PowerManager.shutting_down.connect(_on_system_shutdown)
 	if AppSettings.launched_minimized():
 		DisplayServer.window_set_mode.call_deferred(DisplayServer.WINDOW_MODE_MINIMIZED)
@@ -151,7 +153,17 @@ func _show_next_temp_decision() -> void:
 			return
 
 
+const IMAGE_EXTENSIONS: PackedStringArray = ["png", "jpg", "jpeg", "webp", "svg", "bmp", "tga", "gif", "avif", "heic", "heif", "ico", "tif", "tiff", "jxl", "psd"]
+
+
 func _on_files_dropped(files: PackedStringArray) -> void:
+	# The icon editor handles its own drops; an image dropped elsewhere opens it for the
+	# current server instead of being treated as a plugin.
+	if _current_id != "" and (_server_view.is_icon_editor_open()
+			or Array(files).all(func(f: String) -> bool: return f.get_extension().to_lower() in IMAGE_EXTENSIONS)):
+		if not _server_view.is_icon_editor_open():
+			_server_view.open_icon_editor(files[0])
+		return
 	if _open_server_import_for(files):
 		return
 	if _open_world_import_for(files):

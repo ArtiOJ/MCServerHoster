@@ -10,6 +10,7 @@ const STOP_ICON := preload("res://assets/icons/stop.svg")
 var instance: ServerInstance
 
 @onready var _color_bar: ColorRect = %ColorBar
+@onready var _icon_view: ServerIconView = %IconView
 @onready var _name_label: Label = %NameLabel
 @onready var _dot: StatusDot = %StatusDot
 @onready var _state_label: Label = %StateLabel
@@ -48,6 +49,7 @@ func _refresh() -> void:
 		return
 	var cfg := instance.config
 	_color_bar.color = cfg.color
+	_icon_view.show_instance(instance)
 	_name_label.text = cfg.display_name
 	_dot.show_state(instance)
 	_state_label.text = instance.state_name()

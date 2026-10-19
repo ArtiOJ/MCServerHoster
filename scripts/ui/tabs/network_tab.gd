@@ -4,8 +4,17 @@ extends ServerTab
 ## guidance for one server. Third-party lookups only run when this tab is shown or a
 ## button is pressed (see NetworkService).
 
+const RULE_ROW_SCENE := preload("res://scenes/components/firewall_rule_row.tscn")
+
 var _testing := false
 var _last_result := {}
+var _removing := false
+## Server id -> its previous game port, while the firewall still needs attention after a change.
+var _moved_from := {}
+## Rule waiting for confirmation in the remove dialog.
+var _pending_rule := {}
+## Signature of the rows currently in the old-rules list (avoids rebuilding on every refresh).
+var _rules_key := ""
 
 @onready var _refresh_button: Button = %RefreshButton
 @onready var _lan_value: Label = %LanValue
@@ -41,6 +50,13 @@ var _last_result := {}
 @onready var _dhcp_notice: PanelContainer = %DhcpNotice
 @onready var _dhcp_label: Label = %DhcpLabel
 @onready var _dhcp_reserved_button: Button = %DhcpReservedButton
+@onready var _port_move_notice: PanelContainer = %PortMoveNotice
+@onready var _port_move_label: Label = %PortMoveLabel
+@onready var _allow_new_port_button: Button = %AllowNewPortButton
+@onready var _remove_old_rule_button: Button = %RemoveOldRuleButton
+@onready var _old_rules_box: VBoxContainer = %OldRulesBox
+@onready var _old_rules_list: VBoxContainer = %OldRulesList
+@onready var _remove_rule_confirm: ConfirmationDialog = %RemoveRuleConfirm
 @onready var _rcon_label: Label = %RconLabel
 @onready var _rcon_warning: PanelContainer = %RconWarning
 @onready var _rcon_warning_label: Label = %RconWarningLabel
@@ -58,6 +74,13 @@ func _ready() -> void:
 	_apply_port_button.pressed.connect(_apply_port)
 	_allow_top_button.pressed.connect(_allow_firewall)
 	_allow_button.pressed.connect(_allow_firewall)
+	_allow_new_port_button.pressed.connect(_allow_firewall)
+	_remove_old_rule_button.pressed.connect(func() -> void:
+		var rule := _old_app_rule(int(_moved_from.get(instance.config.id, 0)))
+		if not rule.is_empty():
+			_request_remove(rule))
+	_remove_rule_confirm.confirmed.connect(func() -> void: _remove_rule(_pending_rule))
+	NetworkService.port_moved.connect(_on_port_moved)
 	_open_router_button.pressed.connect(func() -> void:
 		var gw := str(PlatformBackend.get_current().default_route().get("gateway", ""))
 		if gw != "":
@@ -143,12 +166,17 @@ func _refresh() -> void:
 		_firewall_label.add_theme_color_override("font_color", Color("f2b84b") if fw.allowed == "lan" else Color("e05555"))
 	_firewall_command.text = NetworkService.firewall_command(fw.name, cfg.port)
 	_firewall_row.visible = fw.active and fw.allowed != "yes"
-	_firewall_notice.visible = fw.active and fw.allowed != "yes"
+	var blocked: bool = fw.active and fw.allowed != "yes"
+	var show_move := _refresh_port_move(cfg, fw.active, blocked)
+	_firewall_notice.visible = blocked and not show_move
+	_refresh_old_rules(fw.active)
 	_firewall_notice_label.text = "The %s firewall on this computer blocks port %d, so nobody else can join%s." % [
 		fw.name, cfg.port, " from the internet" if fw.allowed == "lan" else ", not even on your Wi-Fi"]
 	for b: Button in [_allow_top_button, _allow_button]:
 		b.disabled = _allowing
 		b.text = "Waiting for password…" if _allowing else "Allow in firewall"
+	_allow_new_port_button.disabled = _allowing or _removing
+	_remove_old_rule_button.disabled = _allowing or _removing
 
 	var rcon_port := instance.get_properties().get_int("rcon.port", cfg.rcon_port)
 	var bind := instance.get_properties().get_value("server-ip", "")
@@ -159,6 +187,86 @@ func _refresh() -> void:
 	var forwarded_rcon := NetworkService.mappings.has(rcon_port)
 	_rcon_warning.visible = forwarded_rcon
 	_rcon_warning_label.text = "Port %d (RCON) is currently forwarded on your router. Remove that forward." % rcon_port
+
+
+func _on_port_moved(server_id: String, old_port: int, _new_port: int) -> void:
+	_moved_from[server_id] = old_port
+	if instance != null and instance.config.id == server_id:
+		_refresh()
+
+
+## The rule Server Manager opened for [param port], if it is now unused.
+func _old_app_rule(port: int) -> Dictionary:
+	if port <= 0:
+		return {}
+	for r in NetworkService.stale_firewall_rules():
+		if r.port == port and r.origin == "app":
+			return r
+	return {}
+
+
+## Shows what the firewall still needs after a port change. Returns whether the notice is shown.
+func _refresh_port_move(cfg: ServerConfig, active: bool, new_blocked: bool) -> bool:
+	var moved := int(_moved_from.get(cfg.id, 0))
+	if moved <= 0 or moved == cfg.port or not active:
+		_moved_from.erase(cfg.id)
+		_port_move_notice.visible = false
+		return false
+	var old_rule := _old_app_rule(moved)
+	if old_rule.is_empty() and not new_blocked:
+		_moved_from.erase(cfg.id)  # Nothing left to do.
+		_port_move_notice.visible = false
+		return false
+	var parts := PackedStringArray(["Port changed from %d to %d." % [moved, cfg.port]])
+	if new_blocked:
+		parts.append("The firewall blocks the new port.")
+	if not old_rule.is_empty():
+		parts.append("The old port is still open in the firewall.")
+	_port_move_label.text = " ".join(parts)
+	_allow_new_port_button.visible = new_blocked
+	_remove_old_rule_button.visible = not old_rule.is_empty()
+	_port_move_notice.visible = true
+	return true
+
+
+func _refresh_old_rules(active: bool) -> void:
+	var stale: Array[Dictionary] = NetworkService.stale_firewall_rules() if active else ([] as Array[Dictionary])
+	var key := "%s|%s" % [_removing or _allowing, ",".join(stale.map(func(r: Dictionary) -> String: return "%d/%s/%s" % [r.port, r.origin, r.source]))]
+	if key == _rules_key:
+		return
+	_rules_key = key
+	for child in _old_rules_list.get_children():
+		child.queue_free()
+	for r in stale:
+		var row: FirewallRuleRow = RULE_ROW_SCENE.instantiate()
+		_old_rules_list.add_child(row)
+		row.setup(r, _removing or _allowing)
+		row.remove_requested.connect(_request_remove)
+	_old_rules_box.visible = not stale.is_empty()
+
+
+func _request_remove(rule: Dictionary) -> void:
+	if rule.origin == "app":
+		_remove_rule(rule)
+		return
+	_pending_rule = rule
+	_remove_rule_confirm.dialog_text = ("Server Manager didn't create the firewall rule for port %d; you or another program added it. "
+		+ "No server here uses that port now. Remove it anyway? If something else on this computer needs port %d, it will be blocked.") % [rule.port, rule.port]
+	_remove_rule_confirm.popup_centered()
+
+
+func _remove_rule(rule: Dictionary) -> void:
+	if _removing or rule.is_empty():
+		return
+	_removing = true
+	_refresh()
+	var result: Dictionary = await NetworkService.remove_firewall_rule(rule)
+	_removing = false
+	if result.ok:
+		Notifier.success(result.message)
+	else:
+		Notifier.error(result.message)
+	_refresh()
 
 
 func _update_port_status() -> void:

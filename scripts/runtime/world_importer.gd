@@ -325,6 +325,13 @@ static func _transfer(src: String, dst: String, move: bool) -> Error:
 	return FileOps.copy_tree(src, dst)
 
 
+## Layout of the world in [param world_dir]: {layout, nether_src, end_src, dimensions}.
+static func detect_layout(world_dir: String) -> Dictionary:
+	var result := {"layout": Layout.SINGLEPLAYER, "nether_src": "", "end_src": "", "dimensions": PackedStringArray()}
+	_detect_layout(world_dir, result)
+	return result
+
+
 static func _detect_layout(world_dir: String, result: Dictionary) -> void:
 	var dims := PackedStringArray()
 	if DirAccess.dir_exists_absolute(world_dir.path_join("dimensions")):

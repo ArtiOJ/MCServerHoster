@@ -9,6 +9,8 @@
 [ext_resource type="Texture2D" path="res://assets/icons/server.svg" id="7"]
 [ext_resource type="Texture2D" path="res://assets/icons/copy.svg" id="8"]
 [ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/components/server_icon_view.tscn" id="icon_view"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/icon_editor_dialog.tscn" id="icon_editor"]
 
 [node name="Overview" type="MarginContainer"]
 theme_override_constants/margin_left = 20
@@ -98,6 +100,37 @@ theme_override_constants/separation = 12
 layout_mode = 2
 theme_type_variation = &"SectionHeader"
 text = "Details"
+
+[node name="IconRow" type="HBoxContainer" parent="Scroll/VBox/Bottom/DetailsCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="IconView" parent="Scroll/VBox/Bottom/DetailsCard/VBox/IconRow" instance=ExtResource("icon_view")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(64, 64)
+layout_mode = 2
+tooltip_text = "Server icon shown in Minecraft's server list. Click to change it."
+clickable = true
+
+[node name="IconText" type="VBoxContainer" parent="Scroll/VBox/Bottom/DetailsCard/VBox/IconRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 4
+theme_override_constants/separation = 6
+
+[node name="IconStatus" type="Label" parent="Scroll/VBox/Bottom/DetailsCard/VBox/IconRow/IconText"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "No icon"
+autowrap_mode = 3
+
+[node name="ChangeIconButton" type="Button" parent="Scroll/VBox/Bottom/DetailsCard/VBox/IconRow/IconText"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Choose and crop an image for the server list. Any common image format works."
+text = "Change icon…"
 
 [node name="Grid" type="GridContainer" parent="Scroll/VBox/Bottom/DetailsCard/VBox"]
 layout_mode = 2
@@ -221,3 +254,7 @@ size_flags_vertical = 3
 
 [node name="TickTimer" type="Timer" parent="."]
 unique_name_in_owner = true
+
+[node name="IconEditorDialog" parent="." instance=ExtResource("icon_editor")]
+unique_name_in_owner = true
+visible = false

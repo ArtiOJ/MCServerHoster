@@ -22,6 +22,10 @@ extends ServerTab
 @onready var _notice_label: Label = %NoticeLabel
 @onready var _copy_button: Button = %CopyAddressButton
 @onready var _folder_button: Button = %OpenFolderButton
+@onready var _icon_view: ServerIconView = %IconView
+@onready var _icon_status: Label = %IconStatus
+@onready var _change_icon_button: Button = %ChangeIconButton
+@onready var _icon_editor: IconEditorDialog = %IconEditorDialog
 @onready var _tick: Timer = %TickTimer
 
 
@@ -31,6 +35,8 @@ func _ready() -> void:
 		DisplayServer.clipboard_set(instance.connect_address())
 		Notifier.info("Copied %s to the clipboard." % instance.connect_address()))
 	_folder_button.pressed.connect(func() -> void: OS.shell_open(instance.config.directory))
+	_icon_view.clicked.connect(func() -> void: _icon_editor.open(instance))
+	_change_icon_button.pressed.connect(func() -> void: _icon_editor.open(instance))
 
 
 func _on_bound() -> void:
@@ -45,6 +51,7 @@ func _on_bound() -> void:
 
 func _refresh_all() -> void:
 	var cfg := instance.config
+	_refresh_icon()
 	var public := NetworkService.public_address(cfg.port)
 	_address_value.text = instance.connect_address() + ("   ·   from the internet: %s" % public if public != "" else "")
 	_version_value.text = "Paper %s, build #%d (%s)" % [cfg.mc_version, cfg.paper_build, cfg.build_channel.to_lower()]
@@ -125,3 +132,19 @@ func _refresh_players() -> void:
 	_online_empty.visible = instance.players.is_empty()
 	_online_empty.text = "Nobody is online." if instance.is_online() else "Server is offline."
 	_refresh_live()
+
+
+func _refresh_icon() -> void:
+	_icon_view.show_instance(instance)
+	var info := ServerIcon.info(instance.config.directory)
+	_icon_status.remove_theme_color_override("font_color")
+	if not info.exists:
+		_icon_status.text = "No server icon. Players see Minecraft's default icon."
+		_change_icon_button.text = "Add icon…"
+	elif not info.valid:
+		_icon_status.text = "server-icon.png is %d×%d; Minecraft only shows 64×64 icons, so it's ignored." % [info.size.x, info.size.y]
+		_icon_status.add_theme_color_override("font_color", Color("f2b84b"))
+		_change_icon_button.text = "Fix icon…"
+	else:
+		_icon_status.text = "64×64 icon shown in the server list."
+		_change_icon_button.text = "Change icon…"
