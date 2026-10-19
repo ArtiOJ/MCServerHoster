@@ -44,6 +44,7 @@ var _day_buttons: Array[Button] = []
 @onready var _text_edit: LineEdit = %ActionTextEdit
 @onready var _warn_check: CheckButton = %WarnCheck
 @onready var _wake_check: CheckButton = %WakeComputerCheck
+@onready var _wake_setup_button: Button = %WakeSetupButton
 @onready var _delay_spin: SpinBox = %DelaySpin
 @onready var _name_edit: LineEdit = %NameEdit
 
@@ -78,7 +79,10 @@ func _ready() -> void:
 	_action_option.item_selected.connect(func(i: int) -> void: _edit(func() -> void: rule.action = i as EventRule.Action))
 	_text_edit.text_changed.connect(func(t: String) -> void: _edit(func() -> void: rule.text = t))
 	_warn_check.toggled.connect(func(on: bool) -> void: _edit(func() -> void: rule.warn_players = on))
-	_wake_check.toggled.connect(func(on: bool) -> void: _edit(func() -> void: rule.wake_computer = on))
+	_wake_check.toggled.connect(_on_wake_toggled)
+	_wake_setup_button.pressed.connect(func() -> void:
+		await WakeSetupDialog.prompt(self)
+		_update_wake_setup())
 	_delay_spin.value_changed.connect(func(v: float) -> void: _edit(func() -> void: rule.delay_seconds = int(v)))
 	_name_edit.text_changed.connect(func(t: String) -> void: _edit(func() -> void: rule.label = t))
 	if rule != null:
@@ -225,6 +229,7 @@ func _update_view() -> void:
 		if a == EventRule.Action.NOTIFY else "Console command (without the leading /) or chat message. Only sent while the server is online."
 	_warn_check.visible = a == EventRule.Action.STOP or a == EventRule.Action.RESTART
 	_wake_check.visible = rule.is_timed()
+	_update_wake_setup()
 
 	_mark(_time_edit, t != EventRule.Trigger.TIME or _valid_time(rule.time_of_day))
 	_mark(_window_start, not rule.window_enabled or _valid_time(rule.window_start))
@@ -251,3 +256,19 @@ static func _valid_time(hhmm: String) -> bool:
 	var h := parts[0].to_int()
 	var m := parts[1].to_int()
 	return h >= 0 and h <= 23 and m >= 0 and m <= 59 and parts[1].length() == 2
+
+
+## Switching "Wake computer" on before the one-time setup offers the setup; declining unticks it.
+func _on_wake_toggled(on: bool) -> void:
+	if on and not WakeHelper.is_installed():
+		if not await WakeSetupDialog.prompt(self):
+			_wake_check.set_pressed_no_signal(false)
+			on = false
+	_edit(func() -> void: rule.wake_computer = on)
+	_update_wake_setup()
+
+
+## Events that are set to wake the computer (Start events by default) show "Set up…" until the
+## one-time setup is done, so a ticked box never silently does nothing.
+func _update_wake_setup() -> void:
+	_wake_setup_button.visible = _wake_check.visible and rule != null and rule.wake_computer and not WakeHelper.is_installed()

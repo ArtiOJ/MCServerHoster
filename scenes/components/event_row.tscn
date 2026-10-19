@@ -301,6 +301,14 @@ layout_mode = 2
 tooltip_text = "If the computer is asleep, wake it shortly before this event runs (needs “Wake for events” and the one-time setup in Preferences → Power)."
 text = "Wake computer"
 
+[node name="WakeSetupButton" type="Button" parent="VBox/Editor/Grid/DoRow"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Waking the computer needs a one-time setup (one password prompt)."
+theme_type_variation = &"AccentButton"
+text = "Set up…"
+
 [node name="DelayLabel" type="Label" parent="VBox/Editor/Grid"]
 layout_mode = 2
 theme_type_variation = &"MutedLabel"

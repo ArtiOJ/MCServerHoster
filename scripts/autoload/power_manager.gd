@@ -41,6 +41,10 @@ var wake_plan := {}
 var wake_error := ""
 ## Test hook: when set, called instead of the real helper with (args: Array) -> Dictionary.
 var wake_runner := Callable()
+## Wi-Fi wake-on-WLAN currently armed: {phy, pattern} or empty. Kept armed while the feature is
+## on (not only at sleep time) so NetworkManager sees it and keeps Wi-Fi connected during sleep.
+var _armed_wowlan := {}
+var _wowlan_busy := false
 static var _re_signal := RegEx.create_from_string("PrepareFor(Sleep|Shutdown) \\((true|false)")
 
 @onready var _poll_timer: Timer = $PollTimer
@@ -63,6 +67,9 @@ func _ready() -> void:
 
 
 func _exit_tree() -> void:
+	if not _armed_wowlan.is_empty():
+		# Nothing listens while the app is closed, so stop waking the computer for connections.
+		_runner().call(["wowlan", _armed_wowlan.phy, "off"])
 	_release(_delay_lock)
 	_release(_block_lock)
 	if _monitor.has("pid") and OS.is_process_running(_monitor.pid):
@@ -102,6 +109,7 @@ func update_locks() -> void:
 		AppSettings.SleepPolicy.BLOCK_WHILE_RUNNING:
 			block = alive
 	_set_lock(_block_lock, "sleep" if block else "", "block", "Minecraft servers are in use")
+	refresh_wake()
 
 
 ## Parses a `gdbus monitor` line into ["Sleep"|"Shutdown", active: bool], or [] if irrelevant.
@@ -213,9 +221,12 @@ func _arm_wake() -> void:
 		var r: Dictionary = await FileOps.run_async(self, _runner().bind(["alarm", str(plan.alarm)]))
 		if not r.ok:
 			errors.append("wake alarm: " + str(r.message))
-	if plan.wowlan != "":
+	if plan.wowlan != "" and (_armed_wowlan.get("pattern", "") != plan.wowlan or _armed_wowlan.get("phy", "") != plan.phy):
+		# Normally already armed by refresh_wake(); this covers a change made right before sleep.
 		var r: Dictionary = await FileOps.run_async(self, _runner().bind(["wowlan", plan.phy, "on", plan.wowlan]))
-		if not r.ok:
+		if r.ok:
+			_armed_wowlan = {"phy": plan.phy, "pattern": plan.wowlan}
+		else:
 			errors.append("Wi-Fi wake-up: " + str(r.message))
 	wake_plan = plan
 	wake_error = "; ".join(errors)
@@ -228,8 +239,27 @@ func _disarm_wake() -> void:
 	wake_plan = {}
 	if int(plan.get("alarm", -1)) > 0:
 		FileOps.run_async(self, _runner().bind(["alarm", "clear"]))
-	if str(plan.get("wowlan", "")) != "":
-		FileOps.run_async(self, _runner().bind(["wowlan", plan.phy, "off"]))
+	# Wi-Fi wake stays armed: refresh_wake() manages it for as long as the feature is on.
+
+
+## Arms or clears Wi-Fi wake-on-WLAN to match the settings and servers. Called on every policy
+## tick; only runs the helper when something changed.
+func refresh_wake() -> void:
+	if _wowlan_busy or asleep or (not WakeHelper.is_installed() and not wake_runner.is_valid()):
+		return
+	var plan := plan_wake()
+	var want := {"phy": plan.phy, "pattern": plan.wowlan} if plan.wowlan != "" else {}
+	if want == _armed_wowlan:
+		return
+	_wowlan_busy = true
+	var args: Array = ["wowlan", _armed_wowlan.phy, "off"] if want.is_empty() else ["wowlan", want.phy, "on", want.pattern]
+	var r: Dictionary = await FileOps.run_async(self, _runner().bind(args))
+	_wowlan_busy = false
+	if r.ok:
+		_armed_wowlan = want
+		wake_error = ""
+	else:
+		wake_error = "Wi-Fi wake-up: " + str(r.message)
 
 
 ## The helper call used for arming; tests replace it through [member wake_runner].

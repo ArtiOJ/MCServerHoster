@@ -42,6 +42,12 @@ func _ready() -> void:
 	PowerManager.update_locks()
 	await get_tree().create_timer(0.5).timeout
 	_check(_inhibitors().contains("Stopping Minecraft servers cleanly") or _inhibitors().contains("Server Manager"), "sleep delay lock held although no server runs")
+	var iface := WakeHelper.wake_interface()
+	if iface.get("wireless", false):
+		# Armed before any sleep, so NetworkManager sees it and keeps Wi-Fi connected while asleep.
+		var early := _calls.filter(func(c: Array) -> bool: return c[0] == "wowlan" and c[2] == "on")
+		_check(early.size() == 1 and early[0][3] == WakeHelper.tcp_pattern(iface.mac, 25999), "Wi-Fi wake armed before sleeping, for port 25999 on %s" % iface.phy)
+	_calls.clear()
 
 	var due := inst.scheduler.next_run_of(inst.config.events[0])
 	PowerManager.handle_monitor_line("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (true,)")
@@ -49,26 +55,24 @@ func _ready() -> void:
 	await get_tree().create_timer(0.3).timeout
 	var alarm := _calls.filter(func(c: Array) -> bool: return c[0] == "alarm")
 	_check(alarm.size() == 1 and int(alarm[0][1]) == due - WakeHelper.LEAD_SEC, "RTC alarm set %d s before the start event" % WakeHelper.LEAD_SEC)
-	var iface := WakeHelper.wake_interface()
-	var wowlan := _calls.filter(func(c: Array) -> bool: return c[0] == "wowlan")
-	if iface.get("wireless", false):
-		_check(wowlan.size() == 1 and wowlan[0][3] == WakeHelper.tcp_pattern(iface.mac, 25999), "Wi-Fi wake pattern armed for port 25999 on %s" % iface.phy)
-	else:
-		_check(wowlan.is_empty(), "no Wi-Fi wake on a wired connection")
+	_check(not _calls.any(func(c: Array) -> bool: return c[0] == "wowlan"), "Wi-Fi wake not re-armed at sleep (already armed)")
 	await get_tree().create_timer(0.5).timeout
 	_check(not _inhibitors().contains("Stopping Minecraft servers cleanly"), "delay lock released so the computer can sleep")
 
 	_calls.clear()
 	PowerManager.handle_monitor_line("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (false,)")
-	await _wait_for(func() -> bool: return _calls.size() >= (2 if iface.get("wireless", false) else 1), 5.0)
+	await _wait_for(func() -> bool: return _calls.size() >= 1, 5.0)
+	await get_tree().create_timer(0.5).timeout
 	_check(_calls.has(["alarm", "clear"]), "alarm cleared after waking")
-	if iface.get("wireless", false):
-		_check(_calls.any(func(c: Array) -> bool: return c[0] == "wowlan" and c[2] == "off"), "Wi-Fi wake disabled after waking")
+	_check(not _calls.any(func(c: Array) -> bool: return c[0] == "wowlan"), "Wi-Fi wake stays armed after waking")
+	_calls.clear()
 
 	AppSettings.wake_for_events = false
 	AppSettings.wake_on_connection = false
 	PowerManager.update_locks()
 	await get_tree().create_timer(0.5).timeout
+	if iface.get("wireless", false):
+		_check(_calls.any(func(c: Array) -> bool: return c[0] == "wowlan" and c[2] == "off"), "Wi-Fi wake cleared when the feature is switched off")
 	_check(not _inhibitors().contains("Stopping Minecraft servers cleanly"), "no lock when waking is switched off and no server runs")
 	PowerManager.wake_runner = Callable()
 	ServerManager.delete_server(inst.config.id, true, true)

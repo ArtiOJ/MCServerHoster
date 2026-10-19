@@ -23,7 +23,6 @@ extends ConfirmationDialog
 @onready var _wake_status: Label = %WakeStatus
 @onready var _setup_wake_button: Button = %SetupWakeButton
 @onready var _remove_wake_button: Button = %RemoveWakeButton
-@onready var _wake_setup_dialog: ConfirmationDialog = %WakeSetupDialog
 @onready var _limit_notice: PanelContainer = %LimitNotice
 @onready var _copy_limit_button: Button = %CopyLimitButton
 @onready var _desktop_notify_check: CheckButton = %DesktopNotifyCheck
@@ -42,14 +41,10 @@ extends ConfirmationDialog
 
 
 func _ready() -> void:
-	_setup_wake_button.pressed.connect(_start_wake_setup)
+	_setup_wake_button.pressed.connect(_run_wake_setup)
 	_remove_wake_button.pressed.connect(_remove_wake)
-	_wake_setup_dialog.confirmed.connect(_install_wake)
 	for c: CheckButton in [_wake_events_check, _wake_connect_check]:
-		c.toggled.connect(func(_on: bool) -> void:
-			AppSettings.wake_for_events = _wake_events_check.button_pressed
-			AppSettings.wake_on_connection = _wake_connect_check.button_pressed
-			_refresh_wake())
+		c.toggled.connect(_on_wake_toggled.bind(c))
 	confirmed.connect(_apply)
 	# Interface size previews live; Cancel puts the saved size back.
 	_ui_scale_option.item_selected.connect(func(index: int) -> void: _preview_scale(UiScale.OPTIONS[index]))
@@ -90,8 +85,9 @@ func open() -> void:
 	_wake_check.disabled = not PowerManager.supported
 	_power_status.text = PowerManager.status_text()
 	_saved_wake = [AppSettings.wake_for_events, AppSettings.wake_on_connection]
-	_wake_events_check.button_pressed = AppSettings.wake_for_events
-	_wake_connect_check.button_pressed = AppSettings.wake_on_connection
+	# Shown as on only when they can work; switching one on before setup offers the setup.
+	_wake_events_check.set_pressed_no_signal(AppSettings.wake_for_events and WakeHelper.is_installed())
+	_wake_connect_check.set_pressed_no_signal(AppSettings.wake_on_connection and WakeHelper.is_installed())
 	_refresh_wake()
 	_limit_notice.visible = PowerManager.supported and PowerManager.max_delay_sec < 60.0
 	_desktop_notify_check.button_pressed = AppSettings.desktop_notifications
@@ -184,23 +180,25 @@ func _refresh_wake() -> void:
 	_wake_status.text = "Waiting for your password…" if _wake_busy else PowerManager.describe_wake()
 
 
-func _start_wake_setup() -> void:
-	_wake_setup_dialog.dialog_text = "To wake this computer from sleep, Server Manager needs to set its wake-up alarm, which only root can do. This installs:\n\n%s\n\nYour password is asked once now. Nothing else on the system is changed, and “Remove” uninstalls both files." % WakeHelper.install_summary()
-	_wake_setup_dialog.popup_centered()
-
-
-func _install_wake() -> void:
+func _run_wake_setup() -> void:
 	_wake_busy = true
 	_refresh_wake()
-	var staging := ProjectSettings.globalize_path("user://wake-setup")
-	var result: Dictionary = await FileOps.run_async(self, func() -> Dictionary: return WakeHelper.install(staging))
+	await WakeSetupDialog.prompt(self)
 	_wake_busy = false
 	_refresh_wake()
-	if result.ok:
-		Notifier.success(result.message)
-		PowerManager.update_locks()
-	else:
-		Notifier.error(result.message)
+
+
+## Switching a wake option on before the one-time setup offers the setup; declining turns it off.
+func _on_wake_toggled(on: bool, check: CheckButton) -> void:
+	if on and not WakeHelper.is_installed() and not _wake_busy:
+		_wake_busy = true
+		var installed := await WakeSetupDialog.prompt(self)
+		_wake_busy = false
+		if not installed:
+			check.set_pressed_no_signal(false)
+	AppSettings.wake_for_events = _wake_events_check.button_pressed
+	AppSettings.wake_on_connection = _wake_connect_check.button_pressed
+	_refresh_wake()
 
 
 func _remove_wake() -> void:
