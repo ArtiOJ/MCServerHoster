@@ -20,6 +20,7 @@ var _server: TCPServer
 ## Each: {peer: StreamPeerTCP, buffer: PackedByteArray, state: int, protocol: int, since: int}
 var _clients: Array[Dictionary] = []
 var _retry_at := 0
+var _listening_port := 0
 
 
 func _ready() -> void:
@@ -35,6 +36,8 @@ func is_listening() -> bool:
 func update() -> void:
 	var want := instance.config.wake_on_connect and instance.state == ServerInstance.State.STOPPED \
 			and not instance.is_process_alive() and instance.orphan_pid <= 0 and not instance.is_temporary()
+	if want and is_listening() and _listening_port != instance.config.port:
+		close()  # The port changed: move to the new one.
 	if want and not is_listening():
 		_listen()
 	elif not want and is_listening():
@@ -68,6 +71,7 @@ func _listen() -> void:
 		start()
 		return
 	last_error = ""
+	_listening_port = instance.config.port
 	start()
 	instance.log_system("Asleep: listening on port %d and will start when a player joins." % instance.config.port)
 	instance.state_changed.emit(instance.state)

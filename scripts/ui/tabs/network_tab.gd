@@ -25,6 +25,13 @@ var _last_result := {}
 @onready var _firewall_row: HBoxContainer = %FirewallRow
 @onready var _firewall_command: LineEdit = %FirewallCommand
 @onready var _copy_firewall_button: Button = %CopyFirewallButton
+@onready var _port_spin: SpinBox = %PortSpin
+@onready var _apply_port_button: Button = %ApplyPortButton
+@onready var _port_status: Label = %PortStatus
+@onready var _firewall_notice: PanelContainer = %FirewallNotice
+@onready var _firewall_notice_label: Label = %FirewallNoticeLabel
+@onready var _allow_top_button: Button = %AllowFirewallTopButton
+@onready var _allow_button: Button = %AllowFirewallButton
 @onready var _open_router_button: Button = %OpenRouterButton
 @onready var _router_value: Label = %RouterValue
 @onready var _external_value: Label = %ExternalValue
@@ -38,7 +45,14 @@ var _last_result := {}
 @onready var _rcon_warning_label: Label = %RconWarningLabel
 
 
+var _allowing := false
+
+
 func _ready() -> void:
+	_port_spin.value_changed.connect(func(_v: float) -> void: _update_port_status())
+	_apply_port_button.pressed.connect(_apply_port)
+	_allow_top_button.pressed.connect(_allow_firewall)
+	_allow_button.pressed.connect(_allow_firewall)
 	_open_router_button.pressed.connect(func() -> void:
 		var gw := str(PlatformBackend.get_current().default_route().get("gateway", ""))
 		if gw != "":
@@ -103,6 +117,9 @@ func _refresh() -> void:
 	_test_button.disabled = _testing
 
 	_refresh_forwarding(cfg)
+	if not _port_spin.get_line_edit().has_focus():
+		_port_spin.set_value_no_signal(cfg.port)
+	_update_port_status()
 
 	var nat := NetworkService.nat_diagnosis()
 	_nat_label.text = nat.text
@@ -121,6 +138,12 @@ func _refresh() -> void:
 		_firewall_label.add_theme_color_override("font_color", Color("f2b84b") if fw.allowed == "lan" else Color("e05555"))
 	_firewall_command.text = NetworkService.firewall_command(fw.name, cfg.port)
 	_firewall_row.visible = fw.active and fw.allowed != "yes"
+	_firewall_notice.visible = fw.active and fw.allowed != "yes"
+	_firewall_notice_label.text = "The %s firewall on this computer blocks port %d, so nobody else can join%s." % [
+		fw.name, cfg.port, " from the internet" if fw.allowed == "lan" else ", not even on your Wi-Fi"]
+	for b: Button in [_allow_top_button, _allow_button]:
+		b.disabled = _allowing
+		b.text = "Waiting for password…" if _allowing else "Allow in firewall"
 
 	var rcon_port := instance.get_properties().get_int("rcon.port", cfg.rcon_port)
 	var bind := instance.get_properties().get_value("server-ip", "")
@@ -131,6 +154,54 @@ func _refresh() -> void:
 	var forwarded_rcon := NetworkService.mappings.has(rcon_port)
 	_rcon_warning.visible = forwarded_rcon
 	_rcon_warning_label.text = "Port %d (RCON) is currently forwarded on your router. Remove that forward." % rcon_port
+
+
+func _update_port_status() -> void:
+	if instance == null:
+		return
+	var port := int(_port_spin.value)
+	var changed := port != instance.config.port
+	var clash := ServerManager.port_owner(port, instance.config.id)
+	_port_status.remove_theme_color_override("font_color")
+	if not changed:
+		_port_status.text = "Players connect on this port." if not instance.is_process_alive() else "In use by the running server."
+		_apply_port_button.disabled = true
+		return
+	if clash != null:
+		_port_status.text = "✕ Used by %s" % clash.config.display_name
+		_port_status.add_theme_color_override("font_color", Color("e05555"))
+		_apply_port_button.disabled = true
+		return
+	if not PlatformBackend.is_port_free(port):
+		_port_status.text = "⚠ Another program is listening on %d" % port
+		_port_status.add_theme_color_override("font_color", Color("f2b84b"))
+	else:
+		_port_status.text = "Restart needed to apply." if instance.is_process_alive() else "Available."
+	_apply_port_button.disabled = false
+
+
+func _apply_port() -> void:
+	var err := instance.set_port(int(_port_spin.value))
+	if err != "":
+		Notifier.error(err)
+		return
+	Notifier.success("%s now uses port %d.%s" % [instance.config.display_name, instance.config.port,
+			" Restart the server to apply it." if instance.is_process_alive() else ""])
+	_refresh()
+
+
+func _allow_firewall() -> void:
+	if _allowing or instance == null:
+		return
+	_allowing = true
+	_refresh()
+	var result: Dictionary = await NetworkService.allow_in_firewall(instance.config.port)
+	_allowing = false
+	if result.ok:
+		Notifier.success(result.message)
+	else:
+		Notifier.error(result.message)
+	_refresh()
 
 
 func _refresh_forwarding(cfg: ServerConfig) -> void:

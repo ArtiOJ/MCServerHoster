@@ -86,6 +86,7 @@ func _ready() -> void:
 	config_changed.connect(wake_listener.update)
 	wake_listener.update.call_deferred()
 	max_players = get_properties().get_int("max-players", 20)
+	sync_port_from_properties()
 	var running := find_running_pid()
 	if running > 0:
 		_attach_on_ready.call_deferred(running)
@@ -122,6 +123,44 @@ func uptime_seconds() -> int:
 
 func get_properties() -> ServerProperties:
 	return ServerProperties.load_file(working_directory().path_join("server.properties"))
+
+
+## Changes the game port everywhere it matters: the config, server.properties
+## (server-port and query.port), the start-on-connect listener and port forwarding.
+## Takes effect for a running server after a restart. Returns "" or an error message.
+func set_port(new_port: int) -> String:
+	if new_port < 1 or new_port > 65535:
+		return "The port must be between 1 and 65535."
+	if new_port == config.port:
+		return ""
+	var clash := ServerManager.port_owner(new_port, config.id)
+	if clash != null:
+		return "Port %d is already used by %s." % [new_port, clash.config.display_name]
+	var old := config.port
+	config.port = new_port
+	if config.rcon_port == new_port:
+		config.rcon_port = ServerManager.allocate_rcon_port(config.id)
+	config.write_managed_properties()
+	save_config()
+	log_system("Port changed from %d to %d.%s" % [old, new_port, " Restart the server to apply it." if is_process_alive() else ""])
+	return ""
+
+
+## Adopts a port that was changed by editing server.properties by hand, so manual edits
+## are not overwritten by the manager's own value.
+func sync_port_from_properties() -> void:
+	var props := ServerProperties.load_file(config.properties_path())
+	if not props.has("server-port"):
+		return
+	var file_port := props.get_int("server-port", config.port)
+	if file_port == config.port:
+		return
+	var err := set_port(file_port)
+	if err != "":
+		log_system("server.properties asks for port %d, but %s Keeping port %d." % [file_port, err.to_lower().trim_suffix("."), config.port], LogParser.Level.WARN)
+		config.write_managed_properties()
+	else:
+		log_system("Using port %d from server.properties (edited outside Server Manager)." % file_port)
 
 
 ## True while stopped but listening for players to wake the server (start on connect).
@@ -180,6 +219,7 @@ func start(temporary := false) -> Error:
 		Notifier.warn("%s: %s" % [config.display_name, msg])
 		return ERR_UNAVAILABLE
 	_restart_delay.stop()
+	sync_port_from_properties()
 	# The wake-on-connect listener holds the game port while stopped; release it first.
 	wake_listener.close()
 	var problem := start_problem()

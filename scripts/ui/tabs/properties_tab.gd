@@ -285,13 +285,15 @@ func _save_raw() -> void:
 	if _raw_file == PROPERTIES_FILE:
 		var parsed := ServerProperties.new()
 		parsed.parse(_raw_editor.text)
-		# The manager owns these keys; keep whatever is currently on disk.
+		# The manager owns RCON and query keys; keep whatever is on disk. server-port may be
+		# edited here and is then adopted as the server's port.
 		var current := ServerProperties.load_file(path)
 		for k in PropertySchema.MANAGED_KEYS:
-			if current.has(k):
+			if k != "server-port" and current.has(k):
 				parsed.set_value(k, current.get_value(k))
 		err = parsed.save_file(path)
 		if err == OK:
+			instance.sync_port_from_properties()
 			err = instance.config.write_managed_properties()
 	else:
 		var f := FileAccess.open(path + ".tmp", FileAccess.WRITE)

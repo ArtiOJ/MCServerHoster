@@ -373,6 +373,35 @@ static func _ufw_port_matches(spec: String, port: int) -> bool:
 	return false
 
 
+## Opens [param port] (TCP) in the active firewall. ufw goes through pkexec, which shows
+## the desktop's normal password prompt; firewalld asks polkit itself. Returns
+## {ok: bool, message: String}. The rule set is re-read afterwards.
+func allow_in_firewall(port: int) -> Dictionary:
+	var fw := firewall_port_status(port)
+	if not fw.active or fw.allowed == "yes":
+		return {"ok": true, "message": "Port %d is already allowed." % port}
+	var code := -1
+	match fw.name:
+		"ufw":
+			var pkexec := PlatformBackend.find_in_path("pkexec")
+			if pkexec == "":
+				return {"ok": false, "message": "pkexec is not installed; run the command in a terminal instead."}
+			var args := PackedStringArray(["ufw", "allow", "%d/tcp" % port, "comment", "Minecraft server (Server Manager)"])
+			code = await FileOps.run_async(self, func() -> int: return OS.execute(pkexec, args))
+		"firewalld":
+			code = await FileOps.run_async(self, func() -> int:
+				var c := OS.execute("firewall-cmd", ["--permanent", "--add-port=%d/tcp" % port])
+				return OS.execute("firewall-cmd", ["--reload"]) if c == 0 else c)
+		_:
+			return {"ok": false, "message": "Unsupported firewall."}
+	var after := firewall_port_status(port)
+	if after.allowed == "yes":
+		return {"ok": true, "message": "Port %d is now allowed through %s." % [port, fw.name]}
+	if code == 126 or code == 127:
+		return {"ok": false, "message": "The password prompt was cancelled or the password was not accepted."}
+	return {"ok": false, "message": "%s did not open the port (exit code %d)." % [fw.name, code]}
+
+
 static func firewall_command(name: String, port: int) -> String:
 	match name:
 		"ufw":

@@ -57,6 +57,44 @@ tooltip_text = "Look up your public address again. It comes from your router (UP
 text = "Refresh"
 icon = ExtResource("4")
 
+[node name="PortRow" type="HBoxContainer" parent="Scroll/Content/AddressesCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="PortKey" type="Label" parent="Scroll/Content/AddressesCard/VBox/PortRow"]
+custom_minimum_size = Vector2(110, 0)
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "The TCP port players connect to. Changing it updates server.properties, start-on-connect and port forwarding; a running server picks it up after a restart. Editing server-port in server.properties by hand also works."
+theme_type_variation = &"MutedLabel"
+text = "Port"
+
+[node name="PortSpin" type="SpinBox" parent="Scroll/Content/AddressesCard/VBox/PortRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+tooltip_text = "The TCP port players connect to."
+min_value = 1024.0
+max_value = 65535.0
+value = 25565.0
+rounded = true
+update_on_text_changed = true
+
+[node name="ApplyPortButton" type="Button" parent="Scroll/Content/AddressesCard/VBox/PortRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Switch the server to this port."
+theme_type_variation = &"AccentButton"
+disabled = true
+text = "Change port"
+
+[node name="PortStatus" type="Label" parent="Scroll/Content/AddressesCard/VBox/PortRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
 [node name="Grid" type="GridContainer" parent="Scroll/Content/AddressesCard/VBox"]
 layout_mode = 2
 theme_override_constants/h_separation = 16
@@ -106,6 +144,30 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
 autowrap_mode = 3
+
+[node name="FirewallNotice" type="PanelContainer" parent="Scroll/Content/AddressesCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="Row" type="HBoxContainer" parent="Scroll/Content/AddressesCard/VBox/FirewallNotice"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="FirewallNoticeLabel" type="Label" parent="Scroll/Content/AddressesCard/VBox/FirewallNotice/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+autowrap_mode = 3
+
+[node name="AllowFirewallTopButton" type="Button" parent="Scroll/Content/AddressesCard/VBox/FirewallNotice/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Add a firewall rule for this port. Your desktop asks for your password."
+theme_type_variation = &"AccentButton"
+text = "Allow in firewall"
 
 [node name="ForwardCard" type="PanelContainer" parent="Scroll/Content"]
 layout_mode = 2
@@ -381,6 +443,13 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Copy command"
 icon = ExtResource("3")
+
+[node name="AllowFirewallButton" type="Button" parent="Scroll/Content/DiagnosticsCard/VBox/FirewallRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Add the rule for you. Your desktop asks for your password."
+theme_type_variation = &"AccentButton"
+text = "Allow in firewall"
 
 [node name="SecurityCard" type="PanelContainer" parent="Scroll/Content"]
 layout_mode = 2

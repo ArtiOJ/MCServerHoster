@@ -98,7 +98,7 @@ godot --headless --path . res://tests/integration/events_test.tscn -- --no-autos
 godot --headless --path . res://tests/integration/wake_test.tscn -- --no-autostart --profile=wk --root=/tmp/sm-wk
 
 # More end-to-end suites: reattach_test (run --phase=1 then --phase=2), server_import_test,
-# world_import_test (--version=1.21.11|26.3 [--legacy-zip=<map.zip>]), failure_test
+# world_import_test (--version=1.21.11|26.3 [--legacy-zip=<map.zip>]), failure_test, port_test
 
 # UI smoke test with screenshots of every view (needs a display)
 godot --path . res://tests/integration/ui_smoke_test.tscn -- --no-autostart --profile=ui --root=/tmp/sm-ui --shots=/tmp/sm-shots
