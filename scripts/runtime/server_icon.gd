@@ -159,7 +159,7 @@ static func convert_to_png(src: String, fmt: String, temp_dir := "") -> Dictiona
 	for c in converters:
 		var dst := dir.path_join("icon-%d-%s.png" % [Time.get_ticks_usec(), c.name])
 		var output: Array = []
-		var code := OS.execute(c.path, converter_args(c.name, src, dst), output, true)
+		var code := PlatformBackend.execute(c.path, converter_args(c.name, src, dst), output, true)
 		if code == 0 and FileAccess.file_exists(dst) and FileAccess.get_file_as_bytes(dst).size() > 8:
 			return {"ok": true, "png_path": dst, "tool": c.name}
 		DirAccess.remove_absolute(dst)

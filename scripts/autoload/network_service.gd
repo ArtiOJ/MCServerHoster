@@ -365,7 +365,7 @@ func firewall_port_status(port: int) -> Dictionary:
 			var verdict := ufw_port_verdict(rules, policy, port)
 			result.merge(verdict, true)
 		"firewalld":
-			var code := OS.execute("firewall-cmd", ["--query-port=%d/tcp" % port])
+			var code := PlatformBackend.execute("firewall-cmd", ["--query-port=%d/tcp" % port])
 			result.allowed = "yes" if code == 0 else ("no" if code == 1 else "unknown")
 	return result
 
@@ -429,11 +429,11 @@ func allow_in_firewall(port: int) -> Dictionary:
 			if pkexec == "":
 				return {"ok": false, "message": "pkexec is not installed; run the command in a terminal instead."}
 			var args := PackedStringArray(["ufw", "allow", "%d/tcp" % port, "comment", "Minecraft server (Server Manager)"])
-			code = await FileOps.run_async(self, func() -> int: return OS.execute(pkexec, args))
+			code = await FileOps.run_async(self, func() -> int: return PlatformBackend.execute(pkexec, args))
 		"firewalld":
 			code = await FileOps.run_async(self, func() -> int:
-				var c := OS.execute("firewall-cmd", ["--permanent", "--add-port=%d/tcp" % port])
-				return OS.execute("firewall-cmd", ["--reload"]) if c == 0 else c)
+				var c := PlatformBackend.execute("firewall-cmd", ["--permanent", "--add-port=%d/tcp" % port])
+				return PlatformBackend.execute("firewall-cmd", ["--reload"]) if c == 0 else c)
 		_:
 			return {"ok": false, "message": "Unsupported firewall."}
 	var after := firewall_port_status(port)
@@ -537,7 +537,7 @@ func firewall_rules() -> Array[Dictionary]:
 		"firewalld":
 			var out: Array = []
 			var rules: Array[Dictionary] = []
-			if OS.execute("firewall-cmd", ["--list-ports"], out) != 0 or out.is_empty():
+			if PlatformBackend.execute("firewall-cmd", ["--list-ports"], out) != 0 or out.is_empty():
 				return rules
 			for token in str(out[0]).strip_edges().split(" ", false):
 				var spec := token.get_slice("/", 0)
@@ -595,11 +595,11 @@ func remove_firewall_rule(rule: Dictionary) -> Dictionary:
 			if pkexec == "":
 				return {"ok": false, "message": "pkexec is not installed; run “sudo %s” in a terminal instead." % " ".join(ufw_delete_args(rule))}
 			var args := ufw_delete_args(rule)
-			code = await FileOps.run_async(self, func() -> int: return OS.execute(pkexec, args))
+			code = await FileOps.run_async(self, func() -> int: return PlatformBackend.execute(pkexec, args))
 		"firewalld":
 			code = await FileOps.run_async(self, func() -> int:
-				var c := OS.execute("firewall-cmd", ["--permanent", "--remove-port=%d/%s" % [port, "udp" if rule.proto == "udp" else "tcp"]])
-				return OS.execute("firewall-cmd", ["--reload"]) if c == 0 else c)
+				var c := PlatformBackend.execute("firewall-cmd", ["--permanent", "--remove-port=%d/%s" % [port, "udp" if rule.proto == "udp" else "tcp"]])
+				return PlatformBackend.execute("firewall-cmd", ["--reload"]) if c == 0 else c)
 		_:
 			return {"ok": false, "message": "No supported firewall is active."}
 	var still := firewall_rules().any(func(r: Dictionary) -> bool:
@@ -632,12 +632,12 @@ func _detect_firewall() -> Dictionary:
 		return {"name": "", "active": false}
 	var out: Array = []
 	if PlatformBackend.find_in_path("firewall-cmd") != "":
-		OS.execute("firewall-cmd", ["--state"], out, true)
+		PlatformBackend.execute("firewall-cmd", ["--state"], out, true)
 		if not out.is_empty() and str(out[0]).strip_edges() == "running":
 			return {"name": "firewalld", "active": true}
 	out.clear()
 	if PlatformBackend.find_in_path("systemctl") != "":
-		OS.execute("systemctl", ["is-active", "ufw"], out)
+		PlatformBackend.execute("systemctl", ["is-active", "ufw"], out)
 		if not out.is_empty() and str(out[0]).strip_edges() == "active":
 			return {"name": "ufw", "active": true}
 	return {"name": "", "active": false}

@@ -106,6 +106,18 @@ func java_executable_in(home: String) -> String:
 	return home.path_join("bin").path_join(exe)
 
 
+## Runs a program and waits for it, passing every argument through literally. Use this
+## instead of OS.execute(): on Linux, Godot 4.7's OS.execute() hands the command to a shell
+## inside double quotes, so `$`, backticks, `"` and `\` in arguments would be expanded or
+## eaten (a file name like `$(rm …).png` would even run a command). Escaping those four
+## characters makes the shell pass each argument through unchanged.
+static func execute(path: String, args, output: Array = [], read_stderr := false) -> int:
+	var safe := PackedStringArray()
+	for a in args:
+		safe.append(str(a).replace("\\", "\\\\").replace("\"", "\\\"").replace("$", "\\$").replace("`", "\\`"))
+	return OS.execute(path, safe, output, read_stderr)
+
+
 ## Resolves an executable name through PATH. Returns "" if not found.
 static func find_in_path(name: String) -> String:
 	var sep := ";" if OS.get_name() == "Windows" else ":"

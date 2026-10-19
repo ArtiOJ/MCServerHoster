@@ -80,7 +80,7 @@ func _inspect(home: String, exe: String) -> JavaRuntime:
 				rt.vendor = line.get_slice("=", 1).strip_edges().trim_prefix("\"").trim_suffix("\"")
 	if rt.version == "":
 		var output: Array = []
-		if OS.execute(exe, ["-version"], output, true) != 0 or output.is_empty():
+		if PlatformBackend.execute(exe, ["-version"], output, true) != 0 or output.is_empty():
 			return null
 		var m := RegEx.create_from_string("version \"([^\"]+)\"").search(str(output[0]))
 		if m == null:

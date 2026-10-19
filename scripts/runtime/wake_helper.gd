@@ -88,7 +88,7 @@ static func install(staging_dir: String) -> Dictionary:
 		f.store_string(pair[1])
 		f.close()
 	var cmd := 'install -D -o root -g root -m 0755 "$1" %s && install -D -o root -g root -m 0644 "$2" %s' % [HELPER_PATH, POLICY_PATH]
-	var code := OS.execute("pkexec", ["/bin/sh", "-c", cmd, "sh", script_src, policy_src])
+	var code := PlatformBackend.execute("pkexec", ["/bin/sh", "-c", cmd, "sh", script_src, policy_src])
 	DirAccess.remove_absolute(script_src)
 	DirAccess.remove_absolute(policy_src)
 	return _result(code, "Wake-up helper installed.", is_installed())
@@ -96,7 +96,7 @@ static func install(staging_dir: String) -> Dictionary:
 
 ## Removes the helper and polkit action (one password prompt). Blocking.
 static func uninstall() -> Dictionary:
-	var code := OS.execute("pkexec", ["/bin/rm", "-f", HELPER_PATH, POLICY_PATH])
+	var code := PlatformBackend.execute("pkexec", ["/bin/rm", "-f", HELPER_PATH, POLICY_PATH])
 	return _result(code, "Wake-up helper removed.", not FileAccess.file_exists(HELPER_PATH))
 
 
@@ -115,7 +115,7 @@ static func _run(args: Array) -> Dictionary:
 	if not is_installed():
 		return {"ok": false, "message": "The wake-up helper is not installed."}
 	var output: Array = []
-	var code := OS.execute("pkexec", PackedStringArray([HELPER_PATH] + args), output, true)
+	var code := PlatformBackend.execute("pkexec", PackedStringArray([HELPER_PATH] + args), output, true)
 	var text := str(output[0]).strip_edges() if not output.is_empty() else ""
 	return {"ok": code == 0, "message": text if code != 0 else "ok", "code": code}
 

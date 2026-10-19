@@ -360,7 +360,7 @@ func _poll_monitor() -> void:
 
 func _read_max_delay() -> float:
 	var output: Array = []
-	if OS.execute("busctl", ["get-property", "org.freedesktop.login1", "/org/freedesktop/login1",
+	if PlatformBackend.execute("busctl", ["get-property", "org.freedesktop.login1", "/org/freedesktop/login1",
 			"org.freedesktop.login1.Manager", "InhibitDelayMaxUSec"], output) == 0 and not output.is_empty():
 		var usec := str(output[0]).strip_edges().get_slice(" ", 1).to_int()
 		if usec > 0:

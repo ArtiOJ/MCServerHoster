@@ -77,3 +77,14 @@ func test_slug_and_args() -> void:
 	check_eq(Fmt.split_args("a 'b c'  d"), PackedStringArray(["a", "b c", "d"]), "split args")
 	check_eq(Fmt.megabytes(6144), "6 GB", "megabytes")
 	check_eq(Fmt.duration(3725), "1h 2m", "duration")
+
+
+func test_execute_passes_arguments_literally() -> void:
+	# Godot's OS.execute goes through a shell; PlatformBackend.execute must neutralise it.
+	var tricky := ["a $HOME b", "x \"$1\" y", "back\\slash", "tick `id` z", "single 'q'", "$(echo pwned)"]
+	var out: Array = []
+	PlatformBackend.execute("/usr/bin/printf", ["[%s]"] + tricky, out, true)
+	check_eq(str(out[0]), "[a $HOME b][x \"$1\" y][back\\slash][tick `id` z][single 'q'][$(echo pwned)]", "arguments unchanged")
+	var packed: Array = []
+	PlatformBackend.execute("/usr/bin/printf", PackedStringArray(["%s", "$PATH"]), packed, true)
+	check_eq(str(packed[0]), "$PATH", "PackedStringArray arguments too")

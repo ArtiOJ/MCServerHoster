@@ -52,7 +52,7 @@ func copy_tree(src: String, dst: String) -> Error:
 		return ERR_ALREADY_EXISTS
 	DirAccess.make_dir_recursive_absolute(dst.get_base_dir())
 	var output: Array = []
-	if OS.execute("cp", ["-a", "--reflink=auto", "--", src, dst], output, true) == 0:
+	if PlatformBackend.execute("cp", ["-a", "--reflink=auto", "--", src, dst], output, true) == 0:
 		return OK
 	push_warning("cp failed (%s); falling back to a portable copy" % str(output))
 	FileOps.remove_path(dst)
@@ -77,7 +77,7 @@ func supports_priority() -> bool:
 
 func terminate(pid: int) -> void:
 	if pid > 0:
-		OS.execute("kill", ["-TERM", str(pid)])
+		PlatformBackend.execute("kill", ["-TERM", str(pid)])
 
 
 func sample_process(pid: int) -> Dictionary:
@@ -173,7 +173,7 @@ func default_route() -> Dictionary:
 						result.address = addr
 						break
 		var out: Array = []
-		if OS.execute("ip", ["-4", "-o", "addr", "show", "dev", f[0]], out) == 0 and not out.is_empty():
+		if PlatformBackend.execute("ip", ["-4", "-o", "addr", "show", "dev", f[0]], out) == 0 and not out.is_empty():
 			result.dynamic = str(out[0]).contains(" dynamic ")
 		return result
 	return {}
