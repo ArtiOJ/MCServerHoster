@@ -27,6 +27,8 @@ Notifier="*res://scripts/autoload/notifier.gd"
 ServerManager="*res://scripts/autoload/server_manager.gd"
 PowerManager="*res://scenes/runtime/power_manager.tscn"
 NetworkService="*res://scenes/runtime/network_service.tscn"
+RemoteAccess="*res://scripts/autoload/remote_access.gd"
+RemoteHosts="*res://scripts/autoload/remote_hosts.gd"
 
 [display]
 

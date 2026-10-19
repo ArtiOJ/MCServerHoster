@@ -63,6 +63,14 @@ func fetch_latest_build(version: String, allow_unstable := true) -> Dictionary:
 	return {"ok": false, "error": res.get("error", "No builds found for %s." % version)}
 
 
+## One specific build. Returns {ok, build, error} (build as in [method fetch_latest_build]).
+func fetch_build(version: String, build_id: int) -> Dictionary:
+	var res := await _get_json("%s/versions/%s/builds/%d" % [BASE_URL, version.uri_encode(), build_id])
+	if res.ok and res.data is Dictionary and (res.data as Dictionary).has("id"):
+		return {"ok": true, "build": _parse_build(res.data)}
+	return {"ok": false, "error": res.get("error", "Paper %s has no build #%d." % [version, build_id])}
+
+
 ## Downloads a build to [param dest_path], verifying its SHA-256 and using a shared cache.
 ## [param on_progress] is called with (downloaded_bytes, total_bytes).
 func download_build(build: Dictionary, dest_path: String, on_progress := Callable()) -> Dictionary:

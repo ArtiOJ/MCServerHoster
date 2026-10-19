@@ -106,6 +106,29 @@ func _acquire_instance_lock() -> void:
 		_owns_lock = true
 
 
+## A per-profile file next to the settings file, e.g. "remote-access.json" becomes
+## "user://remote-access-test.json" under `--profile=test`.
+func profile_path(file_name: String) -> String:
+	var suffix := settings_path.get_file().get_basename().trim_prefix("settings")
+	return settings_path.get_base_dir().path_join(file_name.get_basename() + suffix + "." + file_name.get_extension())
+
+
+## Writes [param text] to [param path] readable only by this user (secrets).
+static func write_private(path: String, text: String) -> Error:
+	var tmp := path + ".tmp"
+	var f := FileAccess.open(tmp, FileAccess.WRITE)
+	if f == null:
+		return FileAccess.get_open_error()
+	f.close()
+	FileAccess.set_unix_permissions(tmp, FileAccess.UNIX_READ_OWNER | FileAccess.UNIX_WRITE_OWNER)
+	f = FileAccess.open(tmp, FileAccess.WRITE)
+	if f == null:
+		return FileAccess.get_open_error()
+	f.store_string(text)
+	f.close()
+	return DirAccess.rename_absolute(tmp, path)
+
+
 func backups_root() -> String:
 	return servers_root.path_join("_backups")
 

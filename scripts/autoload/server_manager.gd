@@ -1,11 +1,8 @@
-extends Node
-## Registry of all managed servers. Creates, loads and deletes servers and
+extends ServerSource
+## Registry of all servers on this computer. Creates, loads and deletes servers and
 ## coordinates app-wide actions (auto-start, update checks, stop-all on exit).
 ## Each server is a ServerInstance scene added as a child of this node.
 
-signal server_added(instance: ServerInstance)
-signal server_removed(server_id: String)
-signal server_state_changed(instance: ServerInstance)
 ## Relayed from instances: a temporary run stopped and needs a keep/discard decision.
 signal temporary_run_ended(instance: ServerInstance)
 
@@ -34,6 +31,27 @@ func get_instances() -> Array[ServerInstance]:
 	return _instances
 
 
+func get_handles() -> Array[ServerHandle]:
+	var out: Array[ServerHandle] = []
+	out.assign(_instances)
+	return out
+
+
+func find_handle(handle_key: String) -> ServerHandle:
+	return get_instance(handle_key)
+
+
+func delete_handle(handle: ServerHandle, delete_files := true, delete_backups := false) -> Dictionary:
+	var err := delete_server(handle.config.id, delete_files, delete_backups)
+	if err == ERR_BUSY:
+		return {"ok": false, "error": "Stop %s before deleting it." % handle.config.display_name}
+	return {"ok": err == OK, "error": "" if err == OK else "Could not delete %s: %s" % [handle.config.display_name, error_string(err)]}
+
+
+func duplicate_handle(handle: ServerHandle, display_name: String, copy_worlds := true, copy_plugins := true, on_status := Callable()) -> Dictionary:
+	return await duplicate_server(handle as ServerInstance, display_name, copy_worlds, copy_plugins, on_status)
+
+
 func get_instance(server_id: String) -> ServerInstance:
 	for inst in _instances:
 		if inst.config.id == server_id:
@@ -41,21 +59,8 @@ func get_instance(server_id: String) -> ServerInstance:
 	return null
 
 
-func running_count() -> int:
-	return _instances.filter(func(i: ServerInstance) -> bool: return i.is_process_alive()).size()
-
-
 func any_running() -> bool:
 	return running_count() > 0
-
-
-## RAM (MB) reserved by servers whose process is alive.
-func allocated_ram_mb() -> int:
-	var total := 0
-	for inst in _instances:
-		if inst.is_process_alive():
-			total += inst.config.ram_max_mb
-	return total
 
 
 ## Server (other than [param except_id]) that uses [param port] as game or RCON port, or null.

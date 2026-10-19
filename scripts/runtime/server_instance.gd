@@ -1,45 +1,14 @@
 class_name ServerInstance
-extends Node
-## One managed Minecraft server: its configuration, lifecycle state machine,
-## console buffer and live statistics. Child nodes do the specialised work.
+extends ServerHandle
+## One managed Minecraft server on this computer: its configuration, lifecycle state
+## machine, console buffer and live statistics. Child nodes do the specialised work.
 
-signal state_changed(state: State)
-signal console_line_added(entry: Dictionary)
-signal console_cleared
-signal stats_updated
-signal players_changed
-signal config_changed
-signal update_available_changed
-## A temporary copy stopped for good; the UI asks whether to keep or discard its changes.
-signal temporary_run_ended
-
-enum State { STOPPED, STARTING, RUNNING, STOPPING, CRASHED, INSTALLING }
-
-const STATE_NAMES := ["Stopped", "Starting", "Running", "Stopping", "Crashed", "Installing"]
-const STATE_COLORS: Array[Color] = [
-	Color("6b7280"), Color("f2b84b"), Color("3fb97f"), Color("f2b84b"), Color("e05555"), Color("5aa9f2"),
-]
-## Stopped but listening for players (start on connect).
-const ASLEEP_COLOR := Color("8b7cf6")
 ## Back-off between automatic restarts after consecutive crashes.
 const RESTART_DELAYS: Array[int] = [5, 15, 60]
 const QUERY_INTERVAL_SEC := 5.0
+const PROPERTIES_FILE := "server.properties"
 
-var config: ServerConfig
-var state: State = State.STOPPED
-## Console history: {"text": raw line, "plain": stripped, "level": LogParser.Level}
-var console_lines: Array[Dictionary] = []
-var players := PackedStringArray()
-var max_players := 0
-var tps := -1.0
-var startup_seconds := -1.0
 var start_time_msec := 0
-var last_exit_code := 0
-## Newest Paper build for this version when newer than the installed one, else 0.
-var update_available_build := 0
-var command_history := PackedStringArray()
-## PID of a server left running by a previous session of the manager (-1 if none).
-var orphan_pid := -1
 
 ## Log lines replayed right after attaching must not count as new joins/stops.
 var _replay_until_msec := 0
@@ -94,25 +63,8 @@ func _ready() -> void:
 
 # --- Queries -----------------------------------------------------------------
 
-func is_online() -> bool:
-	return state == State.RUNNING
-
-
 func is_process_alive() -> bool:
 	return process.is_running()
-
-
-## True when the server is doing something (not cleanly stopped / crashed).
-func is_busy() -> bool:
-	return state in [State.STARTING, State.RUNNING, State.STOPPING, State.INSTALLING]
-
-
-func state_name() -> String:
-	return "Asleep" if state == State.STOPPED and is_asleep() else STATE_NAMES[state]
-
-
-func state_color() -> Color:
-	return ASLEEP_COLOR if state == State.STOPPED and is_asleep() else STATE_COLORS[state]
 
 
 func uptime_seconds() -> int:
@@ -163,14 +115,8 @@ func sync_port_from_properties() -> void:
 		log_system("Using port %d from server.properties (edited outside Server Manager)." % file_port)
 
 
-## True while stopped but listening for players to wake the server (start on connect).
 func is_asleep() -> bool:
 	return wake_listener.is_listening()
-
-
-## True while a temporary copy is running or waiting for a keep/discard decision.
-func is_temporary() -> bool:
-	return config.temp_run_dir != ""
 
 
 ## Folder the server process runs in: the temporary copy during a test run, else the server folder.
@@ -183,6 +129,176 @@ func connect_address() -> String:
 	if ip == "":
 		ip = _lan_ip()
 	return ip if config.port == 25565 else "%s:%d" % [ip, config.port]
+
+
+func public_address() -> String:
+	return NetworkService.public_address(config.port)
+
+
+func process_id() -> int:
+	return process.pid if process.is_running() else -1
+
+
+func cpu_percent() -> float:
+	return monitor.cpu_percent
+
+
+func cpu_cores_used() -> float:
+	return monitor.cpu_cores_used
+
+
+func rss_bytes() -> int:
+	return monitor.rss_bytes
+
+
+func cpu_history() -> PackedFloat32Array:
+	return monitor.cpu_history
+
+
+func ram_history() -> PackedFloat32Array:
+	return monitor.ram_history
+
+
+func java_description() -> String:
+	var java := JavaRuntimes.resolve_for(config)
+	return java.display_name() if java != null else "Not found — Java %d+ required" % config.java_min_version
+
+
+func icon_texture() -> Texture2D:
+	return ServerIcon.load_texture(config.directory)
+
+
+func icon_info() -> Dictionary:
+	return ServerIcon.info(config.directory)
+
+
+func set_icon_png(png: PackedByteArray) -> Error:
+	if png.is_empty():
+		var removed := ServerIcon.remove(config.directory)
+		config_changed.emit()
+		return removed
+	var img := Image.new()
+	if img.load_png_from_buffer(png) != OK or img.get_size() != Vector2i(ServerIcon.SIZE, ServerIcon.SIZE):
+		return ERR_INVALID_DATA
+	var err := ServerIcon.save(config.directory, img)
+	config_changed.emit()
+	return err
+
+
+func update_paper(version: String, build_id: int, backup: bool, on_progress := Callable()) -> Dictionary:
+	var report := func(text: String, fraction: float) -> void:
+		if on_progress.is_valid():
+			on_progress.call(text, fraction)
+	if is_busy():
+		return {"ok": false, "error": "Stop the server first."}
+	report.call("Checking Paper %s…" % version, 0.0)
+	# The build is looked up here rather than taken from the caller, so only genuine
+	# PaperMC downloads can ever become the server jar.
+	var info: Dictionary = await PaperApi.fetch_version_info(version)
+	var found: Dictionary = await PaperApi.fetch_build(version, build_id)
+	if not info.get("ok", false) or not found.get("ok", false):
+		return {"ok": false, "error": "Could not load Paper %s build #%d: %s" % [version, build_id, found.get("error", info.get("error", "unknown error"))]}
+	if backup and not backups.world_dirs().is_empty():
+		report.call("Backing up worlds…", 0.0)
+		if await backups.create_backup(false) == "":
+			return {"ok": false, "error": "Backup failed; update cancelled."}
+	return await install_build(version, found.build, info, func(done: int, total: int) -> void:
+		report.call("Downloading… %s / %s" % [Fmt.bytes(done), Fmt.bytes(total)], float(done) / maxf(total, 1.0)))
+
+
+# --- Settings ----------------------------------------------------------------------
+
+## Configuration files that can be edited as text.
+func config_files() -> PackedStringArray:
+	var files := PackedStringArray([PROPERTIES_FILE])
+	for f in SettingsCatalog.YAML_FILES:
+		if FileAccess.file_exists(config.directory.path_join(f)):
+			files.append(f)
+	return files
+
+
+func settings_snapshot() -> Dictionary:
+	var settings := ServerSettings.open(config)
+	var values := {}
+	var unknown := {}
+	for e in settings.entries():
+		values[e.id] = settings.get_value(e)
+		if e.source == "property" and SettingsCatalog.get_entry(e.id).is_empty():
+			unknown[e.key] = values[e.id]
+	return {
+		"ok": true, "values": values, "unknown": unknown, "raw_files": config_files(),
+		"properties_missing": not FileAccess.file_exists(config.properties_path()),
+		"pending_gamerules": config.pending_gamerules.size(),
+	}
+
+
+func save_settings(changes: Dictionary) -> Dictionary:
+	var settings := ServerSettings.open(config)
+	var allowed := {}
+	for e in settings.entries():
+		allowed[e.id] = e
+	for id in changes:
+		var entry: Dictionary = allowed.get(str(id), {})
+		# Ports and RCON are owned by the manager (set_port), never edited as settings.
+		if entry.is_empty() or (entry.source == "property" and PropertySchema.is_managed(entry.key)):
+			return {"ok": false, "error": "Unknown or protected setting: %s" % id}
+		settings.set_value(entry, str(changes[id]))
+	var rule_count := settings.gamerule_changes().size()
+	var err := settings.save()
+	if err != OK:
+		return {"ok": false, "error": "Could not save settings for %s: %s" % [config.display_name, error_string(err)]}
+	var applied := rule_count > 0 and is_online()
+	if applied:
+		apply_pending_gamerules()
+	_after_settings_saved()
+	return {"ok": true, "rules_applied": applied, "restart_needed": is_process_alive()}
+
+
+func read_config_file(file: String) -> Dictionary:
+	if not config_files().has(file) and file != PROPERTIES_FILE:
+		return {"ok": false, "error": "%s is not a configuration file of this server." % file}
+	var path := config.directory.path_join(file)
+	return {"ok": true, "text": FileAccess.get_file_as_string(path) if FileAccess.file_exists(path) else ""}
+
+
+func write_config_file(file: String, text: String) -> Dictionary:
+	if not config_files().has(file):
+		return {"ok": false, "error": "%s is not a configuration file of this server." % file}
+	var path := config.directory.path_join(file)
+	var err := OK
+	if file == PROPERTIES_FILE:
+		var parsed := ServerProperties.new()
+		parsed.parse(text)
+		# The manager owns RCON and query keys; keep whatever is on disk. server-port may be
+		# edited here and is then adopted as the server's port.
+		var current := ServerProperties.load_file(path)
+		for k in PropertySchema.MANAGED_KEYS:
+			if k != "server-port" and current.has(k):
+				parsed.set_value(k, current.get_value(k))
+		err = parsed.save_file(path)
+		if err == OK:
+			sync_port_from_properties()
+			err = config.write_managed_properties()
+	else:
+		var f := FileAccess.open(path + ".tmp", FileAccess.WRITE)
+		if f == null:
+			err = FileAccess.get_open_error()
+		else:
+			f.store_string(text if text.ends_with("\n") else text + "\n")
+			f.close()
+			err = DirAccess.rename_absolute(path + ".tmp", path)
+	if err != OK:
+		return {"ok": false, "error": "Could not save %s: %s" % [file, error_string(err)]}
+	_after_settings_saved()
+	return {"ok": true}
+
+
+func _after_settings_saved() -> void:
+	if not is_temporary():
+		max_players = get_properties().get_int("max-players", max_players)
+	players_changed.emit()
+	stats_updated.emit()
+	config_changed.emit()
 
 
 ## Human-readable problems that prevent starting, or "" when the server can start.
@@ -317,6 +433,17 @@ func send_command(command: String, echo := true) -> bool:
 	return process.write_line(bare)
 
 
+## A command from someone connected remotely: echoed with their name, and kept out of this
+## computer's command history.
+func send_remote_command(command: String, who: String) -> bool:
+	command = command.strip_edges()
+	if command.is_empty():
+		return false
+	var echo := "> %s   (%s)" % [command, who]
+	_append_console({"text": echo, "plain": echo, "level": LogParser.Level.COMMAND})
+	return send_command(command, false)
+
+
 ## True when commands can reach the server (stdin pipe, or RCON for re-attached servers).
 func can_send_commands() -> bool:
 	if not process.is_running():
@@ -339,11 +466,6 @@ func log_system(message: String, level := LogParser.Level.SYSTEM) -> void:
 	var stamp := Time.get_time_string_from_system()
 	var text := "[%s Manager] %s" % [stamp, message]
 	_append_console({"text": text, "plain": text, "level": lvl, "system": true})
-
-
-func clear_console() -> void:
-	console_lines.clear()
-	console_cleared.emit()
 
 
 func save_config() -> void:
@@ -516,21 +638,6 @@ func mark_installing(on: bool) -> void:
 
 
 # --- Internals ---------------------------------------------------------------
-
-func _set_state(new_state: State) -> void:
-	if state == new_state:
-		return
-	state = new_state
-	state_changed.emit(state)
-
-
-func _append_console(entry: Dictionary) -> void:
-	console_lines.append(entry)
-	var limit := AppSettings.console_max_lines
-	if console_lines.size() > limit + 250:
-		console_lines = console_lines.slice(console_lines.size() - limit)
-	console_line_added.emit(entry)
-
 
 func _on_line(text: String, is_stderr: bool) -> void:
 	var plain := Ansi.strip(text)

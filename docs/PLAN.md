@@ -255,3 +255,51 @@ enp12s0 unplugged; `rtcwake`, `pkexec`, `iw` available.
   must be verified by the user with a real sleep test. Pair with start-on-connect.
 - Tests: pattern builder, wake-time computation, helper argument validation, PowerManager with a
   mock helper path (no real sleep in automated tests).
+
+## 10. Remote access (phase 1 in progress)
+
+Another person running Server Manager connects to this computer with an **access key**
+(a shared secret) and controls servers according to the key's role.
+
+**Roles**
+- *System admin*: every server plus computer-wide actions (create, duplicate, delete servers).
+  On the client, the sidebar's host switcher swaps "This computer" for the remote computer.
+- *Server admin*: only the servers listed on the key, and only server-level actions (start/stop,
+  console, settings, Paper updates, icon, temporary runs). Their servers appear in the client's
+  sidebar under **Remote servers**. Never: Java executable / JVM arguments (would run arbitrary
+  programs), firewall/router, app preferences, creating or deleting servers.
+  (Plugins, once remote, also run code as the host user — the key dialog warns about that.)
+
+**Security**
+- Transport: TLS (mbedTLS via StreamPeerTLS) with the host's self-signed certificate (RSA 2048,
+  `user://remote/`, mode 600). The client pins it.
+- Getting the certificate: a plain "bootstrap" exchange returns the certificate plus
+  HMAC-SHA256(secret, "cert" ‖ client nonce ‖ PEM). Only someone with the key can produce it,
+  so a man in the middle cannot slip in its own certificate. Re-done automatically if the
+  pinned certificate stops matching.
+- Authentication inside TLS: host nonce, client nonce, HMAC proofs both ways, compared in
+  constant time. Keys are 256-bit random, so offline guessing is not a concern.
+- Rate limiting: 5 failed attempts from an address → blocked for 15 min; handshake timeout
+  10 s; at most 8 unauthenticated connections; 4 KB frame limit before authentication.
+- Every request is checked against the key's role and server list on the host; revoking a
+  key or removing a server from it disconnects/updates live sessions. Remote actions are
+  logged in the server console as "[Remote · name]".
+- Secrets are stored in `user://remote/*.json` (mode 600).
+
+**Protocol** (after the 1-byte mode prefix 'B' bootstrap / 'T' TLS): frames are a 4-byte
+big-endian length + UTF-8 JSON. Requests `{id, op, server?, args}` → `{re, ok, result|error}`;
+events `{ev, server?, …}` pushed by the host (server snapshot, stats, console batches,
+added/removed, progress of long operations). Protocol version must match.
+
+**Code structure**
+- `ServerHandle` (base of `ServerInstance` and `RemoteServer`): state, signals and the
+  operations the UI uses. Local calls return immediately; remote ones `await` the host.
+- Host: `RemoteAccess` autoload (keys, certificate, listener) → `RemoteSession` per client.
+- Client: `RemoteHosts` autoload (saved computers) → `RemoteLink` per computer → `RemoteServer`
+  proxies. `ServerSource` is the common base of `ServerManager` and `RemoteLink` (server lists).
+- Tabs opt in with `remote_ready`; the others are hidden for remote servers until ported.
+
+**Phase 1**: keys, connections, sidebar sections, host switcher; header controls, Overview,
+Console, Settings; Paper update, temporary-run decisions, icon; remote create/delete for
+system admins. **Later**: Players, Automation, Resources, Backups, Logs, Worlds, Plugins,
+Network tabs; remote Preferences, remote server import, file uploads.
