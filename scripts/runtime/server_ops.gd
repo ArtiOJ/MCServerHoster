@@ -764,7 +764,7 @@ static func port_check(inst: ServerInstance, port: int) -> Dictionary:
 	if port < 1 or port > 65535:
 		return _fail("The port must be between 1 and 65535.")
 	var owner := ServerManager.port_owner(port, inst.config.id)
-	var own := inst.is_process_alive() and port == inst.config.port
+	var own := port == inst.config.port and (inst.is_process_alive() or inst.wake_listener.holds_port(port))
 	return _ok({"owner": owner.config.display_name if owner != null else "", "rcon": port == inst.config.rcon_port,
 			"free": own or PlatformBackend.is_port_free(port), "own": own})
 

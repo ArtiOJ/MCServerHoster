@@ -32,6 +32,11 @@ func is_listening() -> bool:
 	return _server != null and _server.is_listening()
 
 
+## True while this listener itself holds [param port] (so the port is not taken by another program).
+func holds_port(port: int) -> bool:
+	return is_listening() and _listening_port == port
+
+
 ## Starts or stops listening to match the server's settings and state.
 func update() -> void:
 	var want := instance.config.wake_on_connect and instance.state == ServerInstance.State.STOPPED \

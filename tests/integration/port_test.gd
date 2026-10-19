@@ -26,6 +26,9 @@ func _ready() -> void:
 	inst.save_config()
 	await _wait_for(func() -> bool: return inst.is_asleep(), 5.0)
 	_check(inst.is_asleep() and not PlatformBackend.is_port_free(a), "asleep and listening on port %d" % a)
+	_check(not inst.start_problem().contains("another program"), "its own listener isn't reported as another program: %s" % inst.start_problem())
+	var own: Dictionary = ServerOps.port_check(inst, a)
+	_check(own.free and own.own, "port check counts the listener as the server's own")
 
 	var b := _free_port(a + 100)
 	_check(inst.set_port(b) == "", "change port from the app to %d" % b)

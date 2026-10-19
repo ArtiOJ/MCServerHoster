@@ -348,7 +348,8 @@ func start_problem() -> String:
 	var clash := ServerManager.port_owner(config.port, config.id, true)
 	if clash != null:
 		return "Port %d is used by \"%s\", which is running." % [config.port, clash.config.display_name]
-	if not PlatformBackend.is_port_free(config.port):
+	# While asleep, the wake-on-join listener holds the port; start() releases it first.
+	if not wake_listener.holds_port(config.port) and not PlatformBackend.is_port_free(config.port):
 		return "Port %d is already in use by another program." % config.port
 	return ""
 
