@@ -154,6 +154,31 @@ func process_age_seconds(pid: int) -> int:
 	return int(uptime - rest[19].to_int() / CLK_TCK)
 
 
+func default_route() -> Dictionary:
+	for line in PlatformBackend.read_text("/proc/net/route").split("\n"):
+		var f := line.split("\t", false)
+		# Default route: destination 0.0.0.0 with the gateway flag (0x2) set.
+		if f.size() < 8 or f[1] != "00000000" or (f[3].hex_to_int() & 0x2) == 0:
+			continue
+		var gw := f[2].hex_to_int()  # Little-endian IPv4.
+		var result := {
+			"interface": f[0],
+			"gateway": "%d.%d.%d.%d" % [gw & 0xFF, (gw >> 8) & 0xFF, (gw >> 16) & 0xFF, (gw >> 24) & 0xFF],
+			"address": "", "dynamic": false,
+		}
+		for iface in IP.get_local_interfaces():
+			if iface.name == f[0]:
+				for addr in iface.addresses:
+					if not addr.contains(":"):
+						result.address = addr
+						break
+		var out: Array = []
+		if OS.execute("ip", ["-4", "-o", "addr", "show", "dev", f[0]], out) == 0 and not out.is_empty():
+			result.dynamic = str(out[0]).contains(" dynamic ")
+		return result
+	return {}
+
+
 func process_executable(pid: int) -> String:
 	var dir := DirAccess.open("/proc/%d" % pid)
 	return dir.read_link("/proc/%d/exe" % pid) if dir != null else ""

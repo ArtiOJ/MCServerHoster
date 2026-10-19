@@ -113,3 +113,18 @@ func test_firewall_commands() -> void:
 	check_eq(NetworkService.firewall_command("ufw", 25570), "sudo ufw allow 25570/tcp comment 'Minecraft server'", "ufw")
 	check(NetworkService.firewall_command("firewalld", 25570).contains("--add-port=25570/tcp"), "firewalld")
 	check_eq(NetworkService.firewall_command("", 25570), "", "none")
+
+
+func test_ufw_port_verdict() -> void:
+	var kde := "### tuple ### allow udp 1714:1764 0.0.0.0/0 any 0.0.0.0/0 KDE%20Connect - in\n### tuple ### allow tcp 1714:1764 0.0.0.0/0 any 0.0.0.0/0 KDE%20Connect - in\n"
+	check_eq(NetworkService.ufw_port_verdict(kde, "DROP", 25565).allowed, "no", "default drop, no rule")
+	check_eq(NetworkService.ufw_port_verdict(kde, "DROP", 1720).allowed, "yes", "port inside an allowed range")
+	var mc := kde + "### tuple ### allow tcp 25565 0.0.0.0/0 any 0.0.0.0/0 in\n"
+	check_eq(NetworkService.ufw_port_verdict(mc, "DROP", 25565).allowed, "yes", "explicit allow")
+	var lan := "### tuple ### allow tcp 25565 0.0.0.0/0 any 192.168.4.0/22 in\n"
+	check_eq(NetworkService.ufw_port_verdict(lan, "DROP", 25565).allowed, "lan", "allowed from home network only")
+	var deny_first := "### tuple ### deny tcp 25565 0.0.0.0/0 any 0.0.0.0/0 in\n### tuple ### allow tcp 25565 0.0.0.0/0 any 0.0.0.0/0 in\n"
+	check_eq(NetworkService.ufw_port_verdict(deny_first, "DROP", 25565).allowed, "no", "first matching rule wins")
+	check_eq(NetworkService.ufw_port_verdict("", "ACCEPT", 25565).allowed, "yes", "accept policy")
+	var udp_only := "### tuple ### allow udp 25565 0.0.0.0/0 any 0.0.0.0/0 in\n"
+	check_eq(NetworkService.ufw_port_verdict(udp_only, "DROP", 25565).allowed, "no", "udp rule does not open tcp")

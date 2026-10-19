@@ -66,6 +66,12 @@ func is_pid_alive(pid: int) -> bool:
 	return pid > 0 and OS.is_process_running(pid)
 
 
+## The route to the internet: {"gateway": router IP, "interface": name, "address": this
+## computer's IPv4 on that interface, "dynamic": assigned by DHCP}. Empty when unknown.
+func default_route() -> Dictionary:
+	return {}
+
+
 ## Executable path of a running process, or "" if unknown.
 func process_executable(_pid: int) -> String:
 	return ""

@@ -753,6 +753,10 @@ func find_orphan_pid() -> int:
 
 
 static func _lan_ip() -> String:
+	# Prefer the address on the interface that leads to the router (others may be VPNs or VMs).
+	var route := PlatformBackend.get_current().default_route()
+	if str(route.get("address", "")) != "":
+		return route.address
 	for addr in IP.get_local_addresses():
 		if addr.begins_with("192.168.") or addr.begins_with("10.") or (addr.begins_with("172.") and addr.get_slice(".", 1).to_int() in range(16, 32)):
 			return addr

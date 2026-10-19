@@ -66,9 +66,9 @@ columns = 3
 [node name="LanKey" type="Label" parent="Scroll/Content/AddressesCard/VBox/Grid"]
 layout_mode = 2
 mouse_filter = 0
-tooltip_text = "Players on the same home network (Wi-Fi/LAN) connect with this address."
+tooltip_text = "Only for players on your own Wi-Fi/LAN. Internet players can't use this address; they use the internet address below, and your router forwards them here."
 theme_type_variation = &"MutedLabel"
-text = "On this network"
+text = "Home network"
 
 [node name="LanValue" type="Label" parent="Scroll/Content/AddressesCard/VBox/Grid"]
 unique_name_in_owner = true
@@ -87,7 +87,7 @@ layout_mode = 2
 mouse_filter = 0
 tooltip_text = "Players outside your home network connect with this address, once the port is forwarded on your router."
 theme_type_variation = &"MutedLabel"
-text = "From the internet"
+text = "Internet"
 
 [node name="PublicValue" type="Label" parent="Scroll/Content/AddressesCard/VBox/Grid"]
 unique_name_in_owner = true
@@ -105,6 +105,118 @@ icon = ExtResource("3")
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="ForwardCard" type="PanelContainer" parent="Scroll/Content"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/Content/ForwardCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Scroll/Content/ForwardCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Scroll/Content/ForwardCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("7")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Scroll/Content/ForwardCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Players on the internet connect to your public address; your router must pass those connections on to this computer. Set this up once in your router's admin page (often under Port Forwarding, Virtual Server or NAT)."
+theme_type_variation = &"SectionHeader"
+text = "Router port forwarding"
+
+[node name="OpenRouterButton" type="Button" parent="Scroll/Content/ForwardCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Open your router's admin page in the browser."
+text = "Open router page"
+
+[node name="ForwardGrid" type="GridContainer" parent="Scroll/Content/ForwardCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="RouterKey" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Router"
+
+[node name="RouterValue" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+text = "—"
+
+[node name="ProtocolKey" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Protocol"
+
+[node name="ProtocolValue" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+layout_mode = 2
+text = "TCP"
+
+[node name="ExternalKey" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Also called public, WAN or start/end port."
+theme_type_variation = &"MutedLabel"
+text = "External port"
+
+[node name="ExternalValue" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="InternalIpKey" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "This computer's address on your home network. Also called internal, LAN, private or server IP."
+theme_type_variation = &"MutedLabel"
+text = "Internal IP"
+
+[node name="InternalIpValue" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="InternalPortKey" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Also called private or local port."
+theme_type_variation = &"MutedLabel"
+text = "Internal port"
+
+[node name="InternalPortValue" type="Label" parent="Scroll/Content/ForwardCard/VBox/ForwardGrid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "—"
+
+[node name="ForwardStatus" type="Label" parent="Scroll/Content/ForwardCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+autowrap_mode = 3
+
+[node name="DhcpNotice" type="PanelContainer" parent="Scroll/Content/ForwardCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="DhcpLabel" type="Label" parent="Scroll/Content/ForwardCard/VBox/DhcpNotice"]
+unique_name_in_owner = true
+layout_mode = 2
 autowrap_mode = 3
 
 [node name="AccessCard" type="PanelContainer" parent="Scroll/Content"]

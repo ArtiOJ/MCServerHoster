@@ -17,7 +17,7 @@ enum UpnpState { UNKNOWN, DISCOVERING, AVAILABLE, UNAVAILABLE }
 ## Router lease for a forward; renewed well before it expires.
 const LEASE_SEC := 86400
 const USER_AGENT := "GodotServerManager/0.1 (local Minecraft server manager)"
-const IPIFY_URL := "https://api.ipify.org?format=json"
+const IPIFY_URL := "https://api.ipify.org/?format=json"
 const MCSRVSTAT_URL := "https://api.mcsrvstat.us/3/%s:%d"
 ## Minimum time between automatic retries of a failed router discovery.
 const REDISCOVER_MS := 60000
@@ -221,6 +221,9 @@ func _watch_instance(inst: ServerInstance) -> void:
 ## Looks up the public IP (router first, then api.ipify.org). Only call on user request.
 func refresh_public_ip() -> void:
 	if looking_up_public_ip:
+		# Another caller started a lookup; wait for its result instead of returning empty-handed.
+		while looking_up_public_ip:
+			await get_tree().process_frame
 		return
 	if classify_ip(upnp_external_ip) == "public":
 		public_ip = upnp_external_ip
@@ -302,6 +305,72 @@ func firewall_info(port: int) -> Dictionary:
 	var info := _firewall.duplicate()
 	info.command = firewall_command(info.name, port)
 	return info
+
+
+## Whether this computer's firewall lets other machines reach [param port] (TCP).
+## {name, active, allowed: "yes"|"no"|"lan"|"unknown", detail: String, source: String}.
+## ufw is read from its rule files (world-readable, no root needed); firewalld is queried.
+func firewall_port_status(port: int) -> Dictionary:
+	var info := firewall_info(port)
+	var result := {"name": info.name, "active": info.active, "allowed": "yes", "detail": "", "source": ""}
+	if not info.active:
+		return result
+	match info.name:
+		"ufw":
+			var rules := PlatformBackend.read_text("/etc/ufw/user.rules")
+			var policy := ""
+			for line in PlatformBackend.read_text("/etc/default/ufw").split("\n"):
+				if line.begins_with("DEFAULT_INPUT_POLICY="):
+					policy = line.get_slice("=", 1).strip_edges().trim_prefix("\"").trim_suffix("\"")
+			var verdict := ufw_port_verdict(rules, policy, port)
+			result.merge(verdict, true)
+		"firewalld":
+			var code := OS.execute("firewall-cmd", ["--query-port=%d/tcp" % port])
+			result.allowed = "yes" if code == 0 else ("no" if code == 1 else "unknown")
+	return result
+
+
+## Evaluates ufw rule tuples (from /etc/ufw/user.rules) for incoming TCP to [param port].
+## First matching rule wins, as in ufw; otherwise the default input policy applies.
+static func ufw_port_verdict(rules_text: String, default_policy: String, port: int) -> Dictionary:
+	for line in rules_text.split("\n"):
+		if not line.begins_with("### tuple ###"):
+			continue
+		var f := line.trim_prefix("### tuple ###").strip_edges().split(" ", false)
+		# action proto dport dst sport src [app...] direction
+		if f.size() < 6 or f[-1] != "in":
+			continue
+		var action := f[0]
+		var proto := f[1]
+		if proto != "tcp" and proto != "any":
+			continue
+		if not _ufw_port_matches(f[2], port):
+			continue
+		var src := f[5]
+		var anywhere := src == "0.0.0.0/0" or src == "any"
+		if action == "allow" or action.begins_with("limit"):
+			if anywhere:
+				return {"allowed": "yes", "detail": "ufw allows port %d from anywhere." % port, "source": src}
+			var lan: bool = classify_ip(src.get_slice("/", 0)) == "private"
+			return {"allowed": "lan" if lan else "no", "source": src,
+					"detail": "ufw only allows port %d from %s%s." % [port, src, " (your home network)" if lan else ""]}
+		return {"allowed": "no", "source": src, "detail": "A ufw rule %ss port %d." % [action, port]}
+	if default_policy.to_upper() == "ACCEPT":
+		return {"allowed": "yes", "detail": "ufw accepts incoming connections by default.", "source": ""}
+	return {"allowed": "no", "source": "",
+			"detail": "ufw blocks incoming connections by default and has no rule for port %d, so nobody else can connect, not even on your home network." % port}
+
+
+static func _ufw_port_matches(spec: String, port: int) -> bool:
+	if spec == "any":
+		return true
+	for part in spec.split(","):
+		if part.contains(":"):
+			if port >= part.get_slice(":", 0).to_int() and port <= part.get_slice(":", 1).to_int():
+				return true
+		elif part.is_valid_int() and part.to_int() == port:
+			return true
+	return false
 
 
 static func firewall_command(name: String, port: int) -> String:
@@ -392,9 +461,10 @@ func explain_failure(inst: ServerInstance, result: Dictionary) -> PackedStringAr
 			reasons.append(mapping_errors[inst.config.id])
 	else:
 		reasons.append("Make sure your router forwards TCP port %d to this computer (%s), or turn on UPnP forwarding above." % [inst.config.port, ServerInstance._lan_ip()])
-	var fw := firewall_info(inst.config.port)
-	if fw.active:
-		reasons.append("%s is active on this computer and may block the port. Allow it with: %s" % [fw.name, fw.command])
+	var fw := firewall_port_status(inst.config.port)
+	if fw.active and fw.allowed != "yes":
+		reasons.append("%s Allow it with: %s" % [fw.detail if fw.detail != "" else "%s may block the port." % fw.name,
+				firewall_command(fw.name, inst.config.port)])
 	if str(result.get("error", "")) != "":
 		reasons.append("mcsrvstat.us reported: %s" % result.error)
 	return reasons

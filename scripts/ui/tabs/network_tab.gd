@@ -25,12 +25,24 @@ var _last_result := {}
 @onready var _firewall_row: HBoxContainer = %FirewallRow
 @onready var _firewall_command: LineEdit = %FirewallCommand
 @onready var _copy_firewall_button: Button = %CopyFirewallButton
+@onready var _open_router_button: Button = %OpenRouterButton
+@onready var _router_value: Label = %RouterValue
+@onready var _external_value: Label = %ExternalValue
+@onready var _internal_ip_value: Label = %InternalIpValue
+@onready var _internal_port_value: Label = %InternalPortValue
+@onready var _forward_status: Label = %ForwardStatus
+@onready var _dhcp_notice: PanelContainer = %DhcpNotice
+@onready var _dhcp_label: Label = %DhcpLabel
 @onready var _rcon_label: Label = %RconLabel
 @onready var _rcon_warning: PanelContainer = %RconWarning
 @onready var _rcon_warning_label: Label = %RconWarningLabel
 
 
 func _ready() -> void:
+	_open_router_button.pressed.connect(func() -> void:
+		var gw := str(PlatformBackend.get_current().default_route().get("gateway", ""))
+		if gw != "":
+			OS.shell_open("http://%s/" % gw))
 	_refresh_button.pressed.connect(NetworkService.refresh_public_ip)
 	_copy_lan_button.pressed.connect(func() -> void: _copy(instance.connect_address()))
 	_copy_public_button.pressed.connect(func() -> void: _copy(NetworkService.public_address(instance.config.port)))
@@ -75,6 +87,7 @@ func _refresh() -> void:
 		_public_value.text = "Unknown" + (" — " + NetworkService.public_ip_error if NetworkService.public_ip_error != "" else "")
 	_copy_public_button.disabled = public == ""
 	var hints := PackedStringArray()
+	hints.append("Friends on your Wi-Fi use the home network address; everyone else uses the internet address, which only works once your router forwards the port (below).")
 	if cfg.port == 25565:
 		hints.append("Port 25565 is Minecraft's default, so players can leave it out.")
 	else:
@@ -89,15 +102,25 @@ func _refresh() -> void:
 	_wake_ping_notice.visible = cfg.wake_on_connect and cfg.wake_on_ping
 	_test_button.disabled = _testing
 
+	_refresh_forwarding(cfg)
+
 	var nat := NetworkService.nat_diagnosis()
 	_nat_label.text = nat.text
-	var fw := NetworkService.firewall_info(cfg.port)
-	if fw.active:
-		_firewall_label.text = "%s is active on this computer. If players can't connect, allow the port:" % fw.name
-		_firewall_command.text = fw.command
-	else:
+	var fw := NetworkService.firewall_port_status(cfg.port)
+	_firewall_label.remove_theme_color_override("font_color")
+	if not fw.active:
 		_firewall_label.text = "No active firewall (ufw or firewalld) was detected on this computer."
-	_firewall_row.visible = fw.active
+	elif fw.allowed == "yes":
+		_firewall_label.text = "✓ " + (fw.detail if fw.detail != "" else "%s allows port %d." % [fw.name, cfg.port])
+		_firewall_label.add_theme_color_override("font_color", Color("3fb97f"))
+	elif fw.allowed == "unknown":
+		_firewall_label.text = "%s is active; whether it allows port %d couldn't be checked. If players can't connect, allow it:" % [fw.name, cfg.port]
+	else:
+		var extra := " Players on the internet are blocked too." if fw.allowed == "lan" else ""
+		_firewall_label.text = "✕ " + fw.detail + extra + " Run this once in a terminal (needs your password):"
+		_firewall_label.add_theme_color_override("font_color", Color("f2b84b") if fw.allowed == "lan" else Color("e05555"))
+	_firewall_command.text = NetworkService.firewall_command(fw.name, cfg.port)
+	_firewall_row.visible = fw.active and fw.allowed != "yes"
 
 	var rcon_port := instance.get_properties().get_int("rcon.port", cfg.rcon_port)
 	var bind := instance.get_properties().get_value("server-ip", "")
@@ -108,6 +131,25 @@ func _refresh() -> void:
 	var forwarded_rcon := NetworkService.mappings.has(rcon_port)
 	_rcon_warning.visible = forwarded_rcon
 	_rcon_warning_label.text = "Port %d (RCON) is currently forwarded on your router. Remove that forward." % rcon_port
+
+
+func _refresh_forwarding(cfg: ServerConfig) -> void:
+	var route := PlatformBackend.get_current().default_route()
+	var gw := str(route.get("gateway", ""))
+	var lan := ServerInstance._lan_ip()
+	_router_value.text = gw if gw != "" else "Unknown"
+	_open_router_button.disabled = gw == ""
+	_external_value.text = str(cfg.port)
+	_internal_ip_value.text = lan
+	_internal_port_value.text = str(cfg.port)
+	if cfg.upnp_enabled and NetworkService.is_forwarded(cfg.id):
+		_forward_status.text = "UPnP has set this forward up automatically. You only need to do it by hand if UPnP is off or unsupported."
+	elif NetworkService.upnp_state == NetworkService.UpnpState.UNAVAILABLE:
+		_forward_status.text = "Your router doesn't support automatic forwarding (UPnP), so add this rule by hand in its admin page (usually under Port Forwarding, Virtual Server or NAT), then use “Test from the internet”."
+	else:
+		_forward_status.text = "Add this rule in your router's admin page (usually under Port Forwarding, Virtual Server or NAT), or turn on UPnP forwarding below if your router supports it."
+	_dhcp_notice.visible = bool(route.get("dynamic", false))
+	_dhcp_label.text = "This computer's address (%s) was assigned automatically by your router (DHCP) and can change, which would break the forward. In the router, reserve this address for this computer (often called DHCP reservation or static lease)." % lan
 
 
 func _upnp_text() -> String:

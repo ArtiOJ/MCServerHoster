@@ -13,6 +13,11 @@ func _ready() -> void:
 		if not (file.begins_with("test_") and file.ends_with(".gd")) or file in ["test_runner.gd", "test_case.gd"]:
 			continue
 		var script: GDScript = load(TEST_DIR.path_join(file))
+		if script == null or not script.can_instantiate():
+			# A test file that fails to parse must count as a failure, not be skipped silently.
+			failed += 1
+			printerr("FAIL %s  could not be loaded (parse error?)" % file)
+			continue
 		for method in script.get_script_method_list():
 			if not str(method.name).begins_with("test_"):
 				continue
