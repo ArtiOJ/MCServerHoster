@@ -6,6 +6,9 @@ extends ConfirmationDialog
 
 signal imported(handle: ServerHandle)
 
+## Index of "Add as dimension of current world" in the mode list.
+const MODE_DIMENSION := 2
+
 var _instance: ServerHandle
 ## What the server reported about the chosen world (see ServerOps.world_import_analyze).
 var _analysis := {}
@@ -29,6 +32,8 @@ var _serial := 0
 @onready var _warnings_label: Label = %WarningsLabel
 @onready var _options: GridContainer = %Options
 @onready var _mode_option: OptionButton = %ModeOption
+@onready var _dimension_label: Label = %DimensionLabel
+@onready var _dimension_option: OptionButton = %DimensionOption
 @onready var _apply_check: CheckButton = %ApplyCheck
 @onready var _progress: ProgressBar = %Progress
 @onready var _status: Label = %StatusLabel
@@ -42,6 +47,7 @@ func _ready() -> void:
 	_folder_button.pressed.connect(func() -> void: _folder_dialog.popup_centered())
 	_zip_dialog.file_selected.connect(_analyze)
 	_folder_dialog.dir_selected.connect(_analyze)
+	_mode_option.item_selected.connect(_on_mode_selected)
 	_stop_button.pressed.connect(func() -> void:
 		if _instance != null:
 			_instance.stop())
@@ -130,8 +136,25 @@ func _show_analysis(a: Dictionary) -> void:
 	_warnings.visible = not notes.is_empty()
 	_warnings_label.text = "\n".join(notes)
 	_options.visible = a.valid
-	_apply_check.button_pressed = a.game_mode in ["adventure", "creative"] or a.hardcore
+	var single: bool = a.get("single_dimension", false)
+	var choices: Array = a.get("dimension_choices", [])
+	_dimension_option.clear()
+	for label in choices:
+		_dimension_option.add_item(str(label))
+	_mode_option.set_item_disabled(MODE_DIMENSION, choices.is_empty())
+	_mode_option.select(MODE_DIMENSION if single and not choices.is_empty() else 0)
+	_apply_check.button_pressed = not single and (a.game_mode in ["adventure", "creative"] or a.hardcore)
+	_on_mode_selected(_mode_option.selected)
 	_update_ok()
+
+
+## Map settings belong to a whole world; an added dimension keeps the current world's.
+func _on_mode_selected(index: int) -> void:
+	_dimension_label.visible = index == MODE_DIMENSION
+	_dimension_option.visible = index == MODE_DIMENSION
+	_apply_check.disabled = _busy or index == MODE_DIMENSION
+	if index == MODE_DIMENSION:
+		_apply_check.button_pressed = false
 
 
 func _on_confirmed() -> void:
@@ -144,13 +167,20 @@ func _on_confirmed() -> void:
 	_set_buttons_enabled(false)
 	_progress.visible = true
 	_progress.value = 0.0
-	var mode := WorldImporter.Mode.ADD if _mode_option.selected == 1 else WorldImporter.Mode.REPLACE
-	var result: Dictionary = await _instance.call_op("world_import", {"token": _analysis.token, "mode": mode, "apply": _apply_check.button_pressed},
+	var mode: WorldImporter.Mode = [WorldImporter.Mode.REPLACE, WorldImporter.Mode.ADD, WorldImporter.Mode.DIMENSION][_mode_option.selected]
+	var result: Dictionary = await _instance.call_op("world_import", {"token": _analysis.token, "mode": mode, "apply": _apply_check.button_pressed,
+			"dimension": maxi(_dimension_option.selected, 0)},
 			func(text: String, _f: float) -> void: _status.text = text)
 	_busy = false
 	_progress.visible = false
 	_set_buttons_enabled(true)
-	if result.ok:
+	if result.ok and str(result.get("dimension", "")) != "":
+		DisplayServer.clipboard_set(str(result.command).trim_prefix("/"))
+		Notifier.success("Added dimension %s to %s. Teleport command copied: %s" % [result.dimension, _instance.config.display_name, result.command])
+		_analysis = {}
+		imported.emit(_instance)
+		hide()
+	elif result.ok:
 		Notifier.success("Imported \"%s\" into %s." % [_analysis.display_name, _instance.config.display_name])
 		_analysis = {}
 		imported.emit(_instance)
@@ -193,6 +223,7 @@ func _set_buttons_enabled(enabled: bool) -> void:
 	_zip_button.disabled = not enabled
 	_folder_button.disabled = not enabled
 	_mode_option.disabled = not enabled
-	_apply_check.disabled = not enabled
+	_dimension_option.disabled = not enabled
+	_apply_check.disabled = not enabled or _mode_option.selected == MODE_DIMENSION
 	get_cancel_button().disabled = not enabled
 	_update_ok()

@@ -59,7 +59,7 @@ static func run(inst: ServerInstance, op: String, args: Dictionary, ctx := LOCAL
 		"datapack_toggle": return await datapack_toggle(inst, str(args.get("id", "")), bool(args.get("enable", true)), ctx)
 		"datapack_remove": return datapack_remove(inst, str(args.get("id", "")), ctx)
 		"world_import_analyze": return await world_import_analyze(inst, _paths(args.get("files")))
-		"world_import": return await world_import(inst, str(args.get("token", "")), int(args.get("mode", 0)), bool(args.get("apply", false)), ctx)
+		"world_import": return await world_import(inst, str(args.get("token", "")), int(args.get("mode", 0)), bool(args.get("apply", false)), ctx, int(args.get("dimension", 0)))
 		"world_import_cancel": return world_import_cancel(str(args.get("token", "")))
 		"resources_info": return resources_info(inst)
 		"port_check": return port_check(inst, int(args.get("port", 0)))
@@ -693,22 +693,27 @@ static func world_import_analyze(inst: ServerInstance, files: PackedStringArray)
 		"layout_name": WorldImporter.LAYOUT_NAMES[analysis.layout], "dimensions": analysis.dimensions,
 		"game_mode": analysis.game_mode, "difficulty": analysis.difficulty, "hardcore": analysis.hardcore,
 		"size_bytes": analysis.size_bytes, "found": analysis.world_dir != "",
+		"single_dimension": analysis.layout == WorldImporter.Layout.DIMENSION,
+		"dimension_choices": analysis.dimension_choices.map(func(c: Dictionary) -> String: return c.label),
 	}
 
 
-static func world_import(inst: ServerInstance, token: String, mode: int, apply_settings: bool, ctx: Dictionary) -> Dictionary:
+## [param dimension] is the index into the analysis' dimension_choices for mode DIMENSION.
+static func world_import(inst: ServerInstance, token: String, mode: int, apply_settings: bool, ctx: Dictionary, dimension := 0) -> Dictionary:
 	var pending: Dictionary = _imports.get(token, {})
 	if pending.is_empty() or pending.server != inst.config.id:
 		return _fail("Choose the world again; the earlier choice expired.")
 	var analysis: Dictionary = pending.analysis
 	if _is_remote(ctx):
 		_log(inst, ctx, "Is importing the world \"%s\"." % WorldImporter.display_name(analysis))
-	var result: Dictionary = await WorldImporter.import_into(inst, analysis, WorldImporter.Mode.ADD if mode == 1 else WorldImporter.Mode.REPLACE,
-			apply_settings, func(text: String) -> void: _progress(ctx, text))
+	var import_mode: WorldImporter.Mode = mode if mode in WorldImporter.Mode.values() else WorldImporter.Mode.REPLACE
+	var result: Dictionary = await WorldImporter.import_into(inst, analysis, import_mode,
+			apply_settings, func(text: String) -> void: _progress(ctx, text), dimension)
 	if result.ok:
 		world_import_cancel(token)
 		inst.data_changed.emit(&"worlds")
-		return _ok({"name": WorldImporter.display_name(analysis), "level_name": result.level_name})
+		return _ok({"name": WorldImporter.display_name(analysis), "level_name": result.level_name,
+				"dimension": result.get("dimension", ""), "command": result.get("command", "")})
 	return result
 
 
@@ -773,14 +778,14 @@ static func launch_preview(inst: ServerInstance, draft: Dictionary) -> Dictionar
 	var parts := PackedStringArray([Fmt.shell_quote(str(cmd.path))])
 	for arg in cmd.args:
 		parts.append(Fmt.shell_quote(arg))
+	if cmd.has("script"):
+		# Windows: the launcher file is what actually runs.
+		parts = PackedStringArray([str(cmd.script).strip_edges().get_slice("\r\n", 3)])
 	var warning := ""
 	if rt == null:
 		warning = "No suitable Java runtime found. Install Java %d+ or pick an executable in Settings." % cfg.java_min_version
 	elif rt.major < cfg.java_min_version:
 		warning = "Java %d is too old for this server; it needs Java %d or newer." % [rt.major, cfg.java_min_version]
-	if cmd.has("script"):
-		# Windows: the launcher file is what actually runs.
-		parts = PackedStringArray([str(cmd.script).strip_edges().get_slice("\r\n", 3)])
 	return _ok({"command": " ".join(parts), "java_warning": warning})
 
 

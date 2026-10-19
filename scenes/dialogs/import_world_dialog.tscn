@@ -173,7 +173,8 @@ columns = 2
 layout_mode = 2
 mouse_filter = 0
 tooltip_text = "Replace: the current world is backed up to this server's Backups, then deleted and replaced.
-Add: the world is added next to the current one and the server switches to it (the old world stays on disk)."
+Add: the world is added next to the current one and the server switches to it (the old world stays on disk).
+Dimension (Minecraft 26+ only): one dimension of it is added to the current world as an extra dimension; players reach it with /execute in minecraft:<name> run tp @s <x y z>."
 text = "Import as"
 
 [node name="ModeOption" type="OptionButton" parent="VBox/Options"]
@@ -181,13 +182,31 @@ unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
 tooltip_text = "Replace: the current world is backed up to this server's Backups, then deleted and replaced.
-Add: the world is added next to the current one and the server switches to it (the old world stays on disk)."
+Add: the world is added next to the current one and the server switches to it (the old world stays on disk).
+Dimension (Minecraft 26+ only): one dimension of it is added to the current world as an extra dimension; players reach it with /execute in minecraft:<name> run tp @s <x y z>."
 selected = 0
-item_count = 2
+item_count = 3
 popup/item_0/text = "Replace current world"
 popup/item_0/id = 0
 popup/item_1/text = "Add as new world and switch to it"
 popup/item_1/id = 1
+popup/item_2/text = "Add as dimension of current world"
+popup/item_2/id = 2
+
+[node name="DimensionLabel" type="Label" parent="VBox/Options"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Which of the world's dimensions to add. \"Older save\" ones come from a copy of the original world that the folder still carries."
+text = "Dimension"
+
+[node name="DimensionOption" type="OptionButton" parent="VBox/Options"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Which of the world's dimensions to add. \"Older save\" ones come from a copy of the original world that the folder still carries."
 
 [node name="ApplyLabel" type="Label" parent="VBox/Options"]
 layout_mode = 2

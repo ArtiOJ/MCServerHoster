@@ -26,25 +26,29 @@ const MAX_SIZE := 16 * 1024 * 1024
 var _data := PackedByteArray()
 var _pos := 0
 var _failed := false
+var _bytes_as_bool := false
 
 
 ## Reads a gzip-compressed (or uncompressed) NBT file. Returns the root compound, or {} on failure.
-static func read_file(path: String) -> Dictionary:
+## [param bytes_as_bool] turns byte tags holding 0/1 into booleans, as Minecraft's JSON
+## formats (datapacks) require for the flags NBT stores as bytes.
+static func read_file(path: String, bytes_as_bool := false) -> Dictionary:
 	var f := FileAccess.open(path, FileAccess.READ)
 	if f == null:
 		return {}
 	var raw := f.get_buffer(mini(f.get_length(), MAX_SIZE))
-	return parse(raw)
+	return parse(raw, bytes_as_bool)
 
 
 ## Parses NBT bytes (gzip-compressed or not). Returns the root compound, or {} on failure.
-static func parse(raw: PackedByteArray) -> Dictionary:
+static func parse(raw: PackedByteArray, bytes_as_bool := false) -> Dictionary:
 	var data := raw
 	if raw.size() >= 2 and raw[0] == 0x1F and raw[1] == 0x8B:
 		data = raw.decompress_dynamic(MAX_SIZE, FileAccess.COMPRESSION_GZIP)
 	if data.is_empty():
 		return {}
 	var reader := Nbt.new()
+	reader._bytes_as_bool = bytes_as_bool
 	reader._data = data
 	var root = reader._read_root()
 	return root if root is Dictionary and not reader._failed else {}
@@ -78,6 +82,8 @@ func _payload(type: int, depth: int) -> Variant:
 	match type:
 		TAG_BYTE:
 			var v := _u8()
+			if _bytes_as_bool and v <= 1:
+				return v == 1
 			return v - 256 if v > 127 else v
 		TAG_SHORT:
 			var v := _u16()

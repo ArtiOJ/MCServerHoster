@@ -228,13 +228,14 @@ func _open_server_import_for(files: PackedStringArray) -> bool:
 	return false
 
 
-## A dropped .zip or world folder (level.dat at its top or one level down) opens the
-## world import dialog for the current server. Returns true if handled.
+## A dropped .zip, world folder (level.dat at its top or one level down) or Minecraft 26+
+## dimension folder opens the world import dialog for the current server. Returns true if handled.
 func _open_world_import_for(files: PackedStringArray) -> bool:
 	for path in files:
 		var is_world := path.get_extension().to_lower() in ["zip", "mcworld"]
 		if DirAccess.dir_exists_absolute(path):
-			is_world = FileAccess.file_exists(path.path_join("level.dat")) or Array(DirAccess.get_directories_at(path)).any(
+			is_world = FileAccess.file_exists(path.path_join("level.dat")) or WorldImporter.is_dimension_dir(path) \
+					or Array(DirAccess.get_directories_at(path)).any(
 					func(d: String) -> bool: return FileAccess.file_exists(path.path_join(d).path_join("level.dat")))
 		if not is_world:
 			continue
