@@ -65,6 +65,10 @@ var firewall_app_ports := PackedInt32Array()
 var previous_game_ports := PackedInt32Array()
 ## Running in tests or with `-- --no-autostart` skips auto-starting servers.
 var autostart_enabled := true
+## Launched with the Run button of the Godot editor (its debugger is attached). It works
+## like the real app but never registers itself to start at login, which would launch the
+## editor's Godot binary. Headless test runs and exported builds have no debugger attached.
+var test_copy := false
 ## `-- --profile=<name>` keeps a separate settings file (used by integration tests).
 var settings_path := DEFAULT_SETTINGS_PATH
 ## PID of another running Server Manager using the same settings profile, or -1.
@@ -76,6 +80,7 @@ var _owns_lock := false
 func _ready() -> void:
 	servers_root = _default_servers_root()
 	var args := OS.get_cmdline_user_args()
+	test_copy = EngineDebugger.is_active()
 	autostart_enabled = not args.has("--no-autostart")
 	for arg in args:
 		if arg.begins_with("--profile="):
@@ -218,6 +223,8 @@ func launched_minimized() -> bool:
 ## Creates or removes the login autostart entry to match [member start_at_login]: an XDG
 ## autostart file on Linux, the user's Run registry key on Windows.
 func apply_autostart() -> Error:
+	if test_copy:
+		return OK  # It would register the editor's Godot binary.
 	if OS.get_name() == "Windows":
 		return _apply_windows_autostart()
 	var config_home := OS.get_environment("XDG_CONFIG_HOME")

@@ -115,6 +115,9 @@ func open(source: ServerSource = null) -> void:
 	_sleep_option.select(AppSettings.sleep_policy)
 	_wake_check.button_pressed = AppSettings.restart_after_wake
 	_login_check.button_pressed = AppSettings.start_at_login
+	if AppSettings.test_copy:
+		_login_check.disabled = true
+		_login_check.tooltip_text = "Set this in the installed app; this copy runs from the Godot editor."
 	_minimized_check.button_pressed = AppSettings.start_minimized
 	_sleep_option.disabled = not PowerManager.supported
 	_wake_check.disabled = not PowerManager.supported
