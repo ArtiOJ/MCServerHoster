@@ -2,6 +2,7 @@
 
 [ext_resource type="Script" path="res://scripts/ui/dialogs/import_server_dialog.gd" id="1"]
 [ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/components/port_field.tscn" id="port_field"]
 
 [node name="ImportServerDialog" type="ConfirmationDialog"]
 title = "Import an existing server"
@@ -171,13 +172,9 @@ text = "Port"
 layout_mode = 2
 theme_override_constants/separation = 10
 
-[node name="PortSpin" type="SpinBox" parent="VBox/Options/PortRow"]
+[node name="PortSpin" parent="VBox/Options/PortRow" instance=ExtResource("port_field")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
-min_value = 1024.0
-max_value = 65535.0
-value = 25565.0
 
 [node name="PortStatus" type="Label" parent="VBox/Options/PortRow"]
 unique_name_in_owner = true
@@ -196,6 +193,7 @@ text = "Memory"
 unique_name_in_owner = true
 custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
+select_all_on_focus = true
 size_flags_horizontal = 0
 tooltip_text = "Java heap (-Xmx). Taken from the folder's start script when it has one."
 min_value = 512.0

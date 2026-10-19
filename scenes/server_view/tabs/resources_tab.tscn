@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/globe.svg" id="6"]
 [ext_resource type="Texture2D" path="res://assets/icons/undo.svg" id="7"]
 [ext_resource type="Texture2D" path="res://assets/icons/save.svg" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/components/port_field.tscn" id="port_field"]
 
 [node name="Resources" type="MarginContainer"]
 size_flags_horizontal = 3
@@ -325,15 +326,9 @@ layout_mode = 2
 size_flags_horizontal = 3
 text = "Server port"
 
-[node name="PortSpin" type="SpinBox" parent="VBox/Scroll/Content/NetworkCard/VBox/PortRow"]
+[node name="PortSpin" parent="VBox/Scroll/Content/NetworkCard/VBox/PortRow" instance=ExtResource("port_field")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(160, 0)
 layout_mode = 2
-min_value = 1024.0
-max_value = 65535.0
-value = 25565.0
-rounded = true
-update_on_text_changed = true
 
 [node name="PortStatus" type="Label" parent="VBox/Scroll/Content/NetworkCard/VBox"]
 unique_name_in_owner = true

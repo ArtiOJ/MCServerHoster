@@ -128,3 +128,13 @@ func test_ufw_port_verdict() -> void:
 	check_eq(NetworkService.ufw_port_verdict("", "ACCEPT", 25565).allowed, "yes", "accept policy")
 	var udp_only := "### tuple ### allow udp 25565 0.0.0.0/0 any 0.0.0.0/0 in\n"
 	check_eq(NetworkService.ufw_port_verdict(udp_only, "DROP", 25565).allowed, "no", "udp rule does not open tcp")
+
+
+func test_ufw_rule_with_comment() -> void:
+	# Exactly what `ufw allow 2314/tcp comment '…'` writes (seen on a real system).
+	var rules := "### tuple ### allow tcp 1714:1764 0.0.0.0/0 any 0.0.0.0/0 KDE%20Connect - in\n" \
+		+ "### tuple ### allow tcp 2314 0.0.0.0/0 any 0.0.0.0/0 in comment=4d696e656372616674207365727665722028536572766572204d616e6167657229\n"
+	check_eq(NetworkService.ufw_port_verdict(rules, "DROP", 2314).allowed, "yes", "commented rule is recognised")
+	check_eq(NetworkService.ufw_port_verdict(rules, "DROP", 25565).allowed, "no", "other ports still blocked")
+	var out_rule := "### tuple ### allow tcp 2314 0.0.0.0/0 any 0.0.0.0/0 out comment=6869\n"
+	check_eq(NetworkService.ufw_port_verdict(out_rule, "DROP", 2314).allowed, "no", "outgoing rule does not count")

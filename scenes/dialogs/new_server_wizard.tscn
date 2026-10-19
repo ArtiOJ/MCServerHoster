@@ -8,6 +8,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/archive.svg" id="world_zip"]
 [ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="world_folder"]
 [ext_resource type="Texture2D" path="res://assets/icons/close.svg" id="world_clear"]
+[ext_resource type="PackedScene" path="res://scenes/components/port_field.tscn" id="port_field"]
 
 [sub_resource type="StyleBoxFlat" id="Style_bg"]
 bg_color = Color(0.114, 0.133, 0.169, 1)
@@ -208,13 +209,9 @@ theme_override_constants/separation = 12
 layout_mode = 2
 text = "Port"
 
-[node name="PortSpin" type="SpinBox" parent="Margin/VBox/Pages/Resources/PortRow"]
+[node name="PortSpin" parent="Margin/VBox/Pages/Resources/PortRow" instance=ExtResource("port_field")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
-min_value = 1024.0
-max_value = 65535.0
-value = 25565.0
 
 [node name="PortStatus" type="Label" parent="Margin/VBox/Pages/Resources/PortRow"]
 unique_name_in_owner = true

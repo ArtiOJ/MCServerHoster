@@ -26,7 +26,7 @@ var _serial := 0
 @onready var _options: GridContainer = %Options
 @onready var _name_edit: LineEdit = %NameEdit
 @onready var _mode_option: OptionButton = %ModeOption
-@onready var _port_spin: SpinBox = %PortSpin
+@onready var _port_spin: PortField = %PortSpin
 @onready var _port_status: Label = %PortStatus
 @onready var _ram_spin: SpinBox = %RamSpin
 @onready var _paper_label: Label = %PaperLabel
@@ -50,7 +50,7 @@ func _ready() -> void:
 	_folder_edit.text_submitted.connect(_analyze)
 	for sig: Signal in [_name_edit.text_changed, _eula_check.toggled, _paper_check.toggled, _mode_option.item_selected]:
 		sig.connect(func(_v: Variant) -> void: _validate())
-	_port_spin.value_changed.connect(func(_v: float) -> void: _validate())
+	_port_spin.port_changed.connect(func(_p: int, _ok: bool) -> void: _validate())
 
 
 ## Shows the dialog; with [param dir] the folder is analysed right away.
@@ -88,7 +88,7 @@ func _analyze(dir: String) -> void:
 		return
 	_analysis = result
 	_name_edit.text = dir.get_file()
-	_port_spin.value = result.port
+	_port_spin.port = result.port
 	_ram_spin.value = result.ram_max_mb if result.ram_max_mb > 0 else AppSettings.default_ram_mb
 	_paper_check.button_pressed = true
 	_eula_check.button_pressed = false
@@ -136,9 +136,12 @@ func _validate() -> void:
 	var ok: bool = not a.is_empty() and a.can_import and not _busy
 	if ok and not a.managed:
 		ok = _name_edit.text.strip_edges() != "" and (a.eula_accepted or _eula_check.button_pressed)
-		var port := int(_port_spin.value)
+		var port := _port_spin.port
 		var clash := ServerManager.port_owner(port)
-		if clash != null:
+		if not _port_spin.is_valid():
+			ok = false
+			_port_status.text = _port_spin.error_text()
+		elif clash != null:
 			ok = false
 			_port_status.text = "Used by %s — free port: %d" % [clash.config.display_name, ServerManager.allocate_game_port()]
 		elif a.running_pid > 0:
@@ -170,7 +173,7 @@ func _import() -> void:
 		"analysis": a,
 		"display_name": _name_edit.text.strip_edges(),
 		"mode": "copy" if _mode_option.selected == Mode.COPY else "in_place",
-		"port": int(_port_spin.value),
+		"port": _port_spin.port,
 		"ram_max_mb": int(_ram_spin.value),
 		"switch_to_paper": a.needs_paper_switch and _paper_check.button_pressed,
 		"accept_eula": _eula_check.button_pressed,

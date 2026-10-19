@@ -82,7 +82,7 @@ step = 256.0
 value = 4096.0
 rounded = true
 suffix = "MB"
-update_on_text_changed = true
+select_all_on_focus = true
 
 [node name="ConsoleLinesLabel" type="Label" parent="Scroll/VBox/Grid"]
 layout_mode = 2
@@ -99,7 +99,7 @@ step = 500.0
 value = 5000.0
 rounded = true
 suffix = "lines"
-update_on_text_changed = true
+select_all_on_focus = true
 
 [node name="UpdatesCheck" type="CheckButton" parent="Scroll/VBox"]
 unique_name_in_owner = true

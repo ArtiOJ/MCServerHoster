@@ -130,7 +130,7 @@ max_value = 10080.0
 value = 60.0
 rounded = true
 suffix = "min"
-update_on_text_changed = true
+select_all_on_focus = true
 
 [node name="ThresholdSpin" type="SpinBox" parent="VBox/Editor/Grid/WhenRow"]
 unique_name_in_owner = true
@@ -140,7 +140,7 @@ layout_mode = 2
 min_value = 1.0
 max_value = 1440.0
 value = 15.0
-update_on_text_changed = true
+select_all_on_focus = true
 
 [node name="DaysLabel" type="Label" parent="VBox/Editor/Grid"]
 layout_mode = 2
@@ -308,7 +308,7 @@ tooltip_text = "Wait this long after the trigger before doing the action."
 max_value = 86400.0
 rounded = true
 suffix = "s"
-update_on_text_changed = true
+select_all_on_focus = true
 
 [node name="NameLabel" type="Label" parent="VBox/Editor/Grid"]
 layout_mode = 2

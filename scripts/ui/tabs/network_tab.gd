@@ -25,7 +25,7 @@ var _last_result := {}
 @onready var _firewall_row: HBoxContainer = %FirewallRow
 @onready var _firewall_command: LineEdit = %FirewallCommand
 @onready var _copy_firewall_button: Button = %CopyFirewallButton
-@onready var _port_spin: SpinBox = %PortSpin
+@onready var _port_spin: PortField = %PortSpin
 @onready var _apply_port_button: Button = %ApplyPortButton
 @onready var _port_status: Label = %PortStatus
 @onready var _firewall_notice: PanelContainer = %FirewallNotice
@@ -49,7 +49,7 @@ var _allowing := false
 
 
 func _ready() -> void:
-	_port_spin.value_changed.connect(func(_v: float) -> void: _update_port_status())
+	_port_spin.port_changed.connect(func(_p: int, _ok: bool) -> void: _update_port_status())
 	_apply_port_button.pressed.connect(_apply_port)
 	_allow_top_button.pressed.connect(_allow_firewall)
 	_allow_button.pressed.connect(_allow_firewall)
@@ -117,8 +117,8 @@ func _refresh() -> void:
 	_test_button.disabled = _testing
 
 	_refresh_forwarding(cfg)
-	if not _port_spin.get_line_edit().has_focus():
-		_port_spin.set_value_no_signal(cfg.port)
+	if not _port_spin.has_focus():
+		_port_spin.set_port(cfg.port)
 	_update_port_status()
 
 	var nat := NetworkService.nat_diagnosis()
@@ -159,7 +159,12 @@ func _refresh() -> void:
 func _update_port_status() -> void:
 	if instance == null:
 		return
-	var port := int(_port_spin.value)
+	var port := _port_spin.port
+	if not _port_spin.is_valid():
+		_port_status.text = "✕ " + _port_spin.error_text()
+		_port_status.add_theme_color_override("font_color", Color("e05555"))
+		_apply_port_button.disabled = true
+		return
 	var changed := port != instance.config.port
 	var clash := ServerManager.port_owner(port, instance.config.id)
 	_port_status.remove_theme_color_override("font_color")
@@ -181,7 +186,7 @@ func _update_port_status() -> void:
 
 
 func _apply_port() -> void:
-	var err := instance.set_port(int(_port_spin.value))
+	var err := instance.set_port(_port_spin.port)
 	if err != "":
 		Notifier.error(err)
 		return

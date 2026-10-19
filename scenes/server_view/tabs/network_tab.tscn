@@ -7,6 +7,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/activity.svg" id="5"]
 [ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="6"]
 [ext_resource type="Texture2D" path="res://assets/icons/settings.svg" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/components/port_field.tscn" id="port_field"]
 
 [node name="Network" type="MarginContainer"]
 size_flags_horizontal = 3
@@ -69,16 +70,9 @@ tooltip_text = "The TCP port players connect to. Changing it updates server.prop
 theme_type_variation = &"MutedLabel"
 text = "Port"
 
-[node name="PortSpin" type="SpinBox" parent="Scroll/Content/AddressesCard/VBox/PortRow"]
+[node name="PortSpin" parent="Scroll/Content/AddressesCard/VBox/PortRow" instance=ExtResource("port_field")]
 unique_name_in_owner = true
-custom_minimum_size = Vector2(130, 0)
 layout_mode = 2
-tooltip_text = "The TCP port players connect to."
-min_value = 1024.0
-max_value = 65535.0
-value = 25565.0
-rounded = true
-update_on_text_changed = true
 
 [node name="ApplyPortButton" type="Button" parent="Scroll/Content/AddressesCard/VBox/PortRow"]
 unique_name_in_owner = true

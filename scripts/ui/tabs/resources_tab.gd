@@ -37,7 +37,7 @@ var _host_mb := 0
 @onready var _java_info: Label = %JavaInfo
 @onready var _java_warning: Label = %JavaWarning
 @onready var _command_preview: CodeEdit = %CommandPreview
-@onready var _port_spin: SpinBox = %PortSpin
+@onready var _port_spin: PortField = %PortSpin
 @onready var _port_status: Label = %PortStatus
 @onready var _rcon_label: Label = %RconLabel
 @onready var _dirty_label: Label = %DirtyLabel
@@ -79,7 +79,7 @@ func _ready() -> void:
 	_preset_option.item_selected.connect(_on_input_changed.unbind(1))
 	_extra_args_edit.text_changed.connect(_on_input_changed.unbind(1))
 	_server_args_edit.text_changed.connect(_on_input_changed.unbind(1))
-	_port_spin.value_changed.connect(_on_input_changed.unbind(1))
+	_port_spin.port_changed.connect(_on_input_changed.unbind(2))
 	_java_option.item_selected.connect(_on_java_selected)
 	JavaRuntimes.runtimes_changed.connect(_on_runtimes_changed)
 	_revert_button.pressed.connect(_load_draft)
@@ -124,7 +124,7 @@ func _load_draft() -> void:
 	_preset_option.select(_draft.jvm_preset)
 	_extra_args_edit.text = _draft.extra_jvm_args
 	_server_args_edit.text = _draft.extra_server_args
-	_port_spin.value = _draft.port
+	_port_spin.port = _draft.port
 	_fill_java_options()
 	_loading = false
 	_refresh()
@@ -178,7 +178,7 @@ func _on_input_changed() -> void:
 	_draft.jvm_preset = clampi(_preset_option.selected, 0, ServerConfig.JvmPreset.size() - 1) as ServerConfig.JvmPreset
 	_draft.extra_jvm_args = _extra_args_edit.text
 	_draft.extra_server_args = _server_args_edit.text
-	_draft.port = int(_port_spin.value)
+	_draft.port = _port_spin.port
 	_refresh()
 
 
@@ -248,6 +248,10 @@ func _refresh_network() -> void:
 	var port := _draft.port
 	var color := OK_COLOR
 	var text := "Port %d is available." % port
+	if not _port_spin.is_valid():
+		_port_status.text = _port_spin.error_text()
+		_port_status.add_theme_color_override("font_color", ERROR_COLOR)
+		return
 	var owner := ServerManager.port_owner(port, instance.config.id)
 	if owner != null:
 		color = ERROR_COLOR
@@ -290,7 +294,9 @@ func _validation_errors() -> PackedStringArray:
 	var affinity := _affinity_error()
 	if affinity != "":
 		errors.append(affinity)
-	if ServerManager.port_owner(_draft.port, instance.config.id) != null or _draft.port == instance.config.rcon_port:
+	if not _port_spin.is_valid():
+		errors.append(_port_spin.error_text().to_lower())
+	elif ServerManager.port_owner(_draft.port, instance.config.id) != null or _draft.port == instance.config.rcon_port:
 		errors.append("the port conflicts with another server.")
 	return errors
 
@@ -322,8 +328,11 @@ func _save() -> void:
 	c.jvm_preset = _draft.jvm_preset
 	c.extra_jvm_args = _draft.extra_jvm_args
 	c.extra_server_args = _draft.extra_server_args
-	c.port = _draft.port
 	instance.save_config()
+	# Through set_port so server.properties and start-on-connect follow the new port.
+	var port_error := instance.set_port(_draft.port)
+	if port_error != "":
+		Notifier.error(port_error)
 	var suffix := " Restart the server to apply." if instance.is_process_alive() else ""
 	Notifier.success("Saved resource settings for %s.%s" % [c.display_name, suffix])
 	_load_draft()

@@ -41,7 +41,7 @@ var _world_serial := 0
 @onready var _version_list: ItemList = %VersionList
 @onready var _version_details: Label = %VersionDetails
 @onready var _ram_field: SliderField = %RamField
-@onready var _port_spin: SpinBox = %PortSpin
+@onready var _port_spin: PortField = %PortSpin
 @onready var _port_status: Label = %PortStatus
 @onready var _auto_start_check: CheckButton = %AutoStartCheck
 @onready var _main_rows: VBoxContainer = %MainRows
@@ -75,7 +75,7 @@ func _ready() -> void:
 	_show_pre.toggled.connect(func(_on: bool) -> void: _populate_versions())
 	_reload_button.pressed.connect(func() -> void: _load_versions(true))
 	_version_list.item_selected.connect(_on_version_selected)
-	_port_spin.value_changed.connect(func(_v: float) -> void: _check_port())
+	_port_spin.port_changed.connect(func(_p: int, _ok: bool) -> void: _check_port())
 	_eula_check.toggled.connect(func(_on: bool) -> void: _update_nav())
 	_more_search.text_changed.connect(func(_t: String) -> void: _filter_more())
 	_world_zip_button.pressed.connect(func() -> void: _world_zip_dialog.popup_centered())
@@ -95,7 +95,7 @@ func open() -> void:
 	_name_edit.text = _suggest_name()
 	_color_picker.color = COLORS[ServerManager.get_instances().size() % COLORS.size()]
 	_ram_field.value = clampi(AppSettings.default_ram_mb, 1024, int(_ram_field.max_value))
-	_port_spin.value = ServerManager.allocate_game_port()
+	_port_spin.port = ServerManager.allocate_game_port()
 	_auto_start_check.button_pressed = false
 	_eula_check.button_pressed = false
 	_show_pre.button_pressed = AppSettings.show_unstable_versions
@@ -144,7 +144,7 @@ func _update_nav() -> void:
 		Page.VERSION:
 			can_next = not _build.is_empty() and _world_problem() == ""
 		Page.RESOURCES:
-			can_next = ServerManager.port_owner(int(_port_spin.value)) == null
+			can_next = _port_spin.is_valid() and ServerManager.port_owner(_port_spin.port) == null
 		Page.REVIEW:
 			can_next = _eula_check.button_pressed
 		Page.INSTALL:
@@ -276,9 +276,12 @@ func _on_version_selected(idx: int) -> void:
 # --- Resources --------------------------------------------------------------
 
 func _check_port() -> void:
-	var port := int(_port_spin.value)
+	var port := _port_spin.port
 	var clash := ServerManager.port_owner(port)
-	if clash != null:
+	if not _port_spin.is_valid():
+		_port_status.text = "✕ " + _port_spin.error_text()
+		_port_status.add_theme_color_override("font_color", Color("e05555"))
+	elif clash != null:
 		_port_status.text = "✕ Used by %s" % clash.config.display_name
 		_port_status.add_theme_color_override("font_color", Color("e05555"))
 	elif not PlatformBackend.is_port_free(port):
@@ -300,7 +303,7 @@ func _summary_text() -> String:
 		"Name:  %s" % _name_edit.text.strip_edges(),
 		"Software:  Paper %s, build #%d" % [_selected_version(), _build.get("id", 0)],
 		"Memory:  %s heap" % Fmt.megabytes(int(_ram_field.value)),
-		"Port:  %d" % int(_port_spin.value),
+		"Port:  %d" % _port_spin.port,
 		"Game mode:  %s · %s · up to %s players" % [_main_value("gamemode"), _main_value("difficulty"), players],
 		"World:  %s · seed %s" % [_main_value("level-type").trim_prefix("minecraft:"), seed_text if seed_text != "" else "random"],
 		"MOTD:  %s" % _main_value("motd"),
@@ -410,7 +413,7 @@ func _install() -> void:
 		"version_info": _version_info,
 		"ram_max_mb": ram,
 		"ram_min_mb": clampi(ram / 4, 512, ram),
-		"port": int(_port_spin.value),
+		"port": _port_spin.port,
 		"settings": settings_spec(),
 	}, func(stage: String, fraction: float) -> void:
 		_install_status.text = stage

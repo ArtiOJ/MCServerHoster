@@ -88,3 +88,25 @@ func test_server_settings_round_trip() -> void:
 	check_eq(r.get_value(SettingsCatalog.get_entry("view-distance")), "10", "default when unset")
 	check(FileAccess.file_exists(dir.path_join("config/paper-world-defaults.yml")), "config dir created")
 	FileOps.remove_tree(dir)
+
+
+func test_port_field_never_rewrites_typing() -> void:
+	var field: PortField = load("res://scenes/components/port_field.tscn").instantiate()
+	field.set_port(25565)
+	check(field.is_valid(), "25565 valid")
+	# Backspacing down to "255" must leave "255" in the box (a SpinBox snapped it to 1024).
+	for t in ["2556", "255", "25", "2", ""]:
+		field.text = t
+		field._on_text_changed(t)
+		check_eq(field.text, t, "text kept while typing '%s'" % t)
+	check(not field.is_valid(), "empty is invalid")
+	field.text = "2314"
+	field._on_text_changed("2314")
+	check(field.is_valid() and field.port == 2314, "new port accepted")
+	field.text = "23a14"
+	field._on_text_changed("23a14")
+	check_eq(field.text, "2314", "non-digits dropped")
+	field.text = "80"
+	field._on_text_changed("80")
+	check(not field.is_valid() and field.error_text().contains("administrator"), "privileged port explained")
+	field.free()

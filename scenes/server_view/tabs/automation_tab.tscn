@@ -85,7 +85,7 @@ layout_mode = 2
 max_value = 20.0
 value = 3.0
 rounded = true
-update_on_text_changed = true
+select_all_on_focus = true
 
 [node name="WindowLabel" type="Label" parent="VBox/Scroll/Content/RecoveryCard/VBox/Grid"]
 layout_mode = 2
@@ -101,7 +101,7 @@ max_value = 1440.0
 value = 10.0
 rounded = true
 suffix = "min"
-update_on_text_changed = true
+select_all_on_focus = true
 
 [node name="StopTimeoutLabel" type="Label" parent="VBox/Scroll/Content/RecoveryCard/VBox/Grid"]
 layout_mode = 2
@@ -119,7 +119,7 @@ max_value = 600.0
 value = 60.0
 rounded = true
 suffix = "s"
-update_on_text_changed = true
+select_all_on_focus = true
 
 [node name="RecoveryHint" type="Label" parent="VBox/Scroll/Content/RecoveryCard/VBox"]
 unique_name_in_owner = true
@@ -321,7 +321,7 @@ layout_mode = 2
 max_value = 1000.0
 value = 10.0
 rounded = true
-update_on_text_changed = true
+select_all_on_focus = true
 
 [node name="FullBackupCheck" type="CheckButton" parent="VBox/Scroll/Content/BackupCard/VBox"]
 unique_name_in_owner = true

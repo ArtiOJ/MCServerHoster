@@ -558,6 +558,22 @@ corner_radius_bottom_left = 4
 content_margin_left = 6.0
 content_margin_right = 6.0
 
+[sub_resource type="StyleBoxFlat" id="Style_input_invalid"]
+bg_color = Color(0.075, 0.086, 0.106, 1)
+border_width_left = 1
+border_width_top = 1
+border_width_right = 1
+border_width_bottom = 1
+border_color = Color(0.878, 0.333, 0.333, 1)
+corner_radius_top_left = 6
+corner_radius_top_right = 6
+corner_radius_bottom_right = 6
+corner_radius_bottom_left = 6
+content_margin_left = 10.0
+content_margin_top = 6.0
+content_margin_right = 10.0
+content_margin_bottom = 6.0
+
 [resource]
 default_font_size = 14
 AcceptDialog/styles/panel = SubResource("Style_dialog_panel")
@@ -667,6 +683,9 @@ HSlider/styles/grabber_area = SubResource("Style_slider_fill")
 HSlider/styles/grabber_area_highlight = SubResource("Style_slider_fill")
 HeaderPanel/base_type = &"PanelContainer"
 HeaderPanel/styles/panel = SubResource("Style_header")
+InvalidInput/base_type = &"LineEdit"
+InvalidInput/styles/normal = SubResource("Style_input_invalid")
+InvalidInput/styles/focus = SubResource("Style_input_invalid")
 ItemList/colors/font_color = Color(0.82, 0.84, 0.87, 1)
 ItemList/colors/font_selected_color = Color(1, 1, 1, 1)
 ItemList/colors/font_hovered_color = Color(1, 1, 1, 1)

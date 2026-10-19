@@ -336,8 +336,10 @@ static func ufw_port_verdict(rules_text: String, default_policy: String, port: i
 	for line in rules_text.split("\n"):
 		if not line.begins_with("### tuple ###"):
 			continue
+		# action proto dport dst sport src [app fields] direction [comment=<hex>]
 		var f := line.trim_prefix("### tuple ###").strip_edges().split(" ", false)
-		# action proto dport dst sport src [app...] direction
+		while not f.is_empty() and f[-1].begins_with("comment="):
+			f.remove_at(f.size() - 1)
 		if f.size() < 6 or f[-1] != "in":
 			continue
 		var action := f[0]
@@ -399,6 +401,8 @@ func allow_in_firewall(port: int) -> Dictionary:
 		return {"ok": true, "message": "Port %d is now allowed through %s." % [port, fw.name]}
 	if code == 126 or code == 127:
 		return {"ok": false, "message": "The password prompt was cancelled or the password was not accepted."}
+	if code == 0:
+		return {"ok": false, "message": "%s reported success, but the new rule for port %d could not be confirmed (%s). Check with: sudo ufw status" % [fw.name, port, after.detail]}
 	return {"ok": false, "message": "%s did not open the port (exit code %d)." % [fw.name, code]}
 
 
