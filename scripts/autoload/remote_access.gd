@@ -16,6 +16,8 @@ const BLOCK_SEC := 900
 const STATS_INTERVAL_MSEC := 1000
 const HOST_STATS_INTERVAL_MSEC := 2000
 const CONSOLE_SNAPSHOT_LINES := 1000
+## Keep the computer awake this long after the last remote request.
+const AWAKE_AFTER_ACTIVITY_MSEC := 10 * 60 * 1000
 
 var enabled := false
 var port := RemoteProtocol.DEFAULT_PORT
@@ -24,6 +26,8 @@ var computer_name := ""
 var grants: Array[RemoteGrant] = []
 ## Why the listener is not running ("" when it runs or is switched off).
 var listen_error := ""
+## When someone last asked this computer to do something (ticks msec, -1 = never).
+var last_activity_msec := -1
 
 var _server: TCPServer
 var _key: CryptoKey
@@ -39,6 +43,8 @@ var _last_host_msec := 0
 var _host_last_busy := -1
 var _host_last_total := -1
 var _host_cpu_pct := 0.0
+## Router, firewall or public address changed: Network tabs reload.
+var _network_dirty := false
 
 
 func _ready() -> void:
@@ -51,6 +57,7 @@ func _ready() -> void:
 	ServerManager.server_removed.connect(_on_server_removed)
 	for inst in ServerManager.get_instances():
 		_watch(inst)
+	NetworkService.status_changed.connect(func() -> void: _network_dirty = true)
 	if enabled:
 		_listen.call_deferred()
 
@@ -64,6 +71,19 @@ func _exit_tree() -> void:
 
 
 # --- Settings & keys ---------------------------------------------------------------
+
+## True while someone used remote access recently (the computer then doesn't idle to sleep).
+func recently_active() -> bool:
+	return last_activity_msec >= 0 and Time.get_ticks_msec() - last_activity_msec < AWAKE_AFTER_ACTIVITY_MSEC
+
+
+## Called for every request from a connected person.
+func note_activity() -> void:
+	var was_active := recently_active()
+	last_activity_msec = Time.get_ticks_msec()
+	if not was_active:
+		PowerManager.update_locks()
+
 
 func is_listening() -> bool:
 	return _server != null and _server.is_listening()
@@ -214,6 +234,7 @@ func snapshot(inst: ServerInstance) -> Dictionary:
 		"address": inst.connect_address(), "public_address": inst.public_address(),
 		"java": inst.java_description(), "cores": OS.get_processor_count(), "motd": inst.motd(),
 		"problem": inst.start_problem() if not inst.is_busy() else "",
+		"wake_error": inst.wake_error(),
 	}
 	data.merge(live_state(inst))
 	data.merge(stats(inst))
@@ -226,6 +247,7 @@ func live_state(inst: ServerInstance) -> Dictionary:
 		"state": inst.state, "alive": inst.is_process_alive(), "asleep": inst.is_asleep(),
 		"read_only": inst.is_read_only(), "can_send": inst.can_send_commands(), "pid": inst.process_id(),
 		"players": Array(inst.players), "max_players": inst.max_players,
+		"backup_busy": inst.backup_busy, "backup_progress": inst.backup_progress,
 	}
 
 
@@ -274,6 +296,13 @@ func _watch(inst: ServerInstance) -> void:
 			_console_batches[id] = []
 		_console_batches[id].append(_wire_line(entry)))
 	inst.temporary_run_ended.connect(func() -> void: _broadcast(id, {"ev": "temp_ended", "server": id}))
+	inst.data_changed.connect(func(area: StringName) -> void: _broadcast(id, {"ev": "data", "server": id, "area": str(area)}))
+	# Busy/idle at once; progress with the regular stats.
+	inst.backup_status_changed.connect(func() -> void:
+		if inst.backup_progress <= 0.0 or not inst.backup_busy:
+			_dirty_snapshots[id] = true
+		else:
+			_dirty_stats[id] = true)
 	for session in sessions():
 		session.refresh_access()
 
@@ -298,7 +327,13 @@ func _flush_events() -> void:
 		_console_batches.clear()
 		_dirty_snapshots.clear()
 		_dirty_stats.clear()
+		_network_dirty = false
 		return
+	if _network_dirty:
+		_network_dirty = false
+		for session in sessions():
+			for id in session.visible_ids():
+				session.send({"ev": "data", "server": id, "area": "network"})
 	if not _console_batches.is_empty():
 		var batches := _console_batches
 		_console_batches = {}
@@ -330,6 +365,18 @@ func _flush_events() -> void:
 			var msg := {"ev": "host", "data": host_stats()}
 			for s: RemoteSession in admins:
 				s.send(msg)
+
+
+## Sends a waiting snapshot of [param server_id] right away, so a reply sent next (for
+## example to a settings save) never arrives before the state it produced.
+func flush_snapshot(server_id: String) -> void:
+	if not _dirty_snapshots.has(server_id):
+		return
+	_dirty_snapshots.erase(server_id)
+	_dirty_stats.erase(server_id)
+	var inst := ServerManager.get_instance(server_id)
+	if inst != null:
+		_broadcast(server_id, {"ev": "server", "server": server_id, "data": snapshot(inst)})
 
 
 func _broadcast(server_id: String, msg: Dictionary) -> void:

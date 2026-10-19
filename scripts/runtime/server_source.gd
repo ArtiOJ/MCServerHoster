@@ -73,3 +73,9 @@ func delete_handle(_handle: ServerHandle, _delete_files := true, _delete_backups
 
 func duplicate_handle(_handle: ServerHandle, _display_name: String, _copy_worlds := true, _copy_plugins := true, _on_status := Callable()) -> Dictionary:
 	return {"ok": false, "error": "Not available."}
+
+
+## Runs a computer-wide operation ([HostOps]: preferences, Java runtimes, firewall rules,
+## importing servers, access keys). Returns its JSON-style result ({ok, error?, ...}).
+func call_host_op(_op: String, _args := {}, _on_progress := Callable()) -> Dictionary:
+	return {"ok": false, "error": "Not available."}

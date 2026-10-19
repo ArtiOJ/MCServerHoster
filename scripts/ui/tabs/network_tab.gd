@@ -1,20 +1,25 @@
 class_name NetworkTab
 extends ServerTab
 ## Addresses, UPnP forwarding, the "test from the internet" check and NAT/firewall/RCON
-## guidance for one server. Third-party lookups only run when this tab is shown or a
-## button is pressed (see NetworkService).
+## guidance for one server. Everything is reported by the server's own computer
+## (ServerOps.network_info). Third-party lookups only run when this tab is shown or a
+## button is pressed (see NetworkService). Router and firewall changes reach beyond the
+## server, so for a remote server only its system admins can make them.
 
 const RULE_ROW_SCENE := preload("res://scenes/components/firewall_rule_row.tscn")
 
 var _testing := false
-var _last_result := {}
 var _removing := false
-## Server id -> its previous game port, while the firewall still needs attention after a change.
-var _moved_from := {}
+var _allowing := false
+## The last network_info result.
+var _info := {}
+var _serial := 0
 ## Rule waiting for confirmation in the remove dialog.
 var _pending_rule := {}
 ## Signature of the rows currently in the old-rules list (avoids rebuilding on every refresh).
 var _rules_key := ""
+## Tooltips from the scene, restored when a server with full access is shown.
+var _default_tips := {}
 
 @onready var _refresh_button: Button = %RefreshButton
 @onready var _lan_value: Label = %LanValue
@@ -62,182 +67,187 @@ var _rules_key := ""
 @onready var _rcon_warning_label: Label = %RconWarningLabel
 
 
-var _allowing := false
-
-
 func _ready() -> void:
 	_dhcp_reserved_button.pressed.connect(func() -> void:
-		AppSettings.reserved_lan_ip = ServerInstance._lan_ip()
-		AppSettings.save_settings()
-		_refresh())
+		await handle.source().call_host_op("dhcp_reserved")
+		_reload())
 	_port_spin.port_changed.connect(func(_p: int, _ok: bool) -> void: _update_port_status())
 	_apply_port_button.pressed.connect(_apply_port)
 	_allow_top_button.pressed.connect(_allow_firewall)
 	_allow_button.pressed.connect(_allow_firewall)
 	_allow_new_port_button.pressed.connect(_allow_firewall)
 	_remove_old_rule_button.pressed.connect(func() -> void:
-		var rule := _old_app_rule(int(_moved_from.get(instance.config.id, 0)))
+		var rule: Dictionary = _info.get("moved_rule", {})
 		if not rule.is_empty():
 			_request_remove(rule))
 	_remove_rule_confirm.confirmed.connect(func() -> void: _remove_rule(_pending_rule))
-	NetworkService.port_moved.connect(_on_port_moved)
 	_open_router_button.pressed.connect(func() -> void:
-		var gw := str(PlatformBackend.get_current().default_route().get("gateway", ""))
-		if gw != "":
+		var gw := str(_info.get("gateway", ""))
+		if gw != "" and handle != null and not handle.is_remote():
 			OS.shell_open("http://%s/" % gw))
-	_refresh_button.pressed.connect(NetworkService.refresh_public_ip)
-	_copy_lan_button.pressed.connect(func() -> void: _copy(instance.connect_address()))
-	_copy_public_button.pressed.connect(func() -> void: _copy(NetworkService.public_address(instance.config.port)))
+	_refresh_button.pressed.connect(func() -> void:
+		await handle.call_op("network_refresh")
+		_reload())
+	_copy_lan_button.pressed.connect(func() -> void: _copy(str(_info.get("lan_address", ""))))
+	_copy_public_button.pressed.connect(func() -> void: _copy(str(_info.get("public_address", ""))))
 	_copy_firewall_button.pressed.connect(func() -> void: _copy(_firewall_command.text))
 	_upnp_check.toggled.connect(_on_upnp_toggled)
-	_retry_upnp_button.pressed.connect(func() -> void: NetworkService.retry(instance.config.id))
+	_retry_upnp_button.pressed.connect(func() -> void:
+		await handle.call_op("upnp_retry")
+		_reload())
 	_test_button.pressed.connect(_run_test)
 	visibility_changed.connect(_on_visibility_changed)
+	NetworkService.status_changed.connect(func() -> void:
+		if handle != null and not handle.is_remote():
+			_reload())
 
 
 func _on_bound() -> void:
-	watch(instance.state_changed, _refresh.unbind(1))
-	watch(instance.config_changed, _refresh)
-	watch(NetworkService.status_changed, _refresh)
-	_last_result = {}
+	_info = {}
+	_rules_key = ""
+	watch(handle.state_changed, _reload.unbind(1))
+	watch(handle.config_changed, _reload)
+	watch(handle.data_changed, func(area: StringName) -> void:
+		if area == &"network":
+			_reload())
 	_test_status.text = ""
 	_test_reasons.visible = false
-	_refresh()
+	_open_router_button.visible = not handle.is_remote()
+	var why := "" if handle.can_manage_host() else "Only a system admin of %s can change its router or firewall." % handle.host_name()
+	for c: Control in [_upnp_check, _retry_upnp_button, _allow_top_button, _allow_button, _allow_new_port_button, _remove_old_rule_button, _dhcp_reserved_button]:
+		if not _default_tips.has(c):
+			_default_tips[c] = c.tooltip_text
+		c.tooltip_text = why if why != "" else _default_tips[c]
+	_reload()
 	_on_visibility_changed()
 
 
 ## The tab only triggers router discovery and public-IP lookups while the user looks at it.
 func _on_visibility_changed() -> void:
-	if not is_visible_in_tree() or instance == null:
+	if not is_visible_in_tree() or handle == null:
 		return
-	NetworkService.ensure_discovered()
-	if NetworkService.public_ip == "" and NetworkService.public_ip_error == "":
-		NetworkService.refresh_public_ip()
+	await handle.call_op("network_refresh")
+	_reload()
+
+
+## Fetches the network picture from the server's computer and shows it.
+func _reload() -> void:
+	if handle == null or not is_node_ready():
+		return
+	_serial += 1
+	var serial := _serial
+	var h := handle
+	var res: Dictionary = await h.call_op("network_info")
+	if serial != _serial or h != handle or not res.ok:
+		return
+	_info = res
+	_refresh()
 
 
 func _refresh() -> void:
-	if instance == null or not is_node_ready():
+	if handle == null or _info.is_empty():
 		return
-	var cfg := instance.config
-	_lan_value.text = instance.connect_address()
-	var public := NetworkService.public_address(cfg.port)
-	if NetworkService.looking_up_public_ip:
+	var i := _info
+	var admin := handle.can_manage_host()
+	var host := "this computer" if not handle.is_remote() else handle.host_name()
+	var port := int(i.port)
+	_lan_value.text = str(i.lan_address)
+	var public := str(i.public_address)
+	if i.looking_up:
 		_public_value.text = "Looking up…"
 	elif public != "":
 		_public_value.text = public
 	else:
-		_public_value.text = "Unknown" + (" — " + NetworkService.public_ip_error if NetworkService.public_ip_error != "" else "")
+		_public_value.text = "Unknown" + (" — " + str(i.public_ip_error) if str(i.public_ip_error) != "" else "")
 	_copy_public_button.disabled = public == ""
 	var hints := PackedStringArray()
-	hints.append("Friends on your Wi-Fi use the home network address; everyone else uses the internet address, which only works once your router forwards the port (below).")
-	if cfg.port == 25565:
+	hints.append("Friends on the same Wi-Fi use the home network address; everyone else uses the internet address, which only works once the router forwards the port (below).")
+	if port == 25565:
 		hints.append("Port 25565 is Minecraft's default, so players can leave it out.")
 	else:
-		hints.append("Players must include the port (:%d)." % cfg.port)
-	if NetworkService.public_ip_source != "":
-		hints.append("Public address from %s." % NetworkService.public_ip_source)
+		hints.append("Players must include the port (:%d)." % port)
+	if str(i.public_ip_source) != "":
+		hints.append("Public address from %s." % i.public_ip_source)
 	_address_hint.text = " ".join(hints)
 
-	_upnp_check.set_pressed_no_signal(cfg.upnp_enabled)
-	_upnp_status.text = _upnp_text()
-	_retry_upnp_button.visible = cfg.upnp_enabled and (NetworkService.upnp_state == NetworkService.UpnpState.UNAVAILABLE or NetworkService.mapping_errors.has(cfg.id))
-	_wake_ping_notice.visible = cfg.wake_on_connect and cfg.wake_on_ping
+	_upnp_check.set_pressed_no_signal(bool(i.upnp_enabled))
+	_upnp_check.disabled = not admin
+	_upnp_status.text = str(i.upnp_text)
+	_retry_upnp_button.visible = bool(i.upnp_retry) and admin
+	_wake_ping_notice.visible = bool(i.wake_ping)
 	_test_button.disabled = _testing
 
-	_refresh_forwarding(cfg)
+	_refresh_forwarding(i, port, admin)
 	if not _port_spin.has_focus():
-		_port_spin.set_port(cfg.port)
+		_port_spin.set_port(port)
 	_update_port_status()
 
-	var nat := NetworkService.nat_diagnosis()
-	_nat_label.text = nat.text
-	var fw := NetworkService.firewall_port_status(cfg.port)
+	_nat_label.text = str(i.nat)
+	var fw: Dictionary = i.firewall
 	_firewall_label.remove_theme_color_override("font_color")
 	if not fw.active:
-		_firewall_label.text = "No active firewall (ufw or firewalld) was detected on this computer."
+		_firewall_label.text = "No active firewall (ufw or firewalld) was detected on %s." % host
 	elif fw.allowed == "yes":
-		_firewall_label.text = "✓ " + (fw.detail if fw.detail != "" else "%s allows port %d." % [fw.name, cfg.port])
+		_firewall_label.text = "✓ " + (str(fw.detail) if str(fw.detail) != "" else "%s allows port %d." % [fw.name, port])
 		_firewall_label.add_theme_color_override("font_color", Color("3fb97f"))
 	elif fw.allowed == "unknown":
-		_firewall_label.text = "%s is active; whether it allows port %d couldn't be checked. If players can't connect, allow it:" % [fw.name, cfg.port]
+		_firewall_label.text = "%s is active; whether it allows port %d couldn't be checked. If players can't connect, allow it:" % [fw.name, port]
 	else:
 		var extra := " Players on the internet are blocked too." if fw.allowed == "lan" else ""
-		_firewall_label.text = "✕ " + fw.detail + extra + " Run this once in a terminal (needs your password):"
+		_firewall_label.text = "✕ " + str(fw.detail) + extra + " Run this once in a terminal on %s (needs its password):" % host
 		_firewall_label.add_theme_color_override("font_color", Color("f2b84b") if fw.allowed == "lan" else Color("e05555"))
-	_firewall_command.text = NetworkService.firewall_command(fw.name, cfg.port)
+	_firewall_command.text = str(i.firewall_command)
 	_firewall_row.visible = fw.active and fw.allowed != "yes"
 	var blocked: bool = fw.active and fw.allowed != "yes"
-	var show_move := _refresh_port_move(cfg, fw.active, blocked)
+	var show_move := _refresh_port_move(i, port, blocked, admin)
 	_firewall_notice.visible = blocked and not show_move
-	_refresh_old_rules(fw.active)
-	_firewall_notice_label.text = "The %s firewall on this computer blocks port %d, so nobody else can join%s." % [
-		fw.name, cfg.port, " from the internet" if fw.allowed == "lan" else ", not even on your Wi-Fi"]
+	_refresh_old_rules(i.stale_rules if fw.active else [])
+	_firewall_notice_label.text = "The %s firewall on %s blocks port %d, so nobody else can join%s." % [
+		fw.name, host, port, " from the internet" if fw.allowed == "lan" else ", not even on the same Wi-Fi"]
 	for b: Button in [_allow_top_button, _allow_button]:
-		b.disabled = _allowing
-		b.text = "Waiting for password…" if _allowing else "Allow in firewall"
-	_allow_new_port_button.disabled = _allowing or _removing
-	_remove_old_rule_button.disabled = _allowing or _removing
+		b.disabled = _allowing or not admin
+		b.text = ("Waiting for password…" if not handle.is_remote() else "Waiting for the password on %s…" % host) if _allowing else "Allow in firewall"
+	_allow_new_port_button.disabled = _allowing or _removing or not admin
+	_remove_old_rule_button.disabled = _allowing or _removing or not admin
 
-	var rcon_port := instance.get_properties().get_int("rcon.port", cfg.rcon_port)
-	var bind := instance.get_properties().get_value("server-ip", "")
-	_rcon_label.text = ("RCON (port %d) lets Server Manager send commands without cluttering the console. %s It is protected by a random password. Never forward the RCON port on your router — only the game port (%d) needs to be reachable." % [
+	var rcon_port := int(i.rcon_port)
+	var bind := str(i.server_ip)
+	_rcon_label.text = ("RCON (port %d) lets Server Manager send commands without cluttering the console. %s It is protected by a random password. Never forward the RCON port on the router — only the game port (%d) needs to be reachable." % [
 		rcon_port,
-		"It listens on all network interfaces because server-ip is empty, so devices on your home network can reach it." if bind == "" else "It listens on %s." % bind,
-		cfg.port])
-	var forwarded_rcon := NetworkService.mappings.has(rcon_port)
-	_rcon_warning.visible = forwarded_rcon
-	_rcon_warning_label.text = "Port %d (RCON) is currently forwarded on your router. Remove that forward." % rcon_port
-
-
-func _on_port_moved(server_id: String, old_port: int, _new_port: int) -> void:
-	_moved_from[server_id] = old_port
-	if instance != null and instance.config.id == server_id:
-		_refresh()
-
-
-## The rule Server Manager opened for [param port], if it is now unused.
-func _old_app_rule(port: int) -> Dictionary:
-	if port <= 0:
-		return {}
-	for r in NetworkService.stale_firewall_rules():
-		if r.port == port and r.origin == "app":
-			return r
-	return {}
+		"It listens on all network interfaces because server-ip is empty, so devices on the same network can reach it." if bind == "" else "It listens on %s." % bind,
+		port])
+	_rcon_warning.visible = bool(i.rcon_forwarded)
+	_rcon_warning_label.text = "Port %d (RCON) is currently forwarded on the router. Remove that forward." % rcon_port
 
 
 ## Shows what the firewall still needs after a port change. Returns whether the notice is shown.
-func _refresh_port_move(cfg: ServerConfig, active: bool, new_blocked: bool) -> bool:
-	var moved := int(_moved_from.get(cfg.id, 0))
-	if moved <= 0 or moved == cfg.port or not active:
-		_moved_from.erase(cfg.id)
+func _refresh_port_move(i: Dictionary, port: int, new_blocked: bool, admin: bool) -> bool:
+	var moved := int(i.moved_from)
+	var old_rule: Dictionary = i.moved_rule
+	if moved <= 0 or moved == port or (old_rule.is_empty() and not new_blocked):
 		_port_move_notice.visible = false
 		return false
-	var old_rule := _old_app_rule(moved)
-	if old_rule.is_empty() and not new_blocked:
-		_moved_from.erase(cfg.id)  # Nothing left to do.
-		_port_move_notice.visible = false
-		return false
-	var parts := PackedStringArray(["Port changed from %d to %d." % [moved, cfg.port]])
+	var parts := PackedStringArray(["Port changed from %d to %d." % [moved, port]])
 	if new_blocked:
 		parts.append("The firewall blocks the new port.")
 	if not old_rule.is_empty():
 		parts.append("The old port is still open in the firewall.")
 	_port_move_label.text = " ".join(parts)
-	_allow_new_port_button.visible = new_blocked
-	_remove_old_rule_button.visible = not old_rule.is_empty()
+	_allow_new_port_button.visible = new_blocked and admin
+	_remove_old_rule_button.visible = not old_rule.is_empty() and admin
 	_port_move_notice.visible = true
 	return true
 
 
-func _refresh_old_rules(active: bool) -> void:
-	var stale: Array[Dictionary] = NetworkService.stale_firewall_rules() if active else ([] as Array[Dictionary])
-	var key := "%s|%s" % [_removing or _allowing, ",".join(stale.map(func(r: Dictionary) -> String: return "%d/%s/%s" % [r.port, r.origin, r.source]))]
+func _refresh_old_rules(stale: Array) -> void:
+	var key := "%s|%s" % [_removing or _allowing, ",".join(stale.map(func(r: Dictionary) -> String: return "%d/%s/%s" % [int(r.port), r.origin, r.source]))]
 	if key == _rules_key:
 		return
 	_rules_key = key
 	for child in _old_rules_list.get_children():
 		child.queue_free()
-	for r in stale:
+	for r: Dictionary in stale:
+		r.port = int(r.port)
 		var row: FirewallRuleRow = RULE_ROW_SCENE.instantiate()
 		_old_rules_list.add_child(row)
 		row.setup(r, _removing or _allowing)
@@ -250,8 +260,8 @@ func _request_remove(rule: Dictionary) -> void:
 		_remove_rule(rule)
 		return
 	_pending_rule = rule
-	_remove_rule_confirm.dialog_text = ("Server Manager didn't create the firewall rule for port %d; you or another program added it. "
-		+ "No server here uses that port now. Remove it anyway? If something else on this computer needs port %d, it will be blocked.") % [rule.port, rule.port]
+	_remove_rule_confirm.dialog_text = ("Server Manager didn't create the firewall rule for port %d; someone or another program added it. "
+		+ "No server uses that port now. Remove it anyway? If something else on the computer needs port %d, it will be blocked.") % [int(rule.port), int(rule.port)]
 	_remove_rule_confirm.popup_centered()
 
 
@@ -259,18 +269,20 @@ func _remove_rule(rule: Dictionary) -> void:
 	if _removing or rule.is_empty():
 		return
 	_removing = true
+	_rules_key = ""
 	_refresh()
-	var result: Dictionary = await NetworkService.remove_firewall_rule(rule)
+	var result: Dictionary = await handle.source().call_host_op("firewall_remove", {"rule": rule})
 	_removing = false
 	if result.ok:
-		Notifier.success(result.message)
+		Notifier.success(str(result.message))
 	else:
-		Notifier.error(result.message)
-	_refresh()
+		Notifier.error(str(result.error))
+	_rules_key = ""
+	_reload()
 
 
 func _update_port_status() -> void:
-	if instance == null:
+	if handle == null or _info.is_empty():
 		return
 	var port := _port_spin.port
 	if not _port_spin.is_valid():
@@ -278,101 +290,88 @@ func _update_port_status() -> void:
 		_port_status.add_theme_color_override("font_color", Color("e05555"))
 		_apply_port_button.disabled = true
 		return
-	var changed := port != instance.config.port
-	var clash := ServerManager.port_owner(port, instance.config.id)
 	_port_status.remove_theme_color_override("font_color")
-	if not changed:
-		_port_status.text = "Players connect on this port." if not instance.is_process_alive() else "In use by the running server."
+	if port == int(_info.port):
+		_port_status.text = "Players connect on this port." if not handle.is_process_alive() else "In use by the running server."
 		_apply_port_button.disabled = true
 		return
-	if clash != null:
-		_port_status.text = "✕ Used by %s" % clash.config.display_name
+	_apply_port_button.disabled = true
+	_port_status.text = "Checking…"
+	var h := handle
+	var res: Dictionary = await h.call_op("port_check", {"port": port})
+	if h != handle or port != _port_spin.port:
+		return
+	if not res.ok or str(res.owner) != "" or res.rcon:
+		_port_status.text = "✕ Used by %s" % res.owner if str(res.get("owner", "")) != "" else "✕ " + str(res.get("error", "This is the server's RCON port."))
 		_port_status.add_theme_color_override("font_color", Color("e05555"))
-		_apply_port_button.disabled = true
 		return
-	if not PlatformBackend.is_port_free(port):
+	if not res.free:
 		_port_status.text = "⚠ Another program is listening on %d" % port
 		_port_status.add_theme_color_override("font_color", Color("f2b84b"))
 	else:
-		_port_status.text = "Restart needed to apply." if instance.is_process_alive() else "Available."
+		_port_status.text = "Restart needed to apply." if handle.is_process_alive() else "Available."
 	_apply_port_button.disabled = false
 
 
 func _apply_port() -> void:
-	var err := instance.set_port(_port_spin.port)
-	if err != "":
-		Notifier.error(err)
+	var h := handle
+	var res: Dictionary = await h.call_op("port_set", {"port": _port_spin.port})
+	if not res.ok:
+		Notifier.error(str(res.error))
 		return
-	Notifier.success("%s now uses port %d.%s" % [instance.config.display_name, instance.config.port,
-			" Restart the server to apply it." if instance.is_process_alive() else ""])
-	_refresh()
+	Notifier.success("%s now uses port %d.%s" % [h.config.display_name, _port_spin.port,
+			" Restart the server to apply it." if res.restart_needed else ""])
+	_reload()
 
 
 func _allow_firewall() -> void:
-	if _allowing or instance == null:
+	if _allowing or handle == null:
 		return
 	_allowing = true
 	_refresh()
-	var result: Dictionary = await NetworkService.allow_in_firewall(instance.config.port)
+	var result: Dictionary = await handle.call_op("firewall_allow")
 	_allowing = false
 	if result.ok:
-		Notifier.success(result.message)
+		Notifier.success(str(result.message))
 	else:
-		Notifier.error(result.message)
-	_refresh()
+		Notifier.error(str(result.error))
+	_reload()
 
 
-func _refresh_forwarding(cfg: ServerConfig) -> void:
-	var route := PlatformBackend.get_current().default_route()
-	var gw := str(route.get("gateway", ""))
-	var lan := ServerInstance._lan_ip()
+func _refresh_forwarding(i: Dictionary, port: int, admin: bool) -> void:
+	var gw := str(i.gateway)
+	var lan := str(i.lan_ip)
 	_router_value.text = gw if gw != "" else "Unknown"
 	_open_router_button.disabled = gw == ""
-	_external_value.text = str(cfg.port)
+	_external_value.text = str(port)
 	_internal_ip_value.text = lan
-	_internal_port_value.text = str(cfg.port)
-	if cfg.upnp_enabled and NetworkService.is_forwarded(cfg.id):
+	_internal_port_value.text = str(port)
+	if i.forwarded:
 		_forward_status.text = "UPnP has set this forward up automatically. You only need to do it by hand if UPnP is off or unsupported."
-	elif NetworkService.upnp_state == NetworkService.UpnpState.UNAVAILABLE:
-		_forward_status.text = "Your router doesn't support automatic forwarding (UPnP), so add this rule by hand in its admin page (usually under Port Forwarding, Virtual Server or NAT), then use “Test from the internet”."
+	elif i.upnp_unavailable:
+		_forward_status.text = "The router doesn't support automatic forwarding (UPnP), so add this rule by hand in its admin page (usually under Port Forwarding, Virtual Server or NAT), then use “Test from the internet”."
 	else:
-		_forward_status.text = "Add this rule in your router's admin page (usually under Port Forwarding, Virtual Server or NAT), or turn on UPnP forwarding below if your router supports it."
-	# A reserved address still arrives through DHCP, so this computer can't tell reserved from
+		_forward_status.text = "Add this rule in the router's admin page (usually under Port Forwarding, Virtual Server or NAT), or turn on UPnP forwarding below if the router supports it."
+	# A reserved address still arrives through DHCP, so the computer can't tell reserved from
 	# dynamic; the user confirms it once, and we warn again only if the address changes.
-	var reserved := AppSettings.reserved_lan_ip
-	_dhcp_notice.visible = bool(route.get("dynamic", false)) and reserved != lan
+	var reserved := str(i.reserved_lan_ip)
+	_dhcp_notice.visible = bool(i.dhcp_dynamic) and reserved != lan
+	_dhcp_reserved_button.disabled = not admin
+	var who := "this computer" if not handle.is_remote() else handle.host_name()
 	if reserved != "" and reserved != lan:
-		_dhcp_label.text = "This computer's address changed from %s to %s. Update the port forward in your router to point to %s (and its reservation, if you use one)." % [reserved, lan, lan]
+		_dhcp_label.text = "The address of %s changed from %s to %s. Update the port forward in the router to point to %s (and its reservation, if you use one)." % [who, reserved, lan, lan]
 		_dhcp_reserved_button.text = "Updated"
 	else:
-		_dhcp_label.text = "Your router assigns this computer's address (%s). Unless it is reserved for this computer in the router (DHCP reservation or static lease), it can change and break the forward." % lan
+		_dhcp_label.text = "The router assigns the address of %s (%s). Unless it is reserved in the router (DHCP reservation or static lease), it can change and break the forward." % [who, lan]
 		_dhcp_reserved_button.text = "It's reserved"
 
 
-func _upnp_text() -> String:
-	var cfg := instance.config
-	match NetworkService.upnp_state:
-		NetworkService.UpnpState.DISCOVERING:
-			return "Looking for a UPnP router…"
-		NetworkService.UpnpState.UNAVAILABLE:
-			return NetworkService.upnp_error + (" Forward TCP port %d to %s manually in your router's settings." % [cfg.port, ServerInstance._lan_ip()])
-		NetworkService.UpnpState.UNKNOWN:
-			return "Your router has not been checked yet." if not cfg.upnp_enabled else "Waiting for the router check…"
-	var router := "Router found (internet address %s). " % NetworkService.upnp_external_ip if NetworkService.upnp_external_ip != "" else "Router found. "
-	if not cfg.upnp_enabled:
-		return router + "Turn this on to forward port %d automatically." % cfg.port
-	if NetworkService.mapping_errors.has(cfg.id):
-		return router + NetworkService.mapping_errors[cfg.id]
-	if NetworkService.is_forwarded(cfg.id):
-		return router + "Port %d is forwarded to this computer." % cfg.port
-	return router + "Port %d will be forwarded while the server is running or asleep." % cfg.port
-
-
 func _on_upnp_toggled(on: bool) -> void:
-	instance.config.upnp_enabled = on
-	if on:
-		NetworkService.retry(instance.config.id)
-	instance.save_config()
+	var res: Dictionary = await handle.call_op("upnp_set", {"on": on})
+	if not res.ok:
+		Notifier.error(str(res.error))
+		_upnp_check.set_pressed_no_signal(not on)
+	_reload()
 
 
 func _run_test() -> void:
@@ -380,28 +379,27 @@ func _run_test() -> void:
 		return
 	_testing = true
 	_test_status.text = "Testing from the internet…"
+	_test_status.remove_theme_color_override("font_color")
 	_test_reasons.visible = false
 	_refresh()
-	var inst := instance
-	var result: Dictionary = await NetworkService.test_reachability(inst)
+	var h := handle
+	var result: Dictionary = await h.call_op("network_test")
 	_testing = false
-	if inst != instance:
+	if h != handle:
 		return
-	_last_result = result
-	if not result.get("ok", false):
-		_test_status.text = "✕ The test could not run: %s" % result.get("error", "unknown error")
+	if not result.ok:
+		_test_status.text = "✕ " + str(result.error)
 		_test_status.add_theme_color_override("font_color", Color("e05555"))
 		_test_reasons.visible = false
 	elif result.online:
-		var details: String = result.version if result.version != "" else "Minecraft server"
-		_test_status.text = "✓ Reachable from the internet at %s (%s%s)." % [NetworkService.public_address(inst.config.port), details,
-				", cached result" if result.cache_hit else ""]
+		var details: String = result.version if str(result.version) != "" else "Minecraft server"
+		_test_status.text = "✓ Reachable from the internet at %s (%s%s)." % [result.address, details, ", cached result" if result.cache_hit else ""]
 		_test_status.add_theme_color_override("font_color", Color("3fb97f"))
 		_test_reasons.visible = false
 	else:
-		_test_status.text = "✕ Not reachable from the internet at %s." % NetworkService.public_address(inst.config.port)
+		_test_status.text = "✕ Not reachable from the internet at %s." % result.address
 		_test_status.add_theme_color_override("font_color", Color("e05555"))
-		var reasons := NetworkService.explain_failure(inst, result)
+		var reasons := PackedStringArray(result.reasons)
 		_test_reasons.text = "Likely causes:\n• " + "\n• ".join(reasons) if not reasons.is_empty() else ""
 		_test_reasons.visible = not reasons.is_empty()
 	_refresh()

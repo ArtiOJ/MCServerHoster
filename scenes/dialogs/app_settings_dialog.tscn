@@ -85,6 +85,7 @@ suffix = "MB"
 select_all_on_focus = true
 
 [node name="ConsoleLinesLabel" type="Label" parent="Scroll/VBox/Grid"]
+unique_name_in_owner = true
 layout_mode = 2
 text = "Console history"
 
@@ -102,6 +103,7 @@ suffix = "lines"
 select_all_on_focus = true
 
 [node name="UiScaleLabel" type="Label" parent="Scroll/VBox/Grid"]
+unique_name_in_owner = true
 layout_mode = 2
 mouse_filter = 0
 tooltip_text = "Makes all text and controls bigger or smaller. Automatic follows your screen (its scaling or pixel density). Applies right away; on a small screen the size is limited so the window still fits."
@@ -236,14 +238,14 @@ tooltip_text = "Wake the computer from sleep shortly before events that have “
 [node name="WakeConnectLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
 layout_mode = 2
 mouse_filter = 0
-tooltip_text = "Experimental. While asleep, the Wi-Fi card watches for a player connecting to a server that uses “Start on connect” and wakes the computer. Whether this works depends on your hardware keeping Wi-Fi powered during sleep — try it once. The first connection attempt usually times out; players reconnect after a few seconds."
+tooltip_text = "Experimental. While asleep, the Wi-Fi card watches for a player connecting to a server that uses “Start on connect”, or for someone connecting through Remote access, and wakes the computer. Whether this works depends on your hardware keeping Wi-Fi powered during sleep — try it once. The first connection attempt usually times out; players reconnect after a few seconds."
 text = "Wake on connection"
 
 [node name="WakeConnectCheck" type="CheckButton" parent="Scroll/VBox/PowerGrid"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
-tooltip_text = "Experimental. While asleep, the Wi-Fi card watches for a player connecting to a server that uses “Start on connect” and wakes the computer. Whether this works depends on your hardware keeping Wi-Fi powered during sleep — try it once. The first connection attempt usually times out; players reconnect after a few seconds."
+tooltip_text = "Experimental. While asleep, the Wi-Fi card watches for a player connecting to a server that uses “Start on connect”, or for someone connecting through Remote access, and wakes the computer. Whether this works depends on your hardware keeping Wi-Fi powered during sleep — try it once. The first connection attempt usually times out; players reconnect after a few seconds."
 text = "Experimental"
 
 [node name="PowerStatus" type="Label" parent="Scroll/VBox"]
@@ -547,3 +549,17 @@ size = Vector2i(820, 520)
 ok_button_text = "Open"
 file_mode = 0
 access = 2
+
+[node name="JavaPathDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Add Java"
+size = Vector2i(520, 140)
+ok_button_text = "Add"
+
+[node name="JavaPathEdit" type="LineEdit" parent="JavaPathDialog"]
+unique_name_in_owner = true
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 512.0
+offset_bottom = 91.0
+placeholder_text = "/usr/lib/jvm/java-21-openjdk/bin/java"

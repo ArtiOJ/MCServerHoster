@@ -14,6 +14,10 @@ signal config_changed
 signal update_available_changed
 ## A temporary copy stopped for good; the UI asks whether to keep or discard its changes.
 signal temporary_run_ended
+## Something a tab lists changed: &"plugins", &"backups", &"worlds", &"lists" or &"network".
+signal data_changed(area: StringName)
+## A backup started, progressed or finished (see [member backup_busy]).
+signal backup_status_changed
 
 enum State { STOPPED, STARTING, RUNNING, STOPPING, CRASHED, INSTALLING }
 
@@ -48,6 +52,9 @@ var update_available_build := 0
 var command_history := PackedStringArray()
 ## PID of a server left running by a previous session of the manager (-1 if none).
 var orphan_pid := -1
+var backup_busy := false
+## 0..1 while [member backup_busy].
+var backup_progress := 0.0
 
 
 # --- Identity ----------------------------------------------------------------
@@ -64,6 +71,18 @@ func key() -> String:
 ## Name of the computer the server runs on ("" for this computer).
 func host_name() -> String:
 	return ""
+
+
+## The set of servers this one belongs to (its computer).
+func source() -> ServerSource:
+	return ServerManager
+
+
+## True when whoever views the server may also change things outside it on its computer
+## (Java executable and arguments, waking the computer, router and firewall). Always true
+## here; for a server on another computer only for its system admins.
+func can_manage_host() -> bool:
+	return true
 
 
 ## True when the view may offer [param feature] (one of the FEATURE_* names).
@@ -189,6 +208,11 @@ func icon_info() -> Dictionary:
 	return {"exists": false, "valid": false, "size": Vector2i.ZERO}
 
 
+## Why start-on-connect can't listen right now ("" when fine).
+func wake_error() -> String:
+	return ""
+
+
 # --- Operations --------------------------------------------------------------
 
 ## Starts the server ([param temporary] resumes a pending temporary copy).
@@ -242,6 +266,12 @@ func update_paper(_version: String, _build_id: int, _backup: bool, _on_progress 
 ## Saves a 64×64 server icon (PNG bytes), or removes it with empty [param png].
 func set_icon_png(_png: PackedByteArray) -> Error:
 	return ERR_UNAVAILABLE
+
+
+## Runs one of the tab operations ([ServerOps]) and returns its JSON-style result
+## ({ok, error?, ...}). [param on_progress] receives (text, fraction) for long ones.
+func call_op(_op: String, _args := {}, _on_progress := Callable()) -> Dictionary:
+	return {"ok": false, "error": "Not available."}
 
 
 # --- Settings (server.properties, Paper/Spigot/Bukkit YAML, game rules) ---------

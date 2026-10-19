@@ -62,16 +62,16 @@ func _ready() -> void:
 	_check(host_option.visible and host_option.item_count == 2, "computer switcher lists this computer and Brian's PC")
 	await _shot("50_sidebar_remote")
 
-	# A server-admin server: only the tabs that work remotely.
+	# A server-admin server: every tab, with computer-wide controls locked.
 	var remote_survival: RemoteServer = alice_link.remote_servers()[0]
 	main.show_server(remote_survival.key())
 	var view: ServerView = main.get_node("%ServerView")
 	var tabs: TabContainer = view.get_node("%Tabs")
-	var shown := PackedStringArray()
+	var hidden := PackedStringArray()
 	for i in tabs.get_tab_count():
-		if not tabs.is_tab_hidden(i):
-			shown.append(str(tabs.get_child(i).name))
-	_check(Array(shown) == ["Overview", "Console", "Settings"], "remote server shows Overview, Console, Settings: %s" % str(shown))
+		if tabs.is_tab_hidden(i):
+			hidden.append(str(tabs.get_child(i).name))
+	_check(hidden.is_empty(), "remote server shows every tab (hidden: %s)" % str(hidden))
 	await _wait_for(func() -> bool: return remote_survival.cpu_history().size() > 2, 10.0)
 	await _shot("51_remote_overview")
 	tabs.current_tab = _tab(tabs, "Console")
@@ -83,6 +83,22 @@ func _ready() -> void:
 	var form: VBoxContainer = tabs.get_child(_tab(tabs, "Settings")).get_node("%FormList")
 	_check(form.get_child_count() > 20, "remote settings form filled (%d rows)" % form.get_child_count())
 	await _shot("53_remote_settings")
+	for pair in [["Plugins", "53a_remote_plugins"], ["Players", "53b_remote_players"], ["Worlds", "53c_remote_worlds"],
+			["Backups", "53d_remote_backups"], ["Logs", "53e_remote_logs"], ["Automation", "53f_remote_automation"]]:
+		tabs.current_tab = _tab(tabs, pair[0])
+		await get_tree().create_timer(2.0).timeout
+		await _shot(pair[1])
+	tabs.current_tab = _tab(tabs, "Resources")
+	await get_tree().create_timer(2.0).timeout
+	var resources: Control = tabs.get_child(_tab(tabs, "Resources"))
+	_check((resources.get_node("%JavaOption") as OptionButton).disabled and not (resources.get_node("%ExtraArgsEdit") as LineEdit).editable, "server admin can't pick Java or JVM arguments")
+	await _shot("53g_remote_resources")
+	tabs.current_tab = _tab(tabs, "Network")
+	await get_tree().create_timer(3.0).timeout
+	var network: Control = tabs.get_child(_tab(tabs, "Network"))
+	_check((network.get_node("%UpnpCheck") as CheckButton).disabled, "server admin can't change UPnP")
+	await _shot("53h_remote_network")
+	tabs.current_tab = _tab(tabs, "Overview")
 	var header: ServerHeader = view.get_node("%Header")
 	var menu := (header.get_node("%MoreButton") as MenuButton).get_popup()
 	_check(menu.is_item_disabled(menu.get_item_index(ServerHeader.MenuItem.DELETE)), "server admin can't delete from the menu")
@@ -107,6 +123,18 @@ func _ready() -> void:
 	await _shot("56_remote_wizard")
 	_check(wizard.title.contains("Brian's PC"), "wizard creates on the other computer")
 	wizard.hide()
+	var prefs: AppSettingsDialog = main.get_node("%AppSettingsDialog")
+	prefs.open(bob_link)
+	await get_tree().create_timer(1.5).timeout
+	_check(prefs.title.contains("Brian's PC") and (prefs.get_node("%RootEdit") as LineEdit).text == AppSettings.servers_root, "preferences of the other computer loaded")
+	await _shot("57_remote_preferences")
+	prefs.hide()
+	var share: RemoteDialog = main.get_node("%RemoteDialog")
+	share.open(RemoteDialog.TabIndex.SHARE, bob_link)
+	await get_tree().create_timer(1.5).timeout
+	_check(share.get_node("%GrantList").get_child_count() == 3 and (share.get_node("%EnableCheck") as CheckButton).disabled, "keys of the other computer listed, listener locked")
+	await _shot("58_remote_keys")
+	share.hide()
 	main._switch_source(ServerManager)
 	await _frames(4)
 	_check(dashboard.get_node("%Cards").get_child_count() == 2 and not host_option.get_item_text(host_option.selected).contains("Brian"), "back on this computer")
@@ -114,15 +142,15 @@ func _ready() -> void:
 	# The Remote access dialog.
 	var dialog: RemoteDialog = main.get_node("%RemoteDialog")
 	dialog.open(RemoteDialog.TabIndex.SHARE)
-	await _frames(4)
+	await get_tree().create_timer(0.5).timeout
 	_check(dialog.get_node("%GrantList").get_child_count() == 3, "two keys listed")
 	await _shot("60_remote_share")
-	dialog._open_key_dialog(null)
+	dialog._open_key_dialog({})
 	(dialog.get_node("%PersonEdit") as LineEdit).text = "Charlie"
 	dialog._update_key_dialog()
 	await _shot("61_new_key")
 	dialog.get_node("%KeyDialog").hide()
-	dialog._show_invite(alice)
+	dialog._show_invite(alice.name, alice.role, RemoteAccess.invite_for(alice))
 	await _shot("62_invite")
 	dialog.get_node("%InviteDialog").hide()
 	dialog.open(RemoteDialog.TabIndex.CONNECT)

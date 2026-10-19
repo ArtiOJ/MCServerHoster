@@ -241,6 +241,7 @@ func _check_port_change(inst: ServerInstance) -> void:
 	_known_ports[id] = inst.config.port
 	if old != inst.config.port:
 		remember_old_port(old)
+		inst.port_moved_from = old
 		port_moved.emit(id, old, inst.config.port)
 
 

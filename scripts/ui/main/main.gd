@@ -49,21 +49,19 @@ func _ready() -> void:
 	_sidebar.server_selected.connect(show_server)
 	_sidebar.source_selected.connect(_switch_source)
 	_sidebar.new_server_requested.connect(_open_wizard)
-	_sidebar.settings_requested.connect(_settings_dialog.open)
-	_sidebar.remote_requested.connect(_remote_dialog.open.bind(RemoteDialog.TabIndex.SHARE))
+	_sidebar.settings_requested.connect(func() -> void: _settings_dialog.open(_source))
+	_sidebar.remote_requested.connect(func() -> void: _remote_dialog.open(RemoteDialog.TabIndex.SHARE, _source))
 	_dashboard.server_open_requested.connect(show_server)
 	_dashboard.new_server_requested.connect(_open_wizard)
-	_sidebar.import_server_requested.connect(_import_server_dialog.open.bind(""))
-	_dashboard.import_server_requested.connect(_import_server_dialog.open.bind(""))
-	_import_server_dialog.imported.connect(func(inst: ServerInstance) -> void: show_server(inst.key()))
+	_sidebar.import_server_requested.connect(func() -> void: _import_server_dialog.open("", _source))
+	_dashboard.import_server_requested.connect(func() -> void: _import_server_dialog.open("", _source))
+	_import_server_dialog.imported.connect(func(h: ServerHandle) -> void: show_server(h.key()))
 	_wizard.server_created.connect(func(h: ServerHandle) -> void: show_server(h.key()))
 	_server_view.update_requested.connect(_update_dialog.open)
 	_server_view.delete_requested.connect(_delete_dialog.open)
 	_server_view.duplicate_requested.connect(_duplicate_dialog.open)
 	_server_view.temp_decision_requested.connect(_temp_dialog.open)
-	_server_view.import_world_requested.connect(func(h: ServerHandle) -> void:
-		if h is ServerInstance:
-			_import_world_dialog.open(h))
+	_server_view.import_world_requested.connect(func(h: ServerHandle) -> void: _import_world_dialog.open(h))
 	_duplicate_dialog.duplicated.connect(func(h: ServerHandle) -> void:
 		if h != null:
 			show_server(h.key()))
@@ -199,16 +197,12 @@ const IMAGE_EXTENSIONS: PackedStringArray = ["png", "jpg", "jpeg", "webp", "svg"
 func _on_files_dropped(files: PackedStringArray) -> void:
 	# The icon editor handles its own drops; an image dropped elsewhere opens it for the
 	# current server instead of being treated as a plugin.
-	var current := _find(_current_id)
 	if _current_id != "" and (_server_view.is_icon_editor_open()
 			or Array(files).all(func(f: String) -> bool: return f.get_extension().to_lower() in IMAGE_EXTENSIONS)):
 		if not _server_view.is_icon_editor_open():
 			_server_view.open_icon_editor(files[0])
 		return
 	if _open_server_import_for(files):
-		return
-	if current != null and current.is_remote():
-		Notifier.warn("Worlds and plugins can only be dropped onto servers on this computer for now.")
 		return
 	if _open_world_import_for(files):
 		return
@@ -226,7 +220,10 @@ func _open_server_import_for(files: PackedStringArray) -> bool:
 			continue
 		var has_jar := Array(DirAccess.get_files_at(path)).any(func(f: String) -> bool: return f.ends_with(".jar"))
 		if FileAccess.file_exists(path.path_join("server.properties")) or has_jar:
-			_import_server_dialog.open(path)
+			if _source.can_manage_servers():
+				_import_server_dialog.open(path, _source)
+			else:
+				Notifier.warn("Your access to %s doesn't allow importing servers." % _source.source_name())
 			return true
 	return false
 
@@ -241,7 +238,7 @@ func _open_world_import_for(files: PackedStringArray) -> bool:
 					func(d: String) -> bool: return FileAccess.file_exists(path.path_join(d).path_join("level.dat")))
 		if not is_world:
 			continue
-		var inst := ServerManager.get_instance(_current_id)
+		var inst := _find(_current_id)
 		if inst == null:
 			Notifier.warn("Open a server first, then drop the world onto the window (or use \"Start from an existing world\" when creating a server).")
 		else:

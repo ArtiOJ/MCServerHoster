@@ -2,7 +2,8 @@ class_name LogsTab
 extends ServerTab
 ## Browses a server's log history (current session, rotated archives) and crash
 ## reports. Files are read and filtered on a worker thread so large logs never
-## freeze the window; crash reports get a short plain-language summary.
+## freeze the window; crash reports get a short plain-language summary. For a server
+## on another computer the newest part of a log is fetched from there.
 
 ## Most lines shown at once; older matching lines are left out (noted in the status line).
 const MAX_DISPLAY_LINES := 20000
@@ -14,7 +15,10 @@ const CRASH_COLOR := Color("e06c75")
 const CURRENT_COLOR := Color("52cc90")
 
 var _entries: Array[Dictionary] = []
-var _selected_path := ""
+## Id of the open log (its path inside the server folder).
+var _selected_id := ""
+var _selected_entry := {}
+var _list_serial := 0
 var _text := ""
 var _visible_lines := PackedStringArray()
 var _load_serial := 0
@@ -46,20 +50,22 @@ func _ready() -> void:
 		DisplayServer.clipboard_set("\n".join(_visible_lines))
 		Notifier.info("Copied %d log lines." % _visible_lines.size()))
 	_save_button.pressed.connect(func() -> void:
-		_save_dialog.current_file = _selected_path.get_file().trim_suffix(".gz")
+		_save_dialog.current_file = _selected_id.get_file().trim_suffix(".gz")
 		_save_dialog.popup_centered())
 	_save_dialog.file_selected.connect(_save_to)
 	_open_folder_button.pressed.connect(func() -> void:
-		if _selected_path != "":
-			OS.shell_open(_selected_path.get_base_dir()))
+		if not _selected_entry.is_empty() and handle != null and not handle.is_remote():
+			OS.shell_open(str(_selected_entry.folder)))
 	visibility_changed.connect(func() -> void:
-		if is_visible_in_tree() and instance != null:
+		if is_visible_in_tree() and handle != null:
 			refresh())
 	_set_file_actions_enabled(false)
 
 
 func _on_bound() -> void:
-	_selected_path = ""
+	_selected_id = ""
+	_selected_entry = {}
+	_open_folder_button.visible = handle.supports(ServerHandle.FEATURE_OPEN_FOLDER)
 	_text = ""
 	_viewer.clear()
 	_crash_card.visible = false
@@ -70,24 +76,33 @@ func _on_bound() -> void:
 
 ## Re-scans the log folders and reloads the selected file (or the newest one).
 func refresh() -> void:
-	if instance == null:
+	if handle == null:
 		return
-	_entries = LogArchive.list_entries(instance.working_directory())
+	_list_serial += 1
+	var serial := _list_serial
+	var res: Dictionary = await handle.call_op("logs_list")
+	if serial != _list_serial or handle == null:
+		return
+	_entries.clear()
+	for e in res.get("entries", []):
+		e.kind = int(e.kind)
+		_entries.append(e)
 	_file_list.clear()
 	var select := -1
 	for i in _entries.size():
 		var e := _entries[i]
 		var idx := _file_list.add_item(e.label)
-		_file_list.set_item_tooltip(idx, "%s\n%s · %s" % [e.path, Fmt.bytes(e.size), Fmt.datetime(e.time)])
+		_file_list.set_item_tooltip(idx, "%s\n%s · %s" % [str(e.folder).path_join(str(e.name)), Fmt.bytes(float(e.size)), Fmt.datetime(int(e.time))])
 		if e.kind == LogArchive.Kind.CRASH:
 			_file_list.set_item_custom_fg_color(idx, CRASH_COLOR)
 		elif e.kind == LogArchive.Kind.CURRENT:
 			_file_list.set_item_custom_fg_color(idx, CURRENT_COLOR)
-		if e.path == _selected_path:
+		if e.id == _selected_id:
 			select = i
 	_empty_label.visible = _entries.is_empty()
 	if _entries.is_empty():
-		_selected_path = ""
+		_selected_id = ""
+		_selected_entry = {}
 		_viewer.clear()
 		_crash_card.visible = false
 		_status.text = ""
@@ -100,13 +115,13 @@ func refresh() -> void:
 
 
 func _open(entry: Dictionary) -> void:
-	_selected_path = entry.path
+	_selected_id = entry.id
+	_selected_entry = entry
 	_load_serial += 1
 	var serial := _load_serial
 	_status.text = "Loading %s…" % entry.name
 	_set_file_actions_enabled(false)
-	var path: String = entry.path
-	var result: Dictionary = await FileOps.run_async(self, func() -> Dictionary: return LogArchive.read_text(path))
+	var result: Dictionary = await handle.call_op("log_read", {"id": entry.id})
 	if serial != _load_serial:
 		return  # Another file was selected meanwhile.
 	if not result.ok:
@@ -118,7 +133,7 @@ func _open(entry: Dictionary) -> void:
 	_text = result.text
 	_show_crash_summary(entry)
 	_set_file_actions_enabled(true)
-	await _apply_filter(result.truncated)
+	await _apply_filter(bool(result.truncated), int(result.get("limit", LogArchive.MAX_BYTES)))
 
 
 func _show_crash_summary(entry: Dictionary) -> void:
@@ -146,8 +161,8 @@ func _show_crash_summary(entry: Dictionary) -> void:
 	_crash_meta.text = " · ".join(meta)
 
 
-func _apply_filter(source_truncated := false) -> void:
-	if _selected_path == "":
+func _apply_filter(source_truncated := false, read_limit := LogArchive.MAX_BYTES) -> void:
+	if _selected_id == "":
 		return
 	_load_serial += 1
 	var serial := _load_serial
@@ -173,8 +188,8 @@ func _apply_filter(source_truncated := false) -> void:
 	if result.truncated:
 		parts.append("showing the last %d" % MAX_DISPLAY_LINES)
 	if source_truncated:
-		parts.append("only the last %s of the file was read" % Fmt.bytes(LogArchive.MAX_BYTES))
-	parts.append(_selected_path.get_file())
+		parts.append("only the last %s of the file was read" % Fmt.bytes(read_limit))
+	parts.append(_selected_id.get_file())
 	_status.text = " · ".join(parts)
 
 

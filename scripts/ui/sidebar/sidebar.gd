@@ -67,7 +67,6 @@ func show_source(source: ServerSource) -> void:
 		_add_item(h)
 	var remote := source.is_remote_source()
 	_caption.text = "SERVERS ON %s" % source.source_name().to_upper() if remote else "SERVERS"
-	_import_button.visible = not remote
 	_update_actions()
 	_select_host_item()
 	_update_summary()
@@ -119,6 +118,9 @@ func _update_summary() -> void:
 
 func _update_actions() -> void:
 	_new_button.disabled = not _source.can_manage_servers()
+	_import_button.disabled = not _source.can_manage_servers()
+	_import_button.tooltip_text = "Import an existing server folder" if not _source.is_remote_source() \
+			else "Import a server to %s (upload a folder or name one there)" % _source.source_name()
 	_new_button.tooltip_text = "Create a new Paper server (Ctrl+N)" if not _source.is_remote_source() \
 			else "Create a new Paper server on %s" % _source.source_name()
 

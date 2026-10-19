@@ -18,6 +18,7 @@ var _source: ServerSource
 
 @onready var _title: Label = %Title
 @onready var _subtitle: Label = %Subtitle
+@onready var _wake_button: Button = %WakeButton
 @onready var _running_card: StatCard = %RunningCard
 @onready var _cpu_card: StatCard = %HostCpuCard
 @onready var _ram_card: StatCard = %HostRamCard
@@ -38,6 +39,7 @@ func _ready() -> void:
 	_import_button.pressed.connect(func() -> void: import_server_requested.emit())
 	_start_all.pressed.connect(func() -> void: _source.start_all())
 	_stop_all.pressed.connect(func() -> void: _source.stop_all())
+	_wake_button.pressed.connect(_wake)
 	# Other computers report their load themselves (host_stats_changed).
 	_host_timer.timeout.connect(func() -> void:
 		if not _source.is_remote_source():
@@ -52,7 +54,11 @@ func show_source(source: ServerSource) -> void:
 		_source.server_removed.disconnect(_on_removed)
 		_source.server_state_changed.disconnect(_on_state_changed)
 		_source.host_stats_changed.disconnect(_sample_host)
+		if _source is RemoteLink:
+			(_source as RemoteLink).status_changed.disconnect(_update_counts)
 	_source = source
+	if _source is RemoteLink:
+		(_source as RemoteLink).status_changed.connect(_update_counts)
 	_source.server_added.connect(_add_card)
 	_source.server_removed.connect(_on_removed)
 	_source.server_state_changed.connect(_on_state_changed)
@@ -69,12 +75,21 @@ func show_source(source: ServerSource) -> void:
 	_title.text = "Dashboard" if not remote else source.source_name()
 	_subtitle.text = "All Minecraft servers hosted on this machine" if not remote \
 			else "Servers on %s, managed remotely as its system admin" % source.source_name()
-	_import_button.visible = not remote
 	_create_button.disabled = not source.can_manage_servers()
+	_import_button.disabled = not source.can_manage_servers()
 	for h in source.get_handles():
 		_add_card(h)
 	_update_counts()
 	_sample_host()
+
+
+func _wake() -> void:
+	var link := _source as RemoteLink
+	if link == null:
+		return
+	if not await link.wake_and_wait() and link == _source:
+		Notifier.warn("%s didn't wake up. It may be shut down, off the network, or its Wi-Fi may not stay on during sleep." % link.source_name())
+	_update_counts()
 
 
 func _on_state_changed(_handle: ServerHandle) -> void:
@@ -104,6 +119,13 @@ func _update_counts() -> void:
 	_running_card.set_value("%d / %d" % [running, total])
 	_running_card.set_sub("servers running")
 	var reachable := not _source.is_remote_source() or (_source as RemoteLink).is_online()
+	var link := _source as RemoteLink
+	_wake_button.visible = link != null and link.can_wake()
+	_wake_button.disabled = link != null and link.is_waking()
+	_wake_button.text = "Waking…" if _wake_button.disabled else "Wake"
+	if link != null:
+		_wake_button.tooltip_text = "%s is asleep or offline. Wake it up and reconnect." % link.source_name()
+		_subtitle.text = "Servers on %s, managed remotely as its system admin%s" % [link.source_name(), "" if reachable else " · %s" % link.status_text().to_lower()]
 	_start_all.disabled = total == 0 or running == total or not reachable
 	_stop_all.disabled = running == 0 or not reachable
 	var stats := _source.host_stats()

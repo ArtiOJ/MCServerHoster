@@ -1,11 +1,13 @@
 class_name ImportWorldDialog
 extends ConfirmationDialog
 ## Imports a downloaded map, singleplayer save or another server's world into a
-## server: analyses it, shows what was found, then formats and copies it in.
+## server: analyses it, shows what was found, then formats and copies it in. A world for
+## a server on another computer is uploaded there first (folders as a zip).
 
-signal imported(instance: ServerInstance)
+signal imported(handle: ServerHandle)
 
-var _instance: ServerInstance
+var _instance: ServerHandle
+## What the server reported about the chosen world (see ServerOps.world_import_analyze).
 var _analysis := {}
 var _busy := false
 ## Ignores results of an analysis that was superseded by a newer choice.
@@ -52,7 +54,7 @@ func _ready() -> void:
 
 
 ## Shows the dialog for [param inst]; [param source] (a .zip or folder) is analysed right away.
-func open(inst: ServerInstance, source := "") -> void:
+func open(inst: ServerHandle, source := "") -> void:
 	_unwatch()
 	_discard()
 	_instance = inst
@@ -76,32 +78,41 @@ func open(inst: ServerInstance, source := "") -> void:
 func _analyze(path: String) -> void:
 	_serial += 1
 	var serial := _serial
-	WorldImporter.cleanup(_analysis)
-	_analysis = {}
+	_discard_analysis()
 	_source_label.text = path
 	_source_label.tooltip_text = path
 	_card.visible = false
 	_warnings.visible = false
 	_options.visible = false
 	_progress.visible = true
-	_status.text = "Reading the world…"
+	_progress.value = 0.0
+	_status.text = "Reading the world…" if not _instance.is_remote() else "Sending the world to %s…" % _instance.host_name()
 	_update_ok()
-	var result: Dictionary = await WorldImporter.analyze(self, path, _instance.config.mc_version)
-	if serial != _serial or not visible:
-		WorldImporter.cleanup(result)
+	var h := _instance
+	var result: Dictionary = await h.call_op("world_import_analyze", {"files": [path]}, func(text: String, fraction: float) -> void:
+		if serial == _serial:
+			_status.text = text
+			if fraction >= 0.0:
+				_progress.value = fraction * 100.0)
+	if serial != _serial or not visible or h != _instance:
+		if result.has("token"):
+			h.call_op("world_import_cancel", {"token": result.token})
+		return
+	_progress.visible = false
+	if not result.ok:
+		_status.text = str(result.error)
 		return
 	_analysis = result
-	_progress.visible = false
 	_show_analysis(result)
 
 
 func _show_analysis(a: Dictionary) -> void:
 	_status.text = ""
-	_card.visible = a.world_dir != ""
-	_world_name.text = WorldImporter.display_name(a)
+	_card.visible = a.found
+	_world_name.text = a.display_name
 	_version_value.text = ("Minecraft %s" % a.version) if a.version != "" else "Unknown"
-	_layout_value.text = WorldImporter.LAYOUT_NAMES[a.layout]
-	_dimensions_value.text = ", ".join(a.dimensions) if not a.dimensions.is_empty() else "None generated yet"
+	_layout_value.text = a.layout_name
+	_dimensions_value.text = ", ".join(PackedStringArray(a.dimensions)) if not a.dimensions.is_empty() else "None generated yet"
 	var settings := PackedStringArray()
 	if a.game_mode != "":
 		settings.append(a.game_mode.capitalize())
@@ -110,7 +121,7 @@ func _show_analysis(a: Dictionary) -> void:
 	if a.hardcore:
 		settings.append("Hardcore")
 	_settings_value.text = ", ".join(settings) if not settings.is_empty() else "—"
-	_size_value.text = Fmt.bytes(a.size_bytes)
+	_size_value.text = Fmt.bytes(float(a.size_bytes))
 	var notes := PackedStringArray()
 	if a.error != "":
 		notes.append("✕ " + a.error)
@@ -118,13 +129,13 @@ func _show_analysis(a: Dictionary) -> void:
 		notes.append("• " + w)
 	_warnings.visible = not notes.is_empty()
 	_warnings_label.text = "\n".join(notes)
-	_options.visible = a.ok
+	_options.visible = a.valid
 	_apply_check.button_pressed = a.game_mode in ["adventure", "creative"] or a.hardcore
 	_update_ok()
 
 
 func _on_confirmed() -> void:
-	if _busy or not _analysis.get("ok", false) or _instance == null:
+	if _busy or not _analysis.get("valid", false) or _instance == null:
 		return
 	if _instance.is_process_alive():
 		_status.text = "Stop the server first."
@@ -132,32 +143,38 @@ func _on_confirmed() -> void:
 	_busy = true
 	_set_buttons_enabled(false)
 	_progress.visible = true
+	_progress.value = 0.0
 	var mode := WorldImporter.Mode.ADD if _mode_option.selected == 1 else WorldImporter.Mode.REPLACE
-	var result: Dictionary = await WorldImporter.import_into(_instance, _analysis, mode, _apply_check.button_pressed,
-			func(text: String) -> void: _status.text = text)
-	WorldImporter.cleanup(_analysis)
+	var result: Dictionary = await _instance.call_op("world_import", {"token": _analysis.token, "mode": mode, "apply": _apply_check.button_pressed},
+			func(text: String, _f: float) -> void: _status.text = text)
 	_busy = false
 	_progress.visible = false
 	_set_buttons_enabled(true)
 	if result.ok:
-		Notifier.success("Imported \"%s\" into %s." % [WorldImporter.display_name(_analysis), _instance.config.display_name])
+		Notifier.success("Imported \"%s\" into %s." % [_analysis.display_name, _instance.config.display_name])
 		_analysis = {}
 		imported.emit(_instance)
 		hide()
 	else:
 		_status.text = result.error
-		_analysis["ok"] = false
+		_analysis["valid"] = false
 		_update_ok()
 
 
 func _discard() -> void:
 	_serial += 1
 	if not _busy:
-		WorldImporter.cleanup(_analysis)
-		_analysis = {}
+		_discard_analysis()
 
 
-func _on_state_changed(_state: ServerInstance.State) -> void:
+## Lets the server delete what it unpacked for the analysis.
+func _discard_analysis() -> void:
+	if _analysis.has("token") and _instance != null and is_instance_valid(_instance):
+		_instance.call_op("world_import_cancel", {"token": _analysis.token})
+	_analysis = {}
+
+
+func _on_state_changed(_state: ServerHandle.State) -> void:
 	_update_ok()
 
 
@@ -167,9 +184,9 @@ func _unwatch() -> void:
 
 
 func _update_ok() -> void:
-	var running := _instance != null and (_instance.is_process_alive() or _instance.state == ServerInstance.State.INSTALLING)
+	var running := _instance != null and (_instance.is_process_alive() or _instance.state == ServerHandle.State.INSTALLING)
 	_running_notice.visible = running and not _busy
-	get_ok_button().disabled = _busy or running or not _analysis.get("ok", false)
+	get_ok_button().disabled = _busy or running or not _analysis.get("valid", false)
 
 
 func _set_buttons_enabled(enabled: bool) -> void:

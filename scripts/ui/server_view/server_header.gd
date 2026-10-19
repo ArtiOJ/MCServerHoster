@@ -32,7 +32,7 @@ var instance: ServerHandle
 
 
 func _ready() -> void:
-	_start_button.pressed.connect(func() -> void: instance.start())
+	_start_button.pressed.connect(_on_start_pressed)
 	_stop_button.pressed.connect(func() -> void: instance.stop())
 	_restart_button.pressed.connect(func() -> void: instance.restart())
 	_kill_button.pressed.connect(func() -> void: instance.kill())
@@ -49,10 +49,29 @@ func bind(inst: ServerHandle) -> void:
 		instance.state_changed.disconnect(_on_state_changed)
 		instance.config_changed.disconnect(_refresh)
 		instance.update_available_changed.disconnect(_refresh)
+		if instance is RemoteServer and (instance as RemoteServer).link.status_changed.is_connected(_refresh):
+			(instance as RemoteServer).link.status_changed.disconnect(_refresh)
 	instance = inst
 	instance.state_changed.connect(_on_state_changed)
 	instance.config_changed.connect(_refresh)
 	instance.update_available_changed.connect(_refresh)
+	if instance is RemoteServer:
+		(instance as RemoteServer).link.status_changed.connect(_refresh)
+	_refresh()
+
+
+## Start, or for a server whose computer is asleep: wake that computer (and only wake it;
+## once it is back, everything works as usual, starting included).
+func _on_start_pressed() -> void:
+	var remote := instance as RemoteServer
+	if remote == null or remote.is_connected_to_host():
+		instance.start()
+		return
+	if remote.link.is_waking():
+		return
+	var woke: bool = await remote.link.wake_and_wait()
+	if is_instance_valid(remote) and not woke:
+		Notifier.warn("%s didn't wake up. It may be shut down, off the network, or its Wi-Fi may not stay on during sleep." % remote.host_name())
 	_refresh()
 
 
@@ -84,17 +103,25 @@ func _refresh() -> void:
 	var installing := s == ServerHandle.State.INSTALLING
 	# A server on another computer can only be controlled while connected to it.
 	var reachable := not instance.is_remote() or (instance as RemoteServer).is_connected_to_host()
-	_start_button.visible = not alive and s != ServerHandle.State.STOPPING
-	_start_button.disabled = installing or instance.orphan_pid > 0 or not reachable
-	_start_button.tooltip_text = "Keep or discard the temporary copy first (⋮ menu), or resume it from the Start options." \
-			if instance.is_temporary() else "Start the server (Ctrl+Enter)"
+	# An asleep computer can be woken first (see RemoteLink.wake).
+	var link := (instance as RemoteServer).link if instance.is_remote() else null
+	var wakeable := not reachable and link != null and link.can_wake()
+	var waking := link != null and link.is_waking() and not reachable
+	_start_button.visible = (not alive and s != ServerHandle.State.STOPPING) or not reachable
+	_start_button.disabled = installing or instance.orphan_pid > 0 or (not reachable and not wakeable) or waking
+	_start_button.text = "Waking…" if waking else ("Wake" if wakeable else "Start")
+	if wakeable:
+		_start_button.tooltip_text = "%s is asleep or offline. Wake it up and reconnect (the server isn't started)." % instance.host_name()
+	else:
+		_start_button.tooltip_text = "Keep or discard the temporary copy first (⋮ menu), or resume it from the Start options." \
+				if instance.is_temporary() else "Start the server (Ctrl+Enter)"
 	_start_menu.visible = _start_button.visible
-	_start_menu.disabled = _start_button.disabled
+	_start_menu.disabled = _start_button.disabled or not reachable
 	var start_popup := _start_menu.get_popup()
 	var temp_idx := start_popup.get_item_index(StartItem.START_TEMPORARY)
 	start_popup.set_item_text(temp_idx, "Resume temporary copy" if instance.is_temporary() else "Start temporary copy")
 	start_popup.set_item_disabled(start_popup.get_item_index(StartItem.START), instance.is_temporary())
-	_stop_button.visible = alive or s == ServerHandle.State.CRASHED
+	_stop_button.visible = reachable and (alive or s == ServerHandle.State.CRASHED)
 	_stop_button.disabled = s == ServerHandle.State.STOPPING or not reachable
 	_stop_button.text = "Cancel restart" if s == ServerHandle.State.CRASHED else "Stop"
 	_restart_button.disabled = installing or s == ServerHandle.State.STOPPING or instance.orphan_pid > 0 or not reachable
@@ -111,8 +138,8 @@ func _refresh() -> void:
 	_set_menu_item(popup, MenuItem.STOP_ORPHAN, reachable and instance.orphan_pid > 0)
 	_set_menu_item(popup, MenuItem.DUPLICATE, instance.supports(ServerHandle.FEATURE_DUPLICATE) and reachable and not installing,
 			"Only a system admin of %s can duplicate servers." % instance.host_name() if not instance.supports(ServerHandle.FEATURE_DUPLICATE) else "")
-	_set_menu_item(popup, MenuItem.IMPORT_WORLD, instance.supports(ServerHandle.FEATURE_IMPORT_WORLD) and not installing,
-			"Importing worlds onto another computer isn't available yet." if not instance.supports(ServerHandle.FEATURE_IMPORT_WORLD) else "")
+	_set_menu_item(popup, MenuItem.IMPORT_WORLD, instance.supports(ServerHandle.FEATURE_IMPORT_WORLD) and reachable and not installing,
+			"Not connected to %s." % instance.host_name() if not reachable else "")
 	_set_menu_item(popup, MenuItem.TEMP_DECISION, reachable and instance.is_temporary() and not alive and not installing)
 	_set_menu_item(popup, MenuItem.CHANGE_ICON, reachable)
 

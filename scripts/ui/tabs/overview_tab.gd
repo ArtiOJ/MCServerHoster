@@ -164,6 +164,8 @@ func _remote_notices(remote: RemoteServer) -> PackedStringArray:
 	var out := PackedStringArray()
 	if not remote.is_connected_to_host():
 		out.append("Not connected to %s right now%s. Showing the last known state." % [remote.host_name(), (": " + remote.link.error) if remote.link.error != "" else ""])
+		if remote.link.can_wake():
+			out.append("If %s is asleep, “Wake” wakes it up and reconnects." % remote.host_name())
 	# Sibling tabs that only work for servers on this computer are hidden for this one.
 	var hidden := PackedStringArray()
 	for tab in get_parent().get_children():

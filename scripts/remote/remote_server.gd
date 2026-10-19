@@ -106,6 +106,13 @@ func _apply_live(data: Dictionary) -> void:
 	if data.has("uptime"):
 		_uptime_base = int(data.uptime)
 		_uptime_at_msec = Time.get_ticks_msec()
+	if data.has("backup_busy") or data.has("backup_progress"):
+		var busy := bool(data.get("backup_busy", backup_busy))
+		var progress := float(data.get("backup_progress", backup_progress))
+		if busy != backup_busy or not is_equal_approx(progress, backup_progress):
+			backup_busy = busy
+			backup_progress = progress
+			backup_status_changed.emit()
 
 
 static func _entry_from_wire(line: Dictionary) -> Dictionary:
@@ -140,9 +147,17 @@ func supports(feature: StringName) -> bool:
 	match feature:
 		FEATURE_DELETE, FEATURE_DUPLICATE:
 			return link.is_system_admin()
-		FEATURE_OPEN_FOLDER, FEATURE_IMPORT_WORLD:
+		FEATURE_OPEN_FOLDER:
 			return false
 	return true
+
+
+func source() -> ServerSource:
+	return link
+
+
+func can_manage_host() -> bool:
+	return link.is_system_admin()
 
 
 func is_connected_to_host() -> bool:
@@ -150,7 +165,9 @@ func is_connected_to_host() -> bool:
 
 
 func state_name() -> String:
-	return "Disconnected" if not link.is_online() else super()
+	if not link.is_online():
+		return "Waking up" if link.is_waking() else "Disconnected"
+	return super()
 
 
 func state_color() -> Color:
@@ -235,6 +252,10 @@ func icon_texture() -> Texture2D:
 	return _icon
 
 
+func wake_error() -> String:
+	return str(_data.get("wake_error", ""))
+
+
 func icon_info() -> Dictionary:
 	return {
 		"exists": bool(_data.get("icon_exists", false)), "valid": bool(_data.get("icon_valid", false)),
@@ -298,6 +319,10 @@ func set_icon_png(png: PackedByteArray) -> Error:
 	if not res.ok:
 		Notifier.error("%s: %s" % [config.display_name, res.error])
 	return OK if res.ok else FAILED
+
+
+func call_op(op: String, args := {}, on_progress := Callable()) -> Dictionary:
+	return await link.request_with_files(op, remote_id, args, on_progress)
 
 
 func settings_snapshot() -> Dictionary:

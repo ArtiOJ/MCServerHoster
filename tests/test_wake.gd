@@ -23,6 +23,12 @@ func test_tcp_pattern() -> void:
 	check_eq(WakeHelper.tcp_pattern("bad", 25565), "", "invalid MAC")
 
 
+func test_connect_port_includes_remote_access() -> void:
+	check_eq(WakeHelper.connect_port([]), -1, "nothing to wake for")
+	check_eq(WakeHelper.connect_port([], [25590]), 25590, "remote access alone watches its port")
+	check_eq(WakeHelper.connect_port([], [25590, 25565]), 0, "several ports: any TCP port (one pattern only)")
+
+
 func test_helper_script_rejects_bad_arguments() -> void:
 	# The root helper validates everything before touching the system; run it as a normal user.
 	var path := ProjectSettings.globalize_path("user://wake-helper-test.sh")

@@ -33,6 +33,8 @@ var _monitor := {}
 var _monitor_buf := PackedByteArray()
 var _delay_lock := {}
 var _block_lock := {}
+## Keeps the computer from dozing off while someone manages it remotely.
+var _idle_lock := {}
 var _stopped_for_sleep := PackedStringArray()
 var _handling := false
 ## What was armed for the current sleep: {alarm: unix time or -1, wowlan: pattern or "", phy}.
@@ -72,6 +74,7 @@ func _exit_tree() -> void:
 		_runner().call(["wowlan", _armed_wowlan.phy, "off"])
 	_release(_delay_lock)
 	_release(_block_lock)
+	_release(_idle_lock)
 	if _monitor.has("pid") and OS.is_process_running(_monitor.pid):
 		OS.kill(_monitor.pid)
 
@@ -109,6 +112,8 @@ func update_locks() -> void:
 		AppSettings.SleepPolicy.BLOCK_WHILE_RUNNING:
 			block = alive
 	_set_lock(_block_lock, "sleep" if block else "", "block", "Minecraft servers are in use")
+	# Someone woke the computer or is working on it from elsewhere: no idle sleep meanwhile.
+	_set_lock(_idle_lock, "idle" if RemoteAccess.recently_active() else "", "block", "Servers are being managed remotely")
 	refresh_wake()
 
 
@@ -192,7 +197,7 @@ func _wake_wanted() -> bool:
 	var instances := ServerManager.get_instances()
 	if AppSettings.wake_for_events and not WakeHelper.flagged_event_times(instances).is_empty():
 		return true
-	return AppSettings.wake_on_connection and WakeHelper.connect_port(instances) >= 0
+	return AppSettings.wake_on_connection and WakeHelper.connect_port(instances, _remote_ports()) >= 0
 
 
 ## Works out the wake-up for this sleep: {alarm: unix time or -1, wowlan: pattern or "", phy}.
@@ -202,7 +207,7 @@ func plan_wake() -> Dictionary:
 	if AppSettings.wake_for_events:
 		plan.alarm = WakeHelper.wake_time(WakeHelper.flagged_event_times(instances), int(Time.get_unix_time_from_system()))
 	if AppSettings.wake_on_connection:
-		var port := WakeHelper.connect_port(instances)
+		var port := WakeHelper.connect_port(instances, _remote_ports())
 		var iface := WakeHelper.wake_interface()
 		if port >= 0 and iface.get("wireless", false):
 			plan.phy = iface.phy
@@ -279,6 +284,20 @@ func _runner() -> Callable:
 		return WakeHelper.set_wowlan(str(args[1]), str(args[3]) if args[2] == "on" else "")
 
 
+## Remote access's port while it is on: people connecting from their own Server Manager
+## can wake the computer like players connecting to a start-on-connect server.
+func _remote_ports() -> Array:
+	return [RemoteAccess.port] if RemoteAccess.enabled else []
+
+
+## What clients need to wake this computer: {ready, mac}. Ready when connection wake-up is
+## set up and on, over Wi-Fi (the only wake-up this computer can arm for connections).
+func remote_wake_info() -> Dictionary:
+	var iface := WakeHelper.wake_interface()
+	var ready: bool = AppSettings.wake_on_connection and WakeHelper.is_installed() and iface.get("wireless", false) and RemoteAccess.enabled
+	return {"ready": ready, "mac": str(iface.get("mac", "")) if ready else ""}
+
+
 ## What the current settings would arm, for the Preferences status line.
 func describe_wake() -> String:
 	if not WakeHelper.is_installed():
@@ -290,10 +309,11 @@ func describe_wake() -> String:
 	elif AppSettings.wake_for_events:
 		parts.append("no upcoming events ask to wake the computer")
 	if plan.wowlan != "":
-		parts.append("Wi-Fi watches for connections to port %s" % ("any" if WakeHelper.connect_port(ServerManager.get_instances()) == 0 else str(WakeHelper.connect_port(ServerManager.get_instances()))))
+		var port := WakeHelper.connect_port(ServerManager.get_instances(), _remote_ports())
+		parts.append("Wi-Fi watches for connections to %s" % ("any port" if port == 0 else "port %d" % port))
 	elif AppSettings.wake_on_connection:
 		var iface := WakeHelper.wake_interface()
-		parts.append("connection wake-up needs a server with Start on connect" if iface.get("wireless", false)
+		parts.append("connection wake-up needs a server with Start on connect or remote access turned on" if iface.get("wireless", false)
 				else "connection wake-up currently works only over Wi-Fi")
 	return "Ready · " + "; ".join(parts) if not parts.is_empty() else "Ready."
 

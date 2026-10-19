@@ -52,6 +52,13 @@ func duplicate_handle(handle: ServerHandle, display_name: String, copy_worlds :=
 	return await duplicate_server(handle as ServerInstance, display_name, copy_worlds, copy_plugins, on_status)
 
 
+func call_host_op(op: String, args := {}, on_progress := Callable()) -> Dictionary:
+	var ctx := ServerOps.LOCAL_CONTEXT.duplicate()
+	ctx["progress"] = on_progress
+	var result: Dictionary = await HostOps.run(op, args, ctx)
+	return JSON.parse_string(JSON.stringify(result))
+
+
 func get_instance(server_id: String) -> ServerInstance:
 	for inst in _instances:
 		if inst.config.id == server_id:

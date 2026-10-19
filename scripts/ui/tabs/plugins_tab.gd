@@ -1,13 +1,15 @@
 class_name PluginsTab
 extends ServerTab
 ## Lists the server's plugin jars and installs, enables, disables or removes them.
+## Works the same for servers on other computers: chosen jars are uploaded there.
 
-const DISABLED_SUFFIX := ".disabled"
+const DISABLED_SUFFIX := ServerOps.DISABLED_SUFFIX
 
 enum Column { NAME, VERSION, FILE, SIZE, STATUS }
 
-## True after a change was made while the server process was running.
-var _changed_while_running := false
+var _serial := 0
+var _busy := false
+var _folder := ""
 
 @onready var _install_button: Button = %InstallButton
 @onready var _open_button: Button = %OpenFolderButton
@@ -46,142 +48,116 @@ func _ready() -> void:
 		_tree.deselect_all()
 		_update_buttons())
 	visibility_changed.connect(func() -> void:
-		if is_visible_in_tree() and instance != null:
+		if is_visible_in_tree() and handle != null:
 			refresh())
 
 
 func _on_bound() -> void:
-	_changed_while_running = false
-	watch(instance.state_changed, _on_state_changed)
+	_folder = ""
+	_tree.clear()
+	_open_button.visible = handle.supports(ServerHandle.FEATURE_OPEN_FOLDER)
+	_install_button.tooltip_text = "Install plugin .jar files" if not handle.is_remote() \
+			else "Upload plugin .jar files from this computer to %s" % handle.host_name()
+	watch(handle.state_changed, func(_s: ServerHandle.State) -> void: refresh())
+	watch(handle.data_changed, func(area: StringName) -> void:
+		if area == &"plugins" and is_visible_in_tree():
+			refresh())
 	refresh()
 
 
-func plugins_dir() -> String:
-	return instance.config.directory.path_join("plugins")
-
-
-## Copies plugin jars into the plugins folder (used by the Install dialog and window drag-and-drop).
+## Installs plugin jars (from the Install dialog or files dropped onto the window).
 func install_files(paths: PackedStringArray) -> void:
-	if instance == null:
+	if handle == null or _busy:
 		return
-	DirAccess.make_dir_recursive_absolute(plugins_dir())
-	var installed := PackedStringArray()
-	for path in paths:
-		if not path.to_lower().ends_with(".jar"):
-			Notifier.warn("Skipped %s: only .jar plugin files can be installed." % path.get_file())
-			continue
-		var target := plugins_dir().path_join(path.get_file())
-		var err := DirAccess.copy_absolute(path, target)
-		if err != OK:
-			Notifier.error("Could not install %s: %s" % [path.get_file(), error_string(err)])
-			continue
-		# A fresh copy supersedes a previously disabled version of the same file.
-		if FileAccess.file_exists(target + DISABLED_SUFFIX):
-			DirAccess.remove_absolute(target + DISABLED_SUFFIX)
-		installed.append(path.get_file())
-	if installed.is_empty():
-		return
-	_mark_changed()
-	refresh()
-	instance.log_system("Installed plugin%s: %s" % ["s" if installed.size() > 1 else "", ", ".join(installed)])
-	Notifier.success("Installed %d plugin%s on %s." % [installed.size(), "s" if installed.size() > 1 else "", instance.config.display_name])
+	var h := handle
+	_set_busy(true, "Installing…")
+	var res: Dictionary = await h.call_op("plugin_install", {"files": Array(paths)}, func(text: String, _f: float) -> void:
+		if h == handle:
+			_summary_label.text = text)
+	_set_busy(false)
+	for message in res.get("skipped", []):
+		Notifier.warn(str(message))
+	var installed: Array = res.get("installed", [])
+	if not installed.is_empty():
+		Notifier.success("Installed %d plugin%s on %s." % [installed.size(), "s" if installed.size() > 1 else "", h.config.display_name])
+	elif not res.ok and res.get("skipped", []).is_empty():
+		Notifier.error(str(res.get("error", "Installing failed.")))
+	if h == handle:
+		refresh()
 
 
 func refresh() -> void:
-	if instance == null:
+	if handle == null or _busy:
 		return
+	_serial += 1
+	var serial := _serial
+	var res: Dictionary = await handle.call_op("plugins_list")
+	if serial != _serial or handle == null:
+		return
+	if not res.ok:
+		_tree.clear()
+		_summary_label.text = str(res.error)
+		_update_buttons()
+		return
+	_folder = str(res.folder)
 	var selected_file := _selected_file()
 	_tree.clear()
 	var root := _tree.create_item()
-	var count := 0
 	var enabled := 0
-	var dir := DirAccess.open(plugins_dir())
-	if dir != null:
-		var files := Array(dir.get_files())
-		files.sort_custom(func(a: String, b: String) -> bool: return a.naturalnocasecmp_to(b) < 0)
-		for f: String in files:
-			var is_enabled := f.ends_with(".jar")
-			if not is_enabled and not f.ends_with(".jar" + DISABLED_SUFFIX):
-				continue
-			var path := plugins_dir().path_join(f)
-			var meta := read_plugin_meta(path)
-			var item := _tree.create_item(root)
-			item.set_text(Column.NAME, meta.get("name", f.trim_suffix(DISABLED_SUFFIX).trim_suffix(".jar")))
-			item.set_text(Column.VERSION, meta.get("version", "—"))
-			item.set_text(Column.FILE, f)
-			var file := FileAccess.open(path, FileAccess.READ)
-			item.set_text(Column.SIZE, Fmt.bytes(file.get_length()) if file != null else "—")
-			item.set_text(Column.STATUS, "Enabled" if is_enabled else "Disabled")
-			item.set_custom_color(Column.STATUS, Color("3fb97f") if is_enabled else Color("8b93a3"))
-			if not is_enabled:
-				item.set_custom_color(Column.NAME, Color("8b93a3"))
-			item.set_tooltip_text(Column.NAME, meta.get("description", ""))
-			item.set_metadata(0, path)
-			if f == selected_file:
-				item.select(0)
-			count += 1
-			if is_enabled:
-				enabled += 1
-	_summary_label.text = "%d plugin%s · %d enabled · %s" % [count, "" if count == 1 else "s", enabled, plugins_dir()] if count > 0 \
-		else "No plugins installed. Paper plugins are .jar files in %s" % plugins_dir()
-	_restart_notice.visible = _changed_while_running and instance.is_process_alive()
+	for p: Dictionary in res.plugins:
+		var item := _tree.create_item(root)
+		var on := bool(p.enabled)
+		item.set_text(Column.NAME, str(p.name))
+		item.set_text(Column.VERSION, str(p.version) if str(p.version) != "" else "—")
+		item.set_text(Column.FILE, str(p.file))
+		item.set_text(Column.SIZE, Fmt.bytes(float(p.size)))
+		item.set_text(Column.STATUS, "Enabled" if on else "Disabled")
+		item.set_custom_color(Column.STATUS, Color("3fb97f") if on else Color("8b93a3"))
+		if not on:
+			item.set_custom_color(Column.NAME, Color("8b93a3"))
+		item.set_tooltip_text(Column.NAME, str(p.description))
+		item.set_metadata(0, str(p.file))
+		if str(p.file) == selected_file:
+			item.select(0)
+		if on:
+			enabled += 1
+	var count: int = res.plugins.size()
+	_summary_label.text = "%d plugin%s · %d enabled · %s" % [count, "" if count == 1 else "s", enabled, _folder] if count > 0 \
+		else "No plugins installed. Paper plugins are .jar files in %s" % _folder
+	_restart_notice.visible = bool(res.restart_needed)
 	_update_buttons()
 
 
-## Reads name/version/description from plugin.yml or paper-plugin.yml inside a jar.
-static func read_plugin_meta(jar_path: String) -> Dictionary:
-	var meta := {}
-	var reader := ZIPReader.new()
-	if reader.open(jar_path) != OK:
-		return meta
-	var files := reader.get_files()
-	for descriptor in ["paper-plugin.yml", "plugin.yml"]:
-		if not files.has(descriptor):
-			continue
-		var text := reader.read_file(descriptor).get_string_from_utf8()
-		for line in text.split("\n"):
-			# Only top-level keys (no indentation).
-			if line.begins_with(" ") or line.begins_with("\t"):
-				continue
-			for key in ["name", "version", "description"]:
-				if line.begins_with(key + ":") and not meta.has(key):
-					var value := line.substr(key.length() + 1).strip_edges()
-					meta[key] = value.trim_prefix("\"").trim_suffix("\"").trim_prefix("'").trim_suffix("'")
-		break
-	reader.close()
-	return meta
-
-
 func _selected_file() -> String:
-	var item := _tree.get_selected()
-	return item.get_text(Column.FILE) if item != null else ""
-
-
-func _selected_path() -> String:
 	var item := _tree.get_selected()
 	return str(item.get_metadata(0)) if item != null else ""
 
 
 func _update_buttons() -> void:
-	var path := _selected_path()
-	_toggle_button.disabled = path == ""
-	_delete_button.disabled = path == ""
-	_toggle_button.text = "Enable" if path.ends_with(DISABLED_SUFFIX) else "Disable"
+	var file := _selected_file()
+	_install_button.disabled = _busy
+	_toggle_button.disabled = file == "" or _busy
+	_delete_button.disabled = file == "" or _busy
+	_toggle_button.text = "Enable" if file.ends_with(DISABLED_SUFFIX) else "Disable"
+
+
+func _set_busy(on: bool, text := "") -> void:
+	_busy = on
+	if text != "":
+		_summary_label.text = text
+	_update_buttons()
 
 
 func _toggle_selected() -> void:
-	var path := _selected_path()
-	if path == "":
+	var file := _selected_file()
+	if file == "" or handle == null:
 		return
-	var target := path.trim_suffix(DISABLED_SUFFIX) if path.ends_with(DISABLED_SUFFIX) else path + DISABLED_SUFFIX
-	if FileAccess.file_exists(target):
-		Notifier.error("Cannot rename: %s already exists." % target.get_file())
+	var res: Dictionary = await handle.call_op("plugin_toggle", {"file": file})
+	if not res.ok:
+		Notifier.error(str(res.error))
 		return
-	var err := DirAccess.rename_absolute(path, target)
-	if err != OK:
-		Notifier.error("Could not rename %s: %s" % [path.get_file(), error_string(err)])
-		return
-	_select_after_refresh(target.get_file())
+	await refresh()
+	_select(str(res.file))
 
 
 func _confirm_delete() -> void:
@@ -193,42 +169,28 @@ func _confirm_delete() -> void:
 
 
 func _delete_selected() -> void:
-	var path := _selected_path()
-	if path == "":
+	var file := _selected_file()
+	if file == "" or handle == null:
 		return
-	var err := DirAccess.remove_absolute(path)
-	if err != OK:
-		Notifier.error("Could not delete %s: %s" % [path.get_file(), error_string(err)])
-		return
-	instance.log_system("Removed plugin " + path.get_file())
-	_mark_changed()
+	var res: Dictionary = await handle.call_op("plugin_delete", {"file": file})
+	if not res.ok:
+		Notifier.error(str(res.error))
 	refresh()
 
 
-func _select_after_refresh(file: String) -> void:
-	_mark_changed()
-	refresh()
+func _select(file: String) -> void:
 	var root := _tree.get_root()
 	if root == null:
 		return
 	for item in root.get_children():
-		if item.get_text(Column.FILE) == file:
+		if str(item.get_metadata(0)) == file:
 			item.select(0)
 			break
 	_update_buttons()
 
 
-func _mark_changed() -> void:
-	if instance.is_process_alive():
-		_changed_while_running = true
-
-
 func _open_folder() -> void:
-	DirAccess.make_dir_recursive_absolute(plugins_dir())
-	OS.shell_open(plugins_dir())
-
-
-func _on_state_changed(_state: ServerInstance.State) -> void:
-	if not instance.is_process_alive():
-		_changed_while_running = false
-	_restart_notice.visible = _changed_while_running and instance.is_process_alive()
+	if _folder == "" or handle == null or handle.is_remote():
+		return
+	DirAccess.make_dir_recursive_absolute(_folder)
+	OS.shell_open(_folder)

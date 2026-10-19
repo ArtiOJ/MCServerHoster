@@ -256,7 +256,7 @@ enp12s0 unplugged; `rtcwake`, `pkexec`, `iw` available.
 - Tests: pattern builder, wake-time computation, helper argument validation, PowerManager with a
   mock helper path (no real sleep in automated tests).
 
-## 10. Remote access (phase 1 built and tested; later phases planned)
+## 10. Remote access (built and tested: every tab, uploads, preferences, keys)
 
 Another person running Server Manager connects to this computer with an **access key**
 (a shared secret) and controls servers according to the key's role.
@@ -268,7 +268,7 @@ Another person running Server Manager connects to this computer with an **access
   console, settings, Paper updates, icon, temporary runs). Their servers appear in the client's
   sidebar under **Remote servers**. Never: Java executable / JVM arguments (would run arbitrary
   programs), firewall/router, app preferences, creating or deleting servers.
-  (Plugins, once remote, also run code as the host user — the key dialog warns about that.)
+  (Plugins they upload run code as the host user — the key dialog warns about that.)
 
 **Security**
 - Transport: TLS (mbedTLS via StreamPeerTLS) with the host's self-signed certificate (RSA 2048,
@@ -297,9 +297,38 @@ added/removed, progress of long operations). Protocol version must match.
 - Host: `RemoteAccess` autoload (keys, certificate, listener) → `RemoteSession` per client.
 - Client: `RemoteHosts` autoload (saved computers) → `RemoteLink` per computer → `RemoteServer`
   proxies. `ServerSource` is the common base of `ServerManager` and `RemoteLink` (server lists).
-- Tabs opt in with `remote_ready`; the others are hidden for remote servers until ported.
+- Tabs opt in with `remote_ready` (all of them now); a tab without it would be hidden for
+  remote servers.
 
-**Phase 1**: keys, connections, sidebar sections, host switcher; header controls, Overview,
-Console, Settings; Paper update, temporary-run decisions, icon; remote create/delete for
-system admins. **Later**: Players, Automation, Resources, Backups, Logs, Worlds, Plugins,
-Network tabs; remote Preferences, remote server import, file uploads.
+**Phase 1** (done): keys, connections, sidebar sections, host switcher; header controls,
+Overview, Console, Settings; Paper update, temporary-run decisions, icon; remote create/delete
+for system admins.
+
+**Phase 2** (done):
+- One request path for every tab: `ServerHandle.call_op(op, args, on_progress)`. Local servers
+  run `ServerOps.run(instance, op, args, ctx)` directly; remote ones send the same op to the
+  host, whose session checks the role and runs the same `ServerOps` code. Results are plain
+  JSON-safe dictionaries, so tabs render local and remote servers the same way.
+- `ServerHandle.data_changed(area)` ("plugins", "backups", "worlds", "lists", "logs") tells
+  open views to reload; the host forwards it to every session that sees the server.
+- File transfers in chunks (512 KB, acknowledged, so pings and other requests keep flowing):
+  `upload_begin/chunk/end` stage a file on the host (per session, deleted when the session ends);
+  ops then take upload ids, never host paths. Downloads (`download_chunk/close`) serve files an
+  op registered (backup zips, world exports). Folders are zipped on the client before upload.
+- Server admins (their servers only): plugins (upload, enable, delete), worlds (upload/import,
+  switch, reset, delete, export/download, datapacks), backups (create, restore, delete,
+  download), logs, player lists, automation rules, resources (RAM/CPU/priority/port) and the
+  network tab's read-only status plus the reachability test.
+  Not for server admins: Java executable, JVM/server arguments, "wake the computer" on rules,
+  UPnP forwarding, firewall rules, DHCP note, app preferences, other servers, access keys.
+- System admins: everything a local user can do: all of the above plus Java/JVM settings,
+  UPnP, firewall (the password prompt appears on the host's screen), Preferences of the host
+  (servers folder, defaults, sleep/wake, start at login, Java runtimes, the host's
+  notifications), importing a server (uploaded as a zip) and managing the host's access keys.
+  Display-only preferences (interface size, console length) stay per computer.
+- Waking a sleeping host (both roles): with "Wake on connection" on and remote access enabled,
+  the host's Wi-Fi wake pattern also watches the remote-access port (any port when several are
+  wanted; the card takes one pattern). The welcome tells clients the Wi-Fi MAC when this is ready;
+  "Wake" (server header, remote dashboard, the computer's row) sends magic packets and reconnects
+  every 3 s for up to 2 min. It only wakes; starting is separate. Remote requests hold an idle
+  inhibitor for 10 min so the woken computer doesn't doze off while someone works on it.

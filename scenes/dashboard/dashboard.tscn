@@ -12,6 +12,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="10"]
 [ext_resource type="Texture2D" path="res://assets/logo.svg" id="11"]
 [ext_resource type="Texture2D" path="res://assets/icons/upload.svg" id="12"]
+[ext_resource type="Texture2D" path="res://assets/icons/activity.svg" id="13"]
 
 [node name="Dashboard" type="MarginContainer"]
 anchors_preset = 15
@@ -54,6 +55,15 @@ unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"SubtitleLabel"
 text = "All Minecraft servers hosted on this machine"
+
+[node name="WakeButton" type="Button" parent="Scroll/VBox/Header"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+theme_type_variation = &"AccentButton"
+text = "Wake"
+icon = ExtResource("13")
 
 [node name="StartAllButton" type="Button" parent="Scroll/VBox/Header"]
 unique_name_in_owner = true

@@ -1,7 +1,8 @@
 class_name AutomationTab
 extends ServerTab
 ## Auto-start, crash recovery, events (triggers → actions) and backup retention for
-## one server. Edits go to a draft config and are copied over on save.
+## one server. Edits go to a draft config and are saved through ServerOps (on the
+## server's own computer for remote servers).
 
 const ROW_SCENE := preload("res://scenes/components/event_row.tscn")
 const EDITED_FIELDS: PackedStringArray = [
@@ -11,6 +12,7 @@ const EDITED_FIELDS: PackedStringArray = [
 
 var _draft: ServerConfig
 var _loading := false
+var _saving := false
 var _rows: Array[EventRow] = []
 ## Draft rules whose editor is open, so rebuilding the list keeps them expanded.
 var _expanded := {}
@@ -61,9 +63,10 @@ func _ready() -> void:
 
 
 func _on_bound() -> void:
-	watch(instance.config_changed, _on_config_changed)
-	watch(instance.state_changed, _update_next_runs.unbind(1))
-	watch(instance.state_changed, _update_wake_status.unbind(1))
+	_draft = null
+	watch(handle.config_changed, _on_config_changed)
+	watch(handle.state_changed, _update_next_runs.unbind(1))
+	watch(handle.state_changed, _update_wake_status.unbind(1))
 	_load_draft()
 
 
@@ -73,7 +76,7 @@ func _on_config_changed() -> void:
 
 
 func _load_draft() -> void:
-	if instance == null:
+	if handle == null:
 		return
 	# Keep open editors open across reloads (matched by position).
 	var open_indices: Array[int] = []
@@ -81,7 +84,7 @@ func _load_draft() -> void:
 		for i in _draft.events.size():
 			if _expanded.has(_draft.events[i]):
 				open_indices.append(i)
-	_draft = ServerConfig.from_dict(instance.config.to_dict(), instance.config.directory)
+	_draft = ServerConfig.from_dict(handle.config.to_dict(), handle.config.directory)
 	_loading = true
 	_auto_start_check.button_pressed = _draft.auto_start
 	_auto_restart_check.button_pressed = _draft.auto_restart
@@ -109,7 +112,9 @@ func _build_rows() -> void:
 	_rows.clear()
 	for rule in _draft.events:
 		var row: EventRow = ROW_SCENE.instantiate()
-		row.setup(rule, instance.scheduler)
+		row.setup(rule, instance.scheduler if instance != null else null)
+		if handle.is_remote():
+			row.set_remote(handle.host_name(), handle.can_manage_host())
 		_event_list.add_child(row)
 		row.set_expanded(_expanded.has(rule))
 		row.changed.connect(_refresh)
@@ -128,6 +133,8 @@ func _add_event(template_index: int) -> void:
 	if _draft == null:
 		return
 	var rule := EventRule.from_template(EventRule.templates()[template_index][1])
+	if not handle.can_manage_host():
+		rule.wake_computer = false
 	_draft.events.append(rule)
 	_expanded[rule] = true
 	_build_rows()
@@ -142,20 +149,20 @@ func _add_idle_stop() -> void:
 
 
 func _update_wake_status() -> void:
-	if instance == null or _draft == null:
+	if handle == null or _draft == null:
 		return
 	if not _draft.wake_on_connect:
 		_wake_status.text = ""
-	elif instance.config.wake_on_connect != _draft.wake_on_connect:
-		_wake_status.text = "Save to start listening on port %d." % instance.config.port
-	elif instance.is_asleep():
-		_wake_status.text = "Asleep — listening on port %d for players." % instance.config.port
-	elif instance.wake_listener.last_error != "":
-		_wake_status.text = instance.wake_listener.last_error
-	elif instance.is_temporary():
+	elif handle.config.wake_on_connect != _draft.wake_on_connect:
+		_wake_status.text = "Save to start listening on port %d." % handle.config.port
+	elif handle.is_asleep():
+		_wake_status.text = "Asleep — listening on port %d for players." % handle.config.port
+	elif handle.wake_error() != "":
+		_wake_status.text = handle.wake_error()
+	elif handle.is_temporary():
 		_wake_status.text = "Paused while a temporary copy is pending."
 	else:
-		_wake_status.text = "Listens on port %d whenever the server is stopped." % instance.config.port
+		_wake_status.text = "Listens on port %d whenever the server is stopped." % handle.config.port
 	_wake_status.visible = _wake_status.text != ""
 
 
@@ -197,16 +204,16 @@ func _refresh() -> void:
 	_sleep_notice.visible = _draft.events.any(func(r: EventRule) -> bool:
 		return r.trigger == EventRule.Trigger.SYSTEM_SLEEP or r.trigger == EventRule.Trigger.SYSTEM_WAKE)
 	var dirty := _is_dirty()
-	_save_button.disabled = not dirty or invalid
+	_save_button.disabled = not dirty or invalid or _saving
 	_revert_button.disabled = not dirty
 	_dirty_label.text = "Fix the highlighted times before saving" if invalid else ("Unsaved changes" if dirty else "")
 	_update_next_runs()
 
 
 func _update_next_runs() -> void:
-	if _draft == null or instance == null:
+	if _draft == null or handle == null:
 		return
-	var saved := instance.config.events
+	var saved := handle.config.events
 	for i in _rows.size():
 		var rule: EventRule = _draft.events[i]
 		# Unchanged rules can use the live scheduler's exact next run (interval alignment etc.).
@@ -223,27 +230,22 @@ func _edited_values(cfg: ServerConfig) -> Dictionary:
 
 
 func _is_dirty() -> bool:
-	return _draft != null and instance != null and _edited_values(_draft) != _edited_values(instance.config)
+	return _draft != null and handle != null and _edited_values(_draft) != _edited_values(handle.config)
 
 
 func _save() -> void:
-	if instance == null or _rows.any(func(r: EventRow) -> bool: return not r.is_valid()):
+	if handle == null or _saving or _rows.any(func(r: EventRow) -> bool: return not r.is_valid()):
 		return
-	var c := instance.config
-	c.auto_start = _draft.auto_start
-	c.auto_restart = _draft.auto_restart
-	c.max_restarts = _draft.max_restarts
-	c.restart_window_sec = _draft.restart_window_sec
-	c.stop_timeout_sec = _draft.stop_timeout_sec
-	c.backup_retention = _draft.backup_retention
-	c.backup_full = _draft.backup_full
-	c.wake_on_connect = _draft.wake_on_connect
-	c.wake_on_ping = _draft.wake_on_ping
-	c.wake_motd = _draft.wake_motd
-	var events: Array[EventRule] = []
-	for rule in _draft.events:
-		events.append(EventRule.from_dict(rule.to_dict()))
-	c.events = events
-	instance.save_config()
-	Notifier.success("Saved automation settings for %s." % c.display_name)
+	var h := handle
+	_saving = true
+	_refresh()
+	var res: Dictionary = await h.call_op("config_save", {"changes": _edited_values(_draft)})
+	_saving = false
+	if h != handle:
+		return
+	if not res.ok:
+		Notifier.error(str(res.error))
+		_refresh()
+		return
+	Notifier.success("Saved automation settings for %s." % h.config.display_name)
 	_load_draft()

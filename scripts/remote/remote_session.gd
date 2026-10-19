@@ -12,6 +12,10 @@ const IDLE_TIMEOUT_MSEC := 60000
 const MAX_COMMAND_LENGTH := 2000
 const MAX_ICON_BYTES := 256 * 1024
 const MAX_FILE_BYTES := 4 * 1024 * 1024
+const MAX_UPLOAD_BYTES := 32 * 1024 * 1024 * 1024
+const MAX_OPEN_UPLOADS := 16
+## Operations whose result names a file on this computer that the client may download.
+const DOWNLOAD_OPS: PackedStringArray = ["backup_file", "world_export"]
 
 var grant: RemoteGrant
 var address := ""
@@ -25,6 +29,14 @@ var _host_nonce := ""
 ## Servers this session has been told about.
 var _visible := {}
 var _in_flight := 0
+## Upload id -> {path, name, size, received, file, hash, done}
+var _uploads := {}
+## Download id -> {path, size, temp}
+var _downloads := {}
+## Folder for this session's uploads and exports ("" until first needed).
+var _transfer_dir := ""
+## Analysed imports this person may still confirm: token -> true (world) / false (server).
+var _import_tokens := {}
 
 
 func setup(channel: RemoteChannel) -> void:
@@ -42,6 +54,10 @@ func is_ready_session() -> bool:
 ## True when this session shows [param server_id].
 func sees(server_id: String) -> bool:
 	return _phase == Phase.READY and _visible.has(server_id)
+
+
+func visible_ids() -> Array:
+	return _visible.keys() if _phase == Phase.READY else []
 
 
 func send(msg: Dictionary) -> void:
@@ -180,6 +196,7 @@ func _on_auth(msg: Dictionary) -> void:
 		"t": "welcome", "proof": RemoteProtocol.proof(g.secret, "host", [client_nonce, _host_nonce]),
 		"name": _host().computer_name, "role": int(grant.role), "grant_name": grant.name,
 		"servers": servers, "host": _host().host_stats() if grant.is_system_admin() else {},
+		"wake": PowerManager.remote_wake_info(),
 	})
 	_host().record_success(self)
 
@@ -205,6 +222,7 @@ func _finish() -> void:
 	# Requests still running finish first; their replies go nowhere.
 	while _in_flight > 0:
 		await get_tree().create_timer(0.5).timeout
+	_remove_transfers()
 	queue_free()
 
 
@@ -224,11 +242,23 @@ func _handle_request(msg: Dictionary) -> void:
 	var server_id := str(msg.get("server", ""))
 	var args: Dictionary = msg.get("args", {}) if msg.get("args", {}) is Dictionary else {}
 	var reply := {}
+	_host().note_activity()
+	# File names on this computer never come from the client: uploads are referenced by id.
+	for key in RemoteProtocol.PATH_ARGS:
+		args.erase(key)
+	var uploads: Variant = _upload_paths(args.get("uploads", []))
+	args.erase("uploads")
 	if not RemoteProtocol.OPS.has(op):
 		reply = {"ok": false, "error": "Unknown request \"%s\"." % op}
 	elif not RemoteProtocol.allows(grant.role, op):
 		reply = {"ok": false, "error": "Your access key (%s) does not allow that." % grant.role_name().to_lower()}
+	elif uploads == null:
+		reply = {"ok": false, "error": "The uploaded file is missing or incomplete. Try again."}
+	elif RemoteProtocol.TRANSFER_OPS.has(op):
+		reply = _transfer_request(op, args)
 	elif RemoteProtocol.HOST_OPS.has(op):
+		if not (uploads as PackedStringArray).is_empty():
+			args["files"] = uploads
 		_in_flight += 1
 		reply = await _host_request(op, args, req_id)
 		_in_flight -= 1
@@ -237,10 +267,14 @@ func _handle_request(msg: Dictionary) -> void:
 		if inst == null or not grant.can_access(server_id):
 			reply = {"ok": false, "error": "That server is not available to you."}
 		else:
+			if not (uploads as PackedStringArray).is_empty():
+				args["files"] = uploads
 			_in_flight += 1
 			reply = await _server_request(op, inst, args, req_id)
 			_in_flight -= 1
 	if _phase == Phase.READY:
+		if server_id != "":
+			_host().flush_snapshot(server_id)
 		reply["re"] = req_id
 		send(reply)
 
@@ -350,7 +384,21 @@ func _server_request(op: String, inst: ServerInstance, args: Dictionary, req_id:
 			var res: Dictionary = await ServerManager.duplicate_server(inst, copy_name, bool(args.get("worlds", true)), bool(args.get("plugins", true)),
 					func(text: String) -> void: progress.call(text, -1.0))
 			return {"ok": res.ok, "error": res.get("error", ""), "server": res.instance.config.id if res.ok else ""}
-	return {"ok": false, "error": "Unknown request."}
+	if op == "world_export":
+		args["dest"] = _staging().path_join("export-%s.zip" % Fmt.random_token(8).to_lower())
+	var result: Dictionary = await ServerOps.run(inst, op, args, _context(req_id))
+	if op == "world_import_analyze" and result.has("token"):
+		_import_tokens[str(result.token)] = true
+	if DOWNLOAD_OPS.has(op) and result.get("ok", false) and result.has("path"):
+		result["download"] = _offer_download(str(result.path), op == "world_export")
+		result["size"] = _downloads[result.download].size
+		result.erase("path")
+	return result
+
+
+## How [ServerOps] and [HostOps] see this person.
+func _context(req_id: int) -> Dictionary:
+	return {"actor": grant.name, "role": grant.role, "progress": _progress_sender(req_id)}
 
 
 func _host_request(op: String, args: Dictionary, req_id: int) -> Dictionary:
@@ -363,7 +411,10 @@ func _host_request(op: String, args: Dictionary, req_id: int) -> Dictionary:
 		"stop_all":
 			ServerManager.stop_all()
 			return {"ok": true}
-	return {"ok": false, "error": "Unknown request."}
+	var result: Dictionary = await HostOps.run(op, args, _context(req_id))
+	if op == "server_import_analyze" and result.has("token"):
+		_import_tokens[str(result.token)] = false
+	return result
 
 
 func _start_result(inst: ServerInstance, err: Error) -> Dictionary:
@@ -421,3 +472,131 @@ static func _string_dict(value: Variant) -> Dictionary:
 		for k in value:
 			out[str(k)] = str(value[k])
 	return out
+
+
+# --- File transfers ---------------------------------------------------------------------
+
+func _staging() -> String:
+	if _transfer_dir == "":
+		_transfer_dir = AppSettings.servers_root.path_join("_temp").path_join("remote-%s" % Fmt.random_token(10).to_lower())
+		DirAccess.make_dir_recursive_absolute(_transfer_dir)
+	return _transfer_dir
+
+
+## Paths of finished uploads by id (empty when none were given), or null if one is unknown.
+func _upload_paths(ids: Variant) -> Variant:
+	var out := PackedStringArray()
+	if not ids is Array:
+		return out
+	for id in ids:
+		var u: Dictionary = _uploads.get(str(id), {})
+		if u.is_empty() or not u.done:
+			return null
+		out.append(u.path)
+	return out
+
+
+func _transfer_request(op: String, args: Dictionary) -> Dictionary:
+	var id := str(args.get("id", ""))
+	match op:
+		"upload_begin":
+			var file_name := _safe_file_name(str(args.get("name", "")))
+			var size := int(args.get("size", -1))
+			if file_name == "" or size < 0:
+				return {"ok": false, "error": "Invalid upload."}
+			if size > MAX_UPLOAD_BYTES:
+				return {"ok": false, "error": "The file is too large (%s at most)." % Fmt.bytes(MAX_UPLOAD_BYTES)}
+			if _uploads.values().filter(func(u: Dictionary) -> bool: return not u.done).size() >= MAX_OPEN_UPLOADS:
+				return {"ok": false, "error": "Too many uploads at once."}
+			var new_id := Fmt.random_token(12).to_lower()
+			var dir := _staging().path_join("up-" + new_id)
+			DirAccess.make_dir_recursive_absolute(dir)
+			var path := dir.path_join(file_name)
+			var f := FileAccess.open(path, FileAccess.WRITE)
+			if f == null:
+				return {"ok": false, "error": "Could not store the upload (%s)." % error_string(FileAccess.get_open_error())}
+			var hash := HashingContext.new()
+			hash.start(HashingContext.HASH_SHA256)
+			_uploads[new_id] = {"path": path, "name": file_name, "size": size, "received": 0, "file": f, "hash": hash, "done": false}
+			return {"ok": true, "id": new_id}
+		"upload_chunk":
+			var u: Dictionary = _uploads.get(id, {})
+			if u.is_empty() or u.done:
+				return {"ok": false, "error": "Unknown upload."}
+			if int(args.get("offset", -1)) != int(u.received):
+				return {"ok": false, "error": "Upload out of order."}
+			var data := Marshalls.base64_to_raw(str(args.get("data", "")))
+			if data.size() > RemoteProtocol.CHUNK_BYTES or int(u.received) + data.size() > int(u.size):
+				return {"ok": false, "error": "Upload larger than announced."}
+			(u.file as FileAccess).store_buffer(data)
+			(u.hash as HashingContext).update(data)
+			u.received = int(u.received) + data.size()
+			return {"ok": true, "received": u.received}
+		"upload_end":
+			var u: Dictionary = _uploads.get(id, {})
+			if u.is_empty() or u.done:
+				return {"ok": false, "error": "Unknown upload."}
+			(u.file as FileAccess).close()
+			var digest := (u.hash as HashingContext).finish().hex_encode()
+			if int(u.received) != int(u.size) or digest != str(args.get("sha256", "")):
+				DirAccess.remove_absolute(u.path)
+				_uploads.erase(id)
+				return {"ok": false, "error": "The upload arrived damaged. Try again."}
+			u.done = true
+			u.erase("file")
+			u.erase("hash")
+			return {"ok": true, "id": id}
+		"download_chunk":
+			var d: Dictionary = _downloads.get(id, {})
+			if d.is_empty():
+				return {"ok": false, "error": "Unknown download."}
+			var f := FileAccess.open(d.path, FileAccess.READ)
+			if f == null:
+				return {"ok": false, "error": "The file is gone."}
+			var offset := clampi(int(args.get("offset", 0)), 0, f.get_length())
+			f.seek(offset)
+			var data := f.get_buffer(clampi(int(args.get("length", RemoteProtocol.CHUNK_BYTES)), 1, RemoteProtocol.CHUNK_BYTES))
+			return {"ok": true, "data": Marshalls.raw_to_base64(data), "eof": offset + data.size() >= f.get_length()}
+		"download_close":
+			var d: Dictionary = _downloads.get(id, {})
+			if not d.is_empty():
+				if d.temp:
+					DirAccess.remove_absolute(d.path)
+				_downloads.erase(id)
+			return {"ok": true}
+	return {"ok": false, "error": "Unknown request."}
+
+
+## Lets the client fetch [param path]; [param temp] files are deleted when it is done.
+func _offer_download(path: String, temp: bool) -> String:
+	var id := Fmt.random_token(12).to_lower()
+	var f := FileAccess.open(path, FileAccess.READ)
+	_downloads[id] = {"path": path, "size": f.get_length() if f != null else 0, "temp": temp}
+	return id
+
+
+func _remove_transfers() -> void:
+	# Imports analysed but never confirmed leave unpacked copies behind otherwise.
+	for token in _import_tokens:
+		if _import_tokens[token]:
+			ServerOps.world_import_cancel(token)
+		else:
+			HostOps.server_import_cancel(token)
+	_import_tokens.clear()
+	for u: Dictionary in _uploads.values():
+		if u.has("file"):
+			(u.file as FileAccess).close()
+	_uploads.clear()
+	_downloads.clear()
+	if _transfer_dir != "" and DirAccess.dir_exists_absolute(_transfer_dir):
+		FileOps.remove_tree(_transfer_dir)
+	_transfer_dir = ""
+
+
+## A file name safe to create here: no folders, no hidden or odd characters.
+static func _safe_file_name(file_name: String) -> String:
+	var out := ""
+	for ch in file_name.get_file().replace("\\", "/").get_file():
+		out += ch if ch.is_valid_identifier() or ch.is_valid_int() or ch in " .-_()+[]" else "_"
+	out = out.strip_edges().lstrip(".")
+	return out.left(120)

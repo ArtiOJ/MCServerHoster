@@ -37,7 +37,7 @@ func _ready() -> void:
 		_check((await tab.add_entry(K.WHITELIST, n)).ok, "whitelist add %s offline" % n)
 	_check((await tab.add_entry(K.OPS, "Steve", {"level": 2})).ok, "op Steve at level 2 offline")
 	_check((await tab.add_entry(K.OPS, "Alex_99", {"level": 4})).ok, "op Alex_99 offline")
-	_check(tab.change_op_level("Alex_99", 3).ok, "change Alex_99 to level 3 offline")
+	_check((await tab.change_op_level("Alex_99", 3)).ok, "change Alex_99 to level 3 offline")
 	_check((await tab.add_entry(K.BANS, "Herobrine", {"reason": "Griefing the spawn"})).ok, "ban Herobrine offline")
 	_check((await tab.add_entry(K.IP_BANS, "10.1.2.3", {"reason": "Spam"})).ok, "ban IP offline")
 	_check(not (await tab.add_entry(K.WHITELIST, "bad-name")).ok, "invalid name rejected")
@@ -64,7 +64,7 @@ func _ready() -> void:
 
 	# --- Online: commands, then files reflect them --------------------------------------
 	_check(tab._edit_mode() == "commands", "running server uses commands")
-	_check(not tab.change_op_level("Steve", 4).ok, "level changes refused while online")
+	_check(not (await tab.change_op_level("Steve", 4)).ok, "level changes refused while online")
 	tab.remove_entry(K.WHITELIST, "Alex_99")
 	tab.remove_entry(K.BANS, "Herobrine")
 	tab.remove_entry(K.OPS, "Steve")

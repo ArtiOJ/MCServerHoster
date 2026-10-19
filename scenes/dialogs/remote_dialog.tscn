@@ -33,6 +33,7 @@ layout_mode = 2
 theme_override_constants/separation = 12
 
 [node name="ShareIntro" type="Label" parent="Tabs/Share/VBox"]
+unique_name_in_owner = true
 custom_minimum_size = Vector2(600, 0)
 layout_mode = 2
 theme_type_variation = &"MutedLabel"

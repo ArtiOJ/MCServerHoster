@@ -43,6 +43,10 @@ var _day_buttons: Array[Button] = []
 @onready var _action_option: OptionButton = %ActionOption
 @onready var _text_edit: LineEdit = %ActionTextEdit
 @onready var _warn_check: CheckButton = %WarnCheck
+## Name of the computer the server runs on when it is another one ("" here).
+var _remote_host := ""
+var _can_wake := true
+
 @onready var _wake_check: CheckButton = %WakeComputerCheck
 @onready var _wake_setup_button: Button = %WakeSetupButton
 @onready var _delay_spin: SpinBox = %DelaySpin
@@ -96,6 +100,15 @@ func setup(event_rule: EventRule, event_scheduler: TaskScheduler) -> void:
 		_load_fields()
 
 
+## For a server on another computer: no wake setup from here, and without
+## [param can_wake] (server admins) "Wake computer" can't be changed.
+func set_remote(host: String, can_wake: bool) -> void:
+	_remote_host = host
+	_can_wake = can_wake
+	if is_node_ready():
+		_load_fields()
+
+
 func set_expanded(expanded: bool) -> void:
 	_editor.visible = expanded
 	_expand_button.icon = CHEVRON_UP if expanded else CHEVRON_DOWN
@@ -133,6 +146,7 @@ func refresh_next_run() -> void:
 			pending = false
 		else:
 			next = rule.next_run_after(now, now)
+			pending = saved_rule == null
 		if next < 0:
 			text = "Never runs (no days selected)"
 		else:
@@ -260,7 +274,7 @@ static func _valid_time(hhmm: String) -> bool:
 
 ## Switching "Wake computer" on before the one-time setup offers the setup; declining unticks it.
 func _on_wake_toggled(on: bool) -> void:
-	if on and not WakeHelper.is_installed():
+	if on and _remote_host == "" and not WakeHelper.is_installed():
 		if not await WakeSetupDialog.prompt(self):
 			_wake_check.set_pressed_no_signal(false)
 			on = false
@@ -271,4 +285,7 @@ func _on_wake_toggled(on: bool) -> void:
 ## Events that are set to wake the computer (Start events by default) show "Set up…" until the
 ## one-time setup is done, so a ticked box never silently does nothing.
 func _update_wake_setup() -> void:
-	_wake_setup_button.visible = _wake_check.visible and rule != null and rule.wake_computer and not WakeHelper.is_installed()
+	_wake_setup_button.visible = _remote_host == "" and _wake_check.visible and rule != null and rule.wake_computer and not WakeHelper.is_installed()
+	_wake_check.disabled = not _can_wake
+	if not _can_wake:
+		_wake_check.tooltip_text = "Only a system admin of %s can let events wake the computer." % _remote_host

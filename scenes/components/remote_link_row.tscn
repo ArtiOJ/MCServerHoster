@@ -5,6 +5,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="3"]
 [ext_resource type="Texture2D" path="res://assets/icons/trash.svg" id="4"]
 [ext_resource type="Texture2D" path="res://assets/icons/globe.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/play.svg" id="6"]
 
 [node name="RemoteLinkRow" type="PanelContainer"]
 theme_type_variation = &"CardPanel"
@@ -34,6 +35,15 @@ custom_minimum_size = Vector2(240, 0)
 layout_mode = 2
 theme_type_variation = &"MutedLabel"
 autowrap_mode = 3
+
+[node name="WakeButton" type="Button" parent="HBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Wake this computer from sleep and connect"
+text = "Wake"
+icon = ExtResource("6")
 
 [node name="ConnectButton" type="Button" parent="HBox"]
 unique_name_in_owner = true

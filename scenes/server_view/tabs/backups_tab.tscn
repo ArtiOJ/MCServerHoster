@@ -6,6 +6,7 @@
 [ext_resource type="Texture2D" path="res://assets/icons/folder.svg" id="4"]
 [ext_resource type="Texture2D" path="res://assets/icons/undo.svg" id="5"]
 [ext_resource type="Texture2D" path="res://assets/icons/trash.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/download.svg" id="7"]
 
 [node name="Backups" type="MarginContainer"]
 layout_mode = 3
@@ -19,6 +20,7 @@ theme_override_constants/margin_top = 20
 theme_override_constants/margin_right = 20
 theme_override_constants/margin_bottom = 20
 script = ExtResource("1")
+remote_ready = true
 
 [node name="VBox" type="VBoxContainer" parent="."]
 layout_mode = 2
@@ -83,6 +85,14 @@ layout_mode = 2
 theme_type_variation = &"MutedLabel"
 text = "Stop the server to restore"
 
+[node name="SaveCopyButton" type="Button" parent="VBox/ListCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Save a copy of the selected backup on this computer"
+disabled = true
+text = "Save copy"
+icon = ExtResource("7")
+
 [node name="RestoreButton" type="Button" parent="VBox/ListCard/VBox/Header"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -125,3 +135,11 @@ unique_name_in_owner = true
 title = "Delete backup"
 ok_button_text = "Delete"
 dialog_autowrap = true
+
+[node name="SaveDialog" type="FileDialog" parent="."]
+unique_name_in_owner = true
+title = "Save backup"
+size = Vector2i(820, 520)
+access = 2
+filters = PackedStringArray("*.zip ; Zip archives")
+use_native_dialog = true

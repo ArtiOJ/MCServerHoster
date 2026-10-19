@@ -9,6 +9,10 @@ const QUERY_INTERVAL_SEC := 5.0
 const PROPERTIES_FILE := "server.properties"
 
 var start_time_msec := 0
+## A plugin was added, removed or switched while the process ran (cleared when it stops).
+var plugins_changed_while_running := false
+## The game port before the last change, while the Network tab still points it out (0 = none).
+var port_moved_from := 0
 
 ## Log lines replayed right after attaching must not count as new joins/stops.
 var _replay_until_msec := 0
@@ -52,6 +56,17 @@ func _ready() -> void:
 	_query_timer.wait_time = QUERY_INTERVAL_SEC
 	_query_timer.timeout.connect(_query_status)
 	state_changed.connect(func(_s: State) -> void: wake_listener.update())
+	state_changed.connect(func(_s: State) -> void:
+		if not is_process_alive():
+			plugins_changed_while_running = false)
+	backups.busy_changed.connect(func(busy: bool) -> void:
+		backup_busy = busy
+		backup_progress = 0.0
+		backup_status_changed.emit())
+	backups.progress_changed.connect(func(fraction: float) -> void:
+		backup_progress = fraction
+		backup_status_changed.emit())
+	backups.backups_changed.connect(func() -> void: data_changed.emit(&"backups"))
 	config_changed.connect(wake_listener.update)
 	wake_listener.update.call_deferred()
 	max_players = get_properties().get_int("max-players", 20)
@@ -166,6 +181,18 @@ func ram_history() -> PackedFloat32Array:
 func java_description() -> String:
 	var java := JavaRuntimes.resolve_for(config)
 	return java.display_name() if java != null else "Not found — Java %d+ required" % config.java_min_version
+
+
+func wake_error() -> String:
+	return wake_listener.last_error
+
+
+func call_op(op: String, args := {}, on_progress := Callable()) -> Dictionary:
+	var ctx := ServerOps.LOCAL_CONTEXT.duplicate()
+	ctx["progress"] = on_progress
+	var result: Dictionary = await ServerOps.run(self, op, args, ctx)
+	# The same JSON shape a remote host sends, so views treat both kinds of server alike.
+	return result if op == "log_read" else JSON.parse_string(JSON.stringify(result))
 
 
 func icon_texture() -> Texture2D:

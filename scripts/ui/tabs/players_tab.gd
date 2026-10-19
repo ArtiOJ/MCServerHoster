@@ -3,11 +3,17 @@ extends ServerTab
 ## Online players with moderation actions, plus whitelist / operator / ban / IP-ban lists.
 ## The lists are editable whether or not the server runs: a running server gets console
 ## commands (so it stays in sync and resolves UUIDs itself); a stopped server's list files
-## are edited directly through PlayerLists, which resolves UUIDs from usercache.json,
-## Mojang, or the offline-mode algorithm.
+## are edited directly (see ServerOps), which resolves UUIDs from usercache.json, Mojang,
+## or the offline-mode algorithm. Works the same for servers on other computers.
 
-## Delay before re-reading a list file after a command changed it.
-const RELOAD_DELAY_SEC := 1.0
+const KIND_NAMES := ServerOps.LIST_KINDS
+## Delay before re-reading the lists after a command changed them.
+const RELOAD_DELAY_SEC := 1.5
+
+## The last list snapshot: {mode, online_uuids, whitelist_on, default_level, lists}.
+var _state := {}
+var _serial := 0
+
 @onready var _online_list: ItemList = %OnlineList
 @onready var _count_label: Label = %CountLabel
 @onready var _offline_label: Label = %OfflineLabel
@@ -44,17 +50,21 @@ func _ready() -> void:
 		panel.add_requested.connect(func(value: String, options: Dictionary) -> void: _on_panel_add(panel, kind, value, options))
 		panel.remove_requested.connect(func(value: String) -> void: _on_panel_remove(panel, kind, value))
 	_ops_panel.level_change_requested.connect(func(player: String, level: int) -> void:
-		var result := change_op_level(player, level)
+		var result: Dictionary = await change_op_level(player, level)
 		_ops_panel.set_status("" if result.ok else result.message, not result.ok))
 	_reload_timer.timeout.connect(_refresh_lists)
 	visibility_changed.connect(func() -> void:
-		if is_visible_in_tree() and instance != null:
+		if is_visible_in_tree() and handle != null:
 			_refresh_all())
 
 
 func _on_bound() -> void:
-	watch(instance.players_changed, _refresh_online)
-	watch(instance.state_changed, _refresh_all.unbind(1))
+	_state = {}
+	watch(handle.players_changed, _refresh_online)
+	watch(handle.state_changed, _refresh_all.unbind(1))
+	watch(handle.data_changed, func(area: StringName) -> void:
+		if area == &"lists":
+			_refresh_lists())
 	_refresh_all()
 
 
@@ -64,157 +74,111 @@ func _refresh_all() -> void:
 
 
 func _refresh_online() -> void:
-	if instance == null:
+	if handle == null:
 		return
-	var online := instance.is_online()
+	var online := handle.is_online()
 	var selected := _selected_player()
 	_online_list.clear()
-	for p in instance.players:
+	for p in handle.players:
 		var idx := _online_list.add_item(p)
 		if p == selected:
 			_online_list.select(idx)
-	_count_label.text = "%d / %d" % [instance.players.size(), instance.max_players] if online else "offline"
-	_offline_label.visible = not online or instance.players.is_empty()
+	_count_label.text = "%d / %d" % [handle.players.size(), handle.max_players] if online else "offline"
+	_offline_label.visible = not online or handle.players.is_empty()
 	_offline_label.text = "No players online." if online else "The server is not running."
 	_update_actions()
 
 
 func _refresh_lists() -> void:
-	if instance == null:
+	if handle == null:
 		return
-	var dir := _dir()
-	_whitelist_panel.set_entries(_panel_entries(dir, PlayerLists.Kind.WHITELIST))
-	_ops_panel.set_entries(_panel_entries(dir, PlayerLists.Kind.OPS))
-	_bans_panel.set_entries(_panel_entries(dir, PlayerLists.Kind.BANS))
-	_ip_bans_panel.set_entries(_panel_entries(dir, PlayerLists.Kind.IP_BANS))
-	_ops_panel.set_default_level(instance.get_properties().get_int("op-permission-level", 4))
+	_serial += 1
+	var serial := _serial
+	var res: Dictionary = await handle.call_op("lists_get")
+	if serial != _serial or handle == null:
+		return
+	if not res.ok:
+		_lists_hint.text = str(res.error)
+		return
+	_state = res
+	var lists: Dictionary = res.lists
+	_whitelist_panel.set_entries(_rows(lists.get("whitelist", [])))
+	_ops_panel.set_entries(_rows(lists.get("ops", [])))
+	_bans_panel.set_entries(_rows(lists.get("bans", [])))
+	_ip_bans_panel.set_entries(_rows(lists.get("ip_bans", [])))
+	_ops_panel.set_default_level(int(res.default_level))
 	var mode := _edit_mode()
 	var hint := ""
 	match mode:
 		"files":
 			hint = "The server is stopped: changes are saved to the list files and apply when it starts."
-			if not PlayerLists.uses_online_uuids(dir):
+			if not res.online_uuids:
 				hint += " This is an offline-mode server, so player UUIDs are derived from their names (names are case-sensitive)."
 		"commands":
 			hint = "Changes are sent to the running server as commands."
 		_:
-			if instance.is_read_only():
+			if handle.is_read_only():
 				hint = "Re-attached without RCON, so commands can't be sent. Restart the server from Server Manager to edit these lists."
 			else:
 				hint = "Wait until the server has finished starting or stopping."
 	_lists_hint.text = hint
 	for panel: PlayerListPanel in [_whitelist_panel, _ops_panel, _bans_panel, _ip_bans_panel]:
 		panel.set_editable(mode != "", "", mode == "files")
-	_whitelist_toggle.set_pressed_no_signal(instance.get_properties().get_bool("white-list", false))
-	_whitelist_toggle.disabled = instance.state in [ServerInstance.State.STARTING, ServerInstance.State.STOPPING, ServerInstance.State.INSTALLING]
+	_whitelist_toggle.set_pressed_no_signal(bool(res.whitelist_on))
+	_whitelist_toggle.disabled = handle.state in [ServerHandle.State.STARTING, ServerHandle.State.STOPPING, ServerHandle.State.INSTALLING]
 
 
-## How list edits are applied right now: "files" (server stopped), "commands" (running), or "" (not possible).
-func _edit_mode() -> String:
-	if instance == null or instance.state in [ServerInstance.State.STARTING, ServerInstance.State.STOPPING, ServerInstance.State.INSTALLING]:
-		return ""
-	if instance.is_process_alive():
-		return "commands" if instance.can_send_commands() and instance.is_online() else ""
-	return "files"
-
-
-func _dir() -> String:
-	return instance.working_directory()
-
-
-## ItemList rows for one list: {value, text, tooltip, [level]}.
-static func _panel_entries(dir: String, kind: PlayerLists.Kind) -> Array[Dictionary]:
+## Rows for a PlayerListPanel (levels arrive as JSON numbers).
+static func _rows(entries: Array) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for e in PlayerLists.read(dir, kind):
-		var value := str(e.get("ip" if kind == PlayerLists.Kind.IP_BANS else "name", ""))
-		if value == "":
-			continue
-		var row := {"value": value, "text": value}
-		var tip := PackedStringArray()
-		if e.has("uuid"):
-			tip.append("UUID " + str(e.uuid))
-		match kind:
-			PlayerLists.Kind.OPS:
-				var level := int(e.get("level", 4))
-				row["level"] = level
-				row["text"] = "%s  ·  level %d" % [value, level]
-				if bool(e.get("bypassesPlayerLimit", false)):
-					tip.append("May join when the server is full")
-			PlayerLists.Kind.BANS, PlayerLists.Kind.IP_BANS:
-				tip.append("Reason: " + str(e.get("reason", "")))
-				tip.append("Banned %s by %s" % [str(e.get("created", "?")), str(e.get("source", "?"))])
-				tip.append("Expires: " + str(e.get("expires", "forever")))
-		row["tooltip"] = "\n".join(tip)
+	for e in entries:
+		var row: Dictionary = e
+		if row.has("level"):
+			row["level"] = int(row.level)
 		out.append(row)
 	return out
 
 
-## Adds [param value] (player name, or IP for IP bans) to a list. Running servers get a
-## command; stopped servers' files are edited directly. Returns {ok, message}.
+## How list edits are applied right now: "files" (server stopped), "commands" (running), or "" (not possible).
+func _edit_mode() -> String:
+	if handle == null or handle.state in [ServerHandle.State.STARTING, ServerHandle.State.STOPPING, ServerHandle.State.INSTALLING]:
+		return ""
+	if handle.is_process_alive():
+		return "commands" if handle.can_send_commands() and handle.is_online() else ""
+	return "files"
+
+
+## Adds [param value] (player name, or IP for IP bans) to a list. Returns {ok, message}.
 func add_entry(kind: PlayerLists.Kind, value: String, options := {}) -> Dictionary:
-	var mode := _edit_mode()
-	var reason := str(options.get("reason", "")).strip_edges()
-	if mode == "commands":
-		match kind:
-			PlayerLists.Kind.WHITELIST:
-				instance.send_command("whitelist add " + value)
-			PlayerLists.Kind.OPS:
-				instance.send_command("op " + value)
-			PlayerLists.Kind.BANS:
-				instance.send_command(("ban %s %s" % [value, reason]).strip_edges())
-			PlayerLists.Kind.IP_BANS:
-				instance.send_command(("ban-ip %s %s" % [value, reason]).strip_edges())
-		_reload_timer.start(RELOAD_DELAY_SEC)
-		return {"ok": true, "message": ""}
-	if mode != "files":
-		return {"ok": false, "message": "Lists can't be changed right now."}
-	var dir := _dir()
-	var err := OK
-	if kind == PlayerLists.Kind.IP_BANS:
-		if not PlayerLists.is_valid_ip(value):
-			return {"ok": false, "message": "\"%s\" is not an IP address." % value}
-		err = PlayerLists.add_ip_ban(dir, value, reason)
-	else:
-		var profile: Dictionary = await PlayerLists.resolve(self, dir, value)
-		if not profile.ok:
-			return {"ok": false, "message": profile.error}
-		err = PlayerLists.add_player(dir, kind, profile, options)
-		value = profile.name
-	_refresh_lists()
-	if err != OK:
-		return {"ok": false, "message": "Could not save %s: %s" % [PlayerLists.FILES[kind], error_string(err)]}
-	return {"ok": true, "message": ""}
+	var res: Dictionary = await handle.call_op("list_add", {"kind": KIND_NAMES[kind], "value": value, "options": options})
+	_after_change(res)
+	return {"ok": res.ok, "message": str(res.get("error", ""))}
 
 
 func remove_entry(kind: PlayerLists.Kind, value: String) -> Dictionary:
-	var mode := _edit_mode()
-	if mode == "commands":
-		var commands := ["whitelist remove %s", "deop %s", "pardon %s", "pardon-ip %s"]
-		instance.send_command(commands[kind] % value)
-		_reload_timer.start(RELOAD_DELAY_SEC)
-		return {"ok": true, "message": ""}
-	if mode != "files":
-		return {"ok": false, "message": "Lists can't be changed right now."}
-	var err := PlayerLists.remove(_dir(), kind, value)
-	_refresh_lists()
-	if err != OK and err != ERR_DOES_NOT_EXIST:
-		return {"ok": false, "message": "Could not save %s: %s" % [PlayerLists.FILES[kind], error_string(err)]}
-	return {"ok": true, "message": ""}
+	var res: Dictionary = await handle.call_op("list_remove", {"kind": KIND_NAMES[kind], "value": value})
+	_after_change(res)
+	return {"ok": res.ok, "message": str(res.get("error", ""))}
 
 
 ## Changes an operator's permission level (only while the server is stopped).
 func change_op_level(player: String, level: int) -> Dictionary:
-	if _edit_mode() != "files":
-		return {"ok": false, "message": "Stop the server to change operator levels."}
-	var err := PlayerLists.set_op_level(_dir(), player, level)
-	_refresh_lists()
-	return {"ok": err == OK, "message": "" if err == OK else "Could not save ops.json: %s" % error_string(err)}
+	var res: Dictionary = await handle.call_op("op_level", {"player": player, "level": level})
+	_after_change(res)
+	return {"ok": res.ok, "message": str(res.get("error", ""))}
+
+
+## The running server rewrites its list files shortly after a command.
+func _after_change(res: Dictionary) -> void:
+	if res.get("via_command", false):
+		_reload_timer.start(RELOAD_DELAY_SEC)
+	else:
+		_refresh_lists()
 
 
 func _on_panel_add(panel: PlayerListPanel, kind: PlayerLists.Kind, value: String, options: Dictionary) -> void:
-	if _edit_mode() == "files" and kind != PlayerLists.Kind.IP_BANS and PlayerLists.uses_online_uuids(_dir()) \
-			and PlayerLists.usercache_lookup(_dir(), value).is_empty():
-		panel.set_status("Looking up %s…" % value)
+	if _edit_mode() == "files" and kind != PlayerLists.Kind.IP_BANS:
+		panel.set_status("Adding %s…" % value)
 	var result: Dictionary = await add_entry(kind, value, options)
 	panel.set_status("" if result.ok else result.message, not result.ok)
 
@@ -230,7 +194,7 @@ func _selected_player() -> String:
 
 
 func _update_actions() -> void:
-	var can_act := instance != null and instance.is_online() and _selected_player() != ""
+	var can_act := handle != null and handle.is_online() and handle.can_send_commands() and _selected_player() != ""
 	for b in [_op_button, _deop_button, _kick_button, _ban_button]:
 		b.disabled = not can_act
 	_message_button.disabled = not can_act or _message_edit.text.strip_edges() == ""
@@ -238,9 +202,9 @@ func _update_actions() -> void:
 
 func _player_command(template: String) -> void:
 	var player := _selected_player()
-	if player == "" or not instance.is_online():
+	if player == "" or not handle.is_online():
 		return
-	instance.send_command(template % player)
+	handle.send_command(template % player)
 	_reload_timer.start(RELOAD_DELAY_SEC)
 
 
@@ -251,16 +215,16 @@ func _with_reason(command: String) -> String:
 
 func _on_kick() -> void:
 	var player := _selected_player()
-	if player != "" and instance.is_online():
-		instance.send_command(_with_reason("kick " + player))
+	if player != "" and handle.is_online():
+		handle.send_command(_with_reason("kick " + player))
 		_message_edit.clear()
 		_update_actions()
 
 
 func _on_ban() -> void:
 	var player := _selected_player()
-	if player != "" and instance.is_online():
-		instance.send_command(_with_reason("ban " + player))
+	if player != "" and handle.is_online():
+		handle.send_command(_with_reason("ban " + player))
 		_message_edit.clear()
 		_reload_timer.start(RELOAD_DELAY_SEC)
 		_update_actions()
@@ -269,24 +233,22 @@ func _on_ban() -> void:
 func _on_message() -> void:
 	var player := _selected_player()
 	var text := _message_edit.text.strip_edges()
-	if player != "" and text != "" and instance.is_online():
-		instance.send_command("tell %s %s" % [player, text])
+	if player != "" and text != "" and handle.is_online():
+		handle.send_command("tell %s %s" % [player, text])
 		_message_edit.clear()
 		_update_actions()
 
 
 func _on_whitelist_toggled(enabled: bool) -> void:
-	if instance == null:
+	if handle == null:
 		return
-	if instance.is_online():
-		instance.send_command("whitelist on" if enabled else "whitelist off")
-		_reload_timer.start(RELOAD_DELAY_SEC)
+	var h := handle
+	var res: Dictionary = await h.call_op("whitelist_set", {"enabled": enabled})
+	if not res.ok:
+		Notifier.error(str(res.error))
+		if h == handle:
+			_whitelist_toggle.set_pressed_no_signal(not enabled)
 		return
-	var props := instance.get_properties()
-	props.set_value("white-list", enabled)
-	var err := props.save_file(instance.config.properties_path())
-	if err != OK:
-		Notifier.error("Could not update server.properties: %s" % error_string(err))
-		_whitelist_toggle.set_pressed_no_signal(not enabled)
-		return
-	Notifier.info("Whitelist %s for %s." % ["enabled" if enabled else "disabled", instance.config.display_name])
+	if not res.get("via_command", false):
+		Notifier.info("Whitelist %s for %s." % ["enabled" if enabled else "disabled", h.config.display_name])
+	_after_change(res)

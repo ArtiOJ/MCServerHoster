@@ -15,6 +15,7 @@ var link: RemoteLink
 @onready var _dot: StatusDot = %Dot
 @onready var _name_label: Label = %NameLabel
 @onready var _detail_label: Label = %DetailLabel
+@onready var _wake_button: Button = %WakeButton
 @onready var _connect_button: Button = %ConnectButton
 @onready var _address_button: Button = %AddressButton
 @onready var _remove_button: Button = %RemoveButton
@@ -26,6 +27,7 @@ func _ready() -> void:
 			disconnect_requested.emit(link)
 		else:
 			connect_requested.emit(link))
+	_wake_button.pressed.connect(func() -> void: link.wake())
 	_address_button.pressed.connect(func() -> void: address_requested.emit(link))
 	_remove_button.pressed.connect(func() -> void: remove_requested.emit(link))
 
@@ -47,11 +49,13 @@ func refresh() -> void:
 			var count := link.remote_servers().size()
 			_detail_label.text = "%s · %d server%s · %s" % [link.status_text(), count, "" if count == 1 else "s", link.connected_address]
 		RemoteLink.Status.CONNECTING:
-			_detail_label.text = "Connecting to %s…" % where
+			_detail_label.text = ("Waking up and connecting to %s…" if link.is_waking() else "Connecting to %s…") % where
 		RemoteLink.Status.DENIED:
 			_detail_label.text = "Access denied: %s" % link.error
 		_:
 			_detail_label.text = ("Offline: %s" % link.error if link.error != "" else "Offline") + " · " + where
 	var active := link.status == RemoteLink.Status.ONLINE or link.status == RemoteLink.Status.CONNECTING
+	_wake_button.visible = link.can_wake()
+	_wake_button.disabled = link.is_waking()
 	_connect_button.text = "Disconnect" if active else "Reconnect"
 	_connect_button.tooltip_text = "Stop connecting until you reconnect" if active else "Try to connect now"

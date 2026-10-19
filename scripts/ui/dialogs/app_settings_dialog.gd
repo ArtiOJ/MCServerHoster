@@ -1,6 +1,8 @@
 class_name AppSettingsDialog
 extends ConfirmationDialog
 ## Application preferences: servers folder, defaults, power & background behaviour and Java runtimes.
+## For another computer (as its system admin) it shows and saves that computer's
+## preferences (see HostOps); interface size and console length stay per computer.
 
 @onready var _root_edit: LineEdit = %RootEdit
 @onready var _browse_button: Button = %BrowseButton
@@ -38,6 +40,15 @@ extends ConfirmationDialog
 }
 @onready var _dir_dialog: FileDialog = %DirDialog
 @onready var _java_dialog: FileDialog = %JavaDialog
+@onready var _java_path_dialog: ConfirmationDialog = %JavaPathDialog
+@onready var _java_path_edit: LineEdit = %JavaPathEdit
+@onready var _console_lines_label: Label = %ConsoleLinesLabel
+@onready var _ui_scale_label: Label = %UiScaleLabel
+
+## The computer whose preferences are shown (null = this one).
+var _remote: ServerSource = null
+## Preferences of [member _remote] as loaded (see HostOps.prefs_get).
+var _remote_prefs := {}
 
 
 func _ready() -> void:
@@ -45,19 +56,37 @@ func _ready() -> void:
 	_remove_wake_button.pressed.connect(_remove_wake)
 	for c: CheckButton in [_wake_events_check, _wake_connect_check]:
 		c.toggled.connect(_on_wake_toggled.bind(c))
-	confirmed.connect(_apply)
+	confirmed.connect(func() -> void:
+		if _remote != null:
+			_apply_remote()
+		else:
+			_apply())
 	# Interface size previews live; Cancel puts the saved size back.
 	_ui_scale_option.item_selected.connect(func(index: int) -> void: _preview_scale(UiScale.OPTIONS[index]))
 	canceled.connect(func() -> void:
+		if _remote != null:
+			return
 		_preview_scale(AppSettings.ui_scale)
 		AppSettings.wake_for_events = _saved_wake[0]
 		AppSettings.wake_on_connection = _saved_wake[1])
 	_browse_button.pressed.connect(_browse_root)
 	_dir_dialog.dir_selected.connect(func(dir: String) -> void: _root_edit.text = dir)
-	_rescan_button.pressed.connect(JavaRuntimes.rescan)
-	_add_java_button.pressed.connect(func() -> void: _java_dialog.popup_centered())
+	_rescan_button.pressed.connect(func() -> void:
+		if _remote != null:
+			_remote_java("java_rescan", {})
+		else:
+			JavaRuntimes.rescan())
+	_add_java_button.pressed.connect(func() -> void:
+		if _remote != null:
+			_java_path_edit.text = ""
+			_java_path_dialog.popup_centered()
+		else:
+			_java_dialog.popup_centered())
+	_java_path_dialog.confirmed.connect(func() -> void: _remote_java("java_add", {"exe": _java_path_edit.text.strip_edges()}))
 	_java_dialog.file_selected.connect(_add_java)
-	JavaRuntimes.runtimes_changed.connect(_fill_java_list)
+	JavaRuntimes.runtimes_changed.connect(func() -> void:
+		if _remote == null:
+			_fill_java_list())
 	_desktop_notify_check.toggled.connect(func(_on: bool) -> void: _update_notify_controls())
 	_notify_when_option.item_selected.connect(func(_i: int) -> void: _update_notify_controls())
 	_test_notify_button.pressed.connect(func() -> void:
@@ -68,8 +97,14 @@ func _ready() -> void:
 		Notifier.info("Command copied. Paste it into a terminal, then reboot."))
 
 
-## Loads the current settings into the form and shows the dialog.
-func open() -> void:
+## Loads the settings of [param source] (default: this computer) and shows the dialog.
+func open(source: ServerSource = null) -> void:
+	_remote = source if source != null and source.is_remote_source() else null
+	_set_remote_layout()
+	if _remote != null:
+		_open_remote()
+		return
+	get_ok_button().disabled = false
 	_root_edit.text = AppSettings.servers_root
 	_default_ram_spin.value = AppSettings.default_ram_mb
 	_console_lines_spin.value = AppSettings.console_max_lines
@@ -121,7 +156,7 @@ func _preview_scale(setting: float) -> void:
 
 
 func _update_notify_controls() -> void:
-	var available := Notifier.is_desktop_available()
+	var available: bool = Notifier.is_desktop_available() if _remote == null else bool(_remote_prefs.get("notify_available", false))
 	var active := available and _desktop_notify_check.button_pressed and _notify_when_option.selected != AppSettings.NotifyWhen.NEVER
 	_desktop_notify_check.disabled = not available
 	_notify_when_option.disabled = not available or not _desktop_notify_check.button_pressed
@@ -190,6 +225,8 @@ func _run_wake_setup() -> void:
 
 ## Switching a wake option on before the one-time setup offers the setup; declining turns it off.
 func _on_wake_toggled(on: bool, check: CheckButton) -> void:
+	if _remote != null:
+		return  # Saved with the other preferences of that computer.
 	if on and not WakeHelper.is_installed() and not _wake_busy:
 		_wake_busy = true
 		var installed := await WakeSetupDialog.prompt(self)
@@ -211,6 +248,110 @@ func _remove_wake() -> void:
 		Notifier.success(result.message)
 	else:
 		Notifier.error(result.message)
+
+
+## Rows that only make sense for this computer are hidden for another one.
+func _set_remote_layout() -> void:
+	var local := _remote == null
+	title = "Preferences" if local else "Preferences of %s" % _remote.source_name()
+	for c: Control in [_console_lines_label, _console_lines_spin, _ui_scale_label, _ui_scale_option, _browse_button, _test_notify_button]:
+		c.visible = local
+	_root_edit.tooltip_text = "" if local else "A folder on %s" % _remote.source_name()
+
+
+func _open_remote() -> void:
+	var source := _remote
+	get_ok_button().disabled = true
+	_power_status.text = "Loading…"
+	popup_centered()
+	var res: Dictionary = await source.call_host_op("prefs_get")
+	if source != _remote or not visible:
+		return
+	if not res.ok:
+		_power_status.text = str(res.error)
+		return
+	_remote_prefs = res
+	var v: Dictionary = res.values
+	_root_edit.text = str(v.servers_root)
+	_default_ram_spin.value = int(v.default_ram_mb)
+	_exit_option.select(int(v.exit_behavior))
+	_updates_check.button_pressed = bool(v.check_updates_on_launch)
+	_unstable_check.button_pressed = bool(v.show_unstable_versions)
+	_sleep_option.select(int(v.sleep_policy))
+	_wake_check.button_pressed = bool(v.restart_after_wake)
+	_login_check.button_pressed = bool(v.start_at_login)
+	_minimized_check.button_pressed = bool(v.start_minimized)
+	_sleep_option.disabled = not res.power_supported
+	_wake_check.disabled = not res.power_supported
+	_power_status.text = str(res.power_status)
+	_wake_events_check.set_pressed_no_signal(bool(v.wake_for_events) and res.wake_installed)
+	_wake_connect_check.set_pressed_no_signal(bool(v.wake_on_connection) and res.wake_installed)
+	_wake_events_check.disabled = not res.wake_installed
+	_wake_connect_check.disabled = not res.wake_installed or not res.wake_wireless
+	_setup_wake_button.visible = false
+	_remove_wake_button.visible = false
+	_wake_status.text = str(res.wake_status) if res.wake_installed \
+			else "Waking %s needs a one-time setup on that computer (it asks for its password there)." % source.source_name()
+	_limit_notice.visible = bool(res.limit_notice)
+	_desktop_notify_check.button_pressed = bool(v.desktop_notifications)
+	_notify_when_option.select(int(v.notify_when))
+	for key in _category_checks:
+		(_category_checks[key] as CheckButton).button_pressed = bool(v.notify_categories.get(key, true))
+	_update_notify_controls()
+	_fill_remote_java(res.runtimes)
+	get_ok_button().disabled = false
+
+
+func _fill_remote_java(runtimes: Array) -> void:
+	_java_list.clear()
+	for rt: Dictionary in runtimes:
+		var idx := _java_list.add_item("%s   —   %s" % [rt.name, rt.exe])
+		_java_list.set_item_tooltip(idx, str(rt.home))
+	if runtimes.is_empty():
+		var idx := _java_list.add_item("No Java runtimes found on %s. Install a JDK there (e.g. Java 21) or add one by its path." % _remote.source_name())
+		_java_list.set_item_disabled(idx, true)
+
+
+func _remote_java(op: String, args: Dictionary) -> void:
+	var source := _remote
+	_rescan_button.disabled = true
+	_add_java_button.disabled = true
+	var res: Dictionary = await source.call_host_op(op, args)
+	_rescan_button.disabled = false
+	_add_java_button.disabled = false
+	if source != _remote:
+		return
+	if res.has("runtimes"):
+		_fill_remote_java(res.runtimes)
+	if not res.ok:
+		Notifier.warn(str(res.error))
+
+
+func _apply_remote() -> void:
+	var source := _remote
+	var categories := {}
+	for key in _category_checks:
+		categories[key] = (_category_checks[key] as CheckButton).button_pressed
+	var res: Dictionary = await source.call_host_op("prefs_save", {"changes": {
+		"servers_root": _root_edit.text.strip_edges(),
+		"default_ram_mb": int(_default_ram_spin.value),
+		"exit_behavior": _exit_option.selected,
+		"check_updates_on_launch": _updates_check.button_pressed,
+		"show_unstable_versions": _unstable_check.button_pressed,
+		"sleep_policy": _sleep_option.selected,
+		"restart_after_wake": _wake_check.button_pressed,
+		"wake_for_events": _wake_events_check.button_pressed,
+		"wake_on_connection": _wake_connect_check.button_pressed,
+		"start_at_login": _login_check.button_pressed,
+		"start_minimized": _minimized_check.button_pressed,
+		"desktop_notifications": _desktop_notify_check.button_pressed,
+		"notify_when": _notify_when_option.selected,
+		"notify_categories": categories,
+	}})
+	if res.ok:
+		Notifier.success("Saved the preferences of %s." % source.source_name())
+	else:
+		Notifier.error("%s: %s" % [source.source_name(), res.error])
 
 
 func _apply() -> void:

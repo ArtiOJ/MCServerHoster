@@ -203,13 +203,16 @@ static func flagged_event_times(instances: Array) -> Array:
 	return out
 
 
-## Port to watch for wake-on-connect: the single start-on-connect server's port, 0 when
-## several servers use different ports (wake on any TCP connection), -1 when none.
-static func connect_port(instances: Array) -> int:
+## Port to watch for wake-on-connect: the single start-on-connect server's port (or one of
+## [param extra_ports], e.g. remote access), 0 when several ports are wanted (wake on any TCP
+## connection; the card takes only one pattern), -1 when none.
+static func connect_port(instances: Array, extra_ports: Array = []) -> int:
 	var ports := {}
 	for inst: ServerInstance in instances:
 		if inst.config.wake_on_connect:
 			ports[inst.config.port] = true
+	for p in extra_ports:
+		ports[int(p)] = true
 	if ports.is_empty():
 		return -1
 	return ports.keys()[0] if ports.size() == 1 else 0

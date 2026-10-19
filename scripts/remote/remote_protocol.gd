@@ -22,8 +22,8 @@ enum Role { SYSTEM_ADMIN, SERVER_ADMIN }
 
 const ROLE_NAMES: PackedStringArray = ["System admin", "Server admin"]
 const ROLE_DESCRIPTIONS: PackedStringArray = [
-	"Everything on this computer: all servers, creating and deleting servers.",
-	"Only the chosen servers, and only what belongs to a server (start/stop, console, settings, updates).",
+	"Everything on this computer: all servers, creating and deleting servers, preferences, firewall and access keys.",
+	"Only the chosen servers, and only what belongs to a server (start/stop, console, settings, plugins, worlds, backups, players). Not the computer's network, power or preferences.",
 ]
 
 ## Operation -> lowest role allowed to use it. Server admins get the server-level ones on
@@ -46,15 +46,84 @@ const OPS := {
 	"settings_save": Role.SERVER_ADMIN,
 	"file_read": Role.SERVER_ADMIN,
 	"file_write": Role.SERVER_ADMIN,
-	# Computer-level (system admins only)
+	"plugins_list": Role.SERVER_ADMIN,
+	"plugin_install": Role.SERVER_ADMIN,
+	"plugin_toggle": Role.SERVER_ADMIN,
+	"plugin_delete": Role.SERVER_ADMIN,
+	"backups_list": Role.SERVER_ADMIN,
+	"backup_create": Role.SERVER_ADMIN,
+	"backup_restore": Role.SERVER_ADMIN,
+	"backup_delete": Role.SERVER_ADMIN,
+	"backup_file": Role.SERVER_ADMIN,
+	"logs_list": Role.SERVER_ADMIN,
+	"log_read": Role.SERVER_ADMIN,
+	"lists_get": Role.SERVER_ADMIN,
+	"list_add": Role.SERVER_ADMIN,
+	"list_remove": Role.SERVER_ADMIN,
+	"op_level": Role.SERVER_ADMIN,
+	"whitelist_set": Role.SERVER_ADMIN,
+	"worlds_list": Role.SERVER_ADMIN,
+	"world_activate": Role.SERVER_ADMIN,
+	"world_reset": Role.SERVER_ADMIN,
+	"world_delete": Role.SERVER_ADMIN,
+	"world_export": Role.SERVER_ADMIN,
+	"datapack_add": Role.SERVER_ADMIN,
+	"datapack_toggle": Role.SERVER_ADMIN,
+	"datapack_remove": Role.SERVER_ADMIN,
+	"world_import_analyze": Role.SERVER_ADMIN,
+	"world_import": Role.SERVER_ADMIN,
+	"world_import_cancel": Role.SERVER_ADMIN,
+	"resources_info": Role.SERVER_ADMIN,
+	"port_check": Role.SERVER_ADMIN,
+	"launch_preview": Role.SERVER_ADMIN,
+	"config_save": Role.SERVER_ADMIN,
+	"network_info": Role.SERVER_ADMIN,
+	"network_refresh": Role.SERVER_ADMIN,
+	"network_test": Role.SERVER_ADMIN,
+	"port_set": Role.SERVER_ADMIN,
+	# File transfers (any key; only usable by the operations above and below)
+	"upload_begin": Role.SERVER_ADMIN,
+	"upload_chunk": Role.SERVER_ADMIN,
+	"upload_end": Role.SERVER_ADMIN,
+	"download_chunk": Role.SERVER_ADMIN,
+	"download_close": Role.SERVER_ADMIN,
+	# Server-level but reaching the computer or the router (system admins only)
+	"upnp_set": Role.SYSTEM_ADMIN,
+	"upnp_retry": Role.SYSTEM_ADMIN,
+	"firewall_allow": Role.SYSTEM_ADMIN,
 	"delete": Role.SYSTEM_ADMIN,
 	"duplicate": Role.SYSTEM_ADMIN,
+	# Computer-level (system admins only)
 	"create_server": Role.SYSTEM_ADMIN,
 	"start_all": Role.SYSTEM_ADMIN,
 	"stop_all": Role.SYSTEM_ADMIN,
+	"prefs_get": Role.SYSTEM_ADMIN,
+	"prefs_save": Role.SYSTEM_ADMIN,
+	"java_rescan": Role.SYSTEM_ADMIN,
+	"java_add": Role.SYSTEM_ADMIN,
+	"firewall_remove": Role.SYSTEM_ADMIN,
+	"dhcp_reserved": Role.SYSTEM_ADMIN,
+	"server_import_analyze": Role.SYSTEM_ADMIN,
+	"server_import": Role.SYSTEM_ADMIN,
+	"server_import_cancel": Role.SYSTEM_ADMIN,
+	"access_get": Role.SYSTEM_ADMIN,
+	"access_rename": Role.SYSTEM_ADMIN,
+	"grant_create": Role.SYSTEM_ADMIN,
+	"grant_update": Role.SYSTEM_ADMIN,
+	"grant_revoke": Role.SYSTEM_ADMIN,
+	"grant_invite": Role.SYSTEM_ADMIN,
 }
 ## Operations that act on the computer rather than on one server (no "server" field).
-const HOST_OPS: PackedStringArray = ["create_server", "start_all", "stop_all"]
+const HOST_OPS: PackedStringArray = [
+	"create_server", "start_all", "stop_all", "prefs_get", "prefs_save", "java_rescan", "java_add",
+	"firewall_remove", "dhcp_reserved", "server_import_analyze", "server_import", "server_import_cancel",
+	"access_get", "access_rename", "grant_create", "grant_update", "grant_revoke", "grant_invite",
+]
+const TRANSFER_OPS: PackedStringArray = ["upload_begin", "upload_chunk", "upload_end", "download_chunk", "download_close"]
+## Bytes per upload or download chunk.
+const CHUNK_BYTES := 1024 * 1024
+## Arguments naming files on the host; a client can never send them (see ServerOps).
+const PATH_ARGS: PackedStringArray = ["files", "source", "dest", "path", "dir"]
 
 
 static func allows(role: int, op: String) -> bool:
