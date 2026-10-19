@@ -233,3 +233,25 @@ Each phase ends in a runnable app and passing headless tests.
 Phases 0–7 implemented. Remaining stretch goals: full detach/reattach (console via log tail + RCON),
 Hangar/Modrinth plugin search, in-app YAML config editor, import of existing non-managed servers,
 Windows/macOS backends.
+
+## 9. Next: wake the computer from sleep (designed, not built)
+
+Findings on the user's machine: RTC `rtc_cmos` with alarm support, suspend mode `deep`;
+Wi-Fi (wlan0, phy0) supports WoWLAN magic packet + 1 pattern (≤128 bytes, offset 0); Ethernet
+enp12s0 unplugged; `rtcwake`, `pkexec`, `iw` available.
+
+- One-time setup (one password prompt, explicit button in Preferences → Power): install a
+  root-owned helper `/usr/local/libexec/server-manager-wake` (validates args; `alarm <epoch>|clear`
+  writes /sys/class/rtc/rtc0/wakealarm; `wowlan <phy> on <pattern>|off` runs `iw phy … wowlan`) and
+  a polkit action (`/usr/share/polkit-1/actions/…wake.policy`, exec.path annotation,
+  allow_active=yes) so later calls need no password. Offer removal too.
+- Scheduled wake: per-event "Wake computer" flag (default on for Start). On PrepareForSleep(true)
+  set the RTC alarm to the earliest flagged timed event − ~90 s; clear it after wake. Hold the sleep
+  delay lock whenever such events exist (even with no server running).
+- Connect wake (experimental): WoWLAN magic-packet + one pattern matching a TCP SYN to the
+  server's port in 802.3 form: dst MAC, ethertype 08:00, byte 14 = 45, byte 23 = 06, bytes 36–37 =
+  port, byte 47 = 02, everything else wildcard ("-"). One pattern only → one port (wildcard the port
+  if several servers use start-on-connect). Works only if the platform keeps Wi-Fi powered in S3;
+  must be verified by the user with a real sleep test. Pair with start-on-connect.
+- Tests: pattern builder, wake-time computation, helper argument validation, PowerManager with a
+  mock helper path (no real sleep in automated tests).
