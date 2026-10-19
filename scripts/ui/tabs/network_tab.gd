@@ -40,6 +40,7 @@ var _last_result := {}
 @onready var _forward_status: Label = %ForwardStatus
 @onready var _dhcp_notice: PanelContainer = %DhcpNotice
 @onready var _dhcp_label: Label = %DhcpLabel
+@onready var _dhcp_reserved_button: Button = %DhcpReservedButton
 @onready var _rcon_label: Label = %RconLabel
 @onready var _rcon_warning: PanelContainer = %RconWarning
 @onready var _rcon_warning_label: Label = %RconWarningLabel
@@ -49,6 +50,10 @@ var _allowing := false
 
 
 func _ready() -> void:
+	_dhcp_reserved_button.pressed.connect(func() -> void:
+		AppSettings.reserved_lan_ip = ServerInstance._lan_ip()
+		AppSettings.save_settings()
+		_refresh())
 	_port_spin.port_changed.connect(func(_p: int, _ok: bool) -> void: _update_port_status())
 	_apply_port_button.pressed.connect(_apply_port)
 	_allow_top_button.pressed.connect(_allow_firewall)
@@ -224,8 +229,16 @@ func _refresh_forwarding(cfg: ServerConfig) -> void:
 		_forward_status.text = "Your router doesn't support automatic forwarding (UPnP), so add this rule by hand in its admin page (usually under Port Forwarding, Virtual Server or NAT), then use “Test from the internet”."
 	else:
 		_forward_status.text = "Add this rule in your router's admin page (usually under Port Forwarding, Virtual Server or NAT), or turn on UPnP forwarding below if your router supports it."
-	_dhcp_notice.visible = bool(route.get("dynamic", false))
-	_dhcp_label.text = "This computer's address (%s) was assigned automatically by your router (DHCP) and can change, which would break the forward. In the router, reserve this address for this computer (often called DHCP reservation or static lease)." % lan
+	# A reserved address still arrives through DHCP, so this computer can't tell reserved from
+	# dynamic; the user confirms it once, and we warn again only if the address changes.
+	var reserved := AppSettings.reserved_lan_ip
+	_dhcp_notice.visible = bool(route.get("dynamic", false)) and reserved != lan
+	if reserved != "" and reserved != lan:
+		_dhcp_label.text = "This computer's address changed from %s to %s. Update the port forward in your router to point to %s (and its reservation, if you use one)." % [reserved, lan, lan]
+		_dhcp_reserved_button.text = "Updated"
+	else:
+		_dhcp_label.text = "Your router assigns this computer's address (%s). Unless it is reserved for this computer in the router (DHCP reservation or static lease), it can change and break the forward." % lan
+		_dhcp_reserved_button.text = "It's reserved"
 
 
 func _upnp_text() -> String:

@@ -270,10 +270,22 @@ visible = false
 layout_mode = 2
 theme_type_variation = &"NoticePanel"
 
-[node name="DhcpLabel" type="Label" parent="Scroll/Content/ForwardCard/VBox/DhcpNotice"]
+[node name="DhcpRow" type="HBoxContainer" parent="Scroll/Content/ForwardCard/VBox/DhcpNotice"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="DhcpLabel" type="Label" parent="Scroll/Content/ForwardCard/VBox/DhcpNotice/DhcpRow"]
 unique_name_in_owner = true
 layout_mode = 2
+size_flags_horizontal = 3
 autowrap_mode = 3
+
+[node name="DhcpReservedButton" type="Button" parent="Scroll/Content/ForwardCard/VBox/DhcpNotice/DhcpRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Your router always gives this computer this address. Server Manager will warn you again only if the address changes."
+text = "It's reserved"
 
 [node name="AccessCard" type="PanelContainer" parent="Scroll/Content"]
 layout_mode = 2
@@ -306,7 +318,7 @@ theme_override_constants/separation = 12
 layout_mode = 2
 size_flags_horizontal = 3
 mouse_filter = 0
-tooltip_text = "Ask your router (via UPnP) to forward this server's game port to this computer while the server is running or asleep. The forward is removed when the server stops. The RCON port is never forwarded."
+tooltip_text = "UPnP (Universal Plug and Play) lets programs ask your router to set up port forwarding automatically, so you don't have to do it in the router's admin page. When on, Server Manager forwards this server's game port while it is running or asleep and removes the forward when it stops. The RCON port is never forwarded. Many routers have UPnP turned off or don't support it; then forward the port by hand (see Router port forwarding)."
 text = "UPnP forwarding"
 
 [node name="RetryUpnpButton" type="Button" parent="Scroll/Content/AccessCard/VBox/UpnpRow"]
@@ -320,7 +332,7 @@ icon = ExtResource("4")
 [node name="UpnpCheck" type="CheckButton" parent="Scroll/Content/AccessCard/VBox/UpnpRow"]
 unique_name_in_owner = true
 layout_mode = 2
-tooltip_text = "Ask your router (via UPnP) to forward this server's game port to this computer while the server is running or asleep. The forward is removed when the server stops. The RCON port is never forwarded."
+tooltip_text = "UPnP (Universal Plug and Play) lets programs ask your router to set up port forwarding automatically, so you don't have to do it in the router's admin page. When on, Server Manager forwards this server's game port while it is running or asleep and removes the forward when it stops. The RCON port is never forwarded. Many routers have UPnP turned off or don't support it; then forward the port by hand (see Router port forwarding)."
 
 [node name="UpnpStatus" type="Label" parent="Scroll/Content/AccessCard/VBox"]
 unique_name_in_owner = true

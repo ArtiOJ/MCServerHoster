@@ -41,6 +41,8 @@ var restart_after_wake := true
 var start_at_login := false
 ## Start with the window minimized (always the case when launched at login).
 var start_minimized := false
+## LAN address the user confirmed is reserved for this computer in the router.
+var reserved_lan_ip := ""
 ## Show notifications on the desktop (in addition to the in-app toasts).
 var desktop_notifications := true
 var notify_when: NotifyWhen = NotifyWhen.UNFOCUSED
@@ -117,6 +119,7 @@ func load_settings() -> void:
 	restart_after_wake = bool(data.get("restart_after_wake", restart_after_wake))
 	start_at_login = bool(data.get("start_at_login", start_at_login))
 	start_minimized = bool(data.get("start_minimized", start_minimized))
+	reserved_lan_ip = str(data.get("reserved_lan_ip", reserved_lan_ip))
 	desktop_notifications = bool(data.get("desktop_notifications", desktop_notifications))
 	notify_when = clampi(int(data.get("notify_when", notify_when)), 0, NotifyWhen.size() - 1) as NotifyWhen
 	notify_categories = DEFAULT_NOTIFY_CATEGORIES.duplicate()
@@ -144,6 +147,7 @@ func save_settings() -> void:
 		"restart_after_wake": restart_after_wake,
 		"start_at_login": start_at_login,
 		"start_minimized": start_minimized,
+		"reserved_lan_ip": reserved_lan_ip,
 		"desktop_notifications": desktop_notifications,
 		"notify_when": notify_when,
 		"notify_categories": notify_categories,
