@@ -1,0 +1,26 @@
+Server Manager for iPhone: building and installing
+===================================================
+
+This folder is an Xcode project made by Godot. It needs a Mac with Xcode 15 or newer
+and an Apple Developer account.
+
+1. Open ServerManager.xcodeproj in Xcode.
+2. Click the ServerManager project in the left column, pick the ServerManager target,
+   open "Signing & Capabilities":
+   - Team: choose your team (the project comes with a placeholder, CHANGEME00).
+   - Bundle Identifier: io.github.artioj.servermanager. If Xcode says it is taken,
+     change it to something unique, e.g. com.<yourname>.servermanager.
+3. Put it on an iPhone to try it:
+   - Connect the iPhone with a cable and trust the Mac.
+   - On the iPhone: Settings > Privacy & Security > Developer Mode > On (it restarts).
+   - In Xcode pick the iPhone at the top, then Product > Run.
+4. Share it through TestFlight (no cable needed for the testers):
+   - In App Store Connect (appstoreconnect.apple.com) create a new app with the same
+     bundle identifier.
+   - In Xcode pick "Any iOS Device (arm64)", then Product > Archive.
+   - In the Organizer window: Distribute App > TestFlight & App Store > Upload.
+   - When the build shows up in App Store Connect under TestFlight, add testers by
+     email. They install the TestFlight app and accept the invite.
+
+When the app first connects to a computer on the same Wi-Fi, iPhone asks to allow
+"local network" access. Allow it, or computers at home can't be reached.

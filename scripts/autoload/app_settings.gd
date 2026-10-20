@@ -73,6 +73,9 @@ var autostart_enabled := true
 ## like the real app but never registers itself to start at login, which would launch the
 ## editor's Godot binary. Headless test runs and exported builds have no debugger attached.
 var test_copy := false
+## Phone app (iOS, Android, or `-- --phone` to try it on a desktop): it only connects to
+## other computers and never runs servers itself.
+var phone := false
 ## `-- --profile=<name>` keeps a separate settings file (used by integration tests).
 var settings_path := DEFAULT_SETTINGS_PATH
 ## PID of another running Server Manager using the same settings profile, or -1.
@@ -92,10 +95,15 @@ func _ready() -> void:
 	if testing:
 		autostart_enabled = false
 		settings_path = "user://settings-tests.json"
+	phone = OS.has_feature("mobile") or args.has("--phone")
+	# Trying the phone layout on a desktop must not share the real app's settings.
+	if phone and not OS.has_feature("mobile") and not testing:
+		settings_path = "user://settings-phone.json"
 	for arg in args:
 		if arg.begins_with("--profile="):
 			settings_path = "user://settings-%s.json" % Fmt.slugify(arg.get_slice("=", 1))
-	_acquire_instance_lock()
+	if not phone:
+		_acquire_instance_lock()
 	load_settings()
 
 

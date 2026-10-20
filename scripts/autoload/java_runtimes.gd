@@ -8,7 +8,8 @@ var runtimes: Array[JavaRuntime] = []
 
 
 func _ready() -> void:
-	rescan()
+	if not AppSettings.phone:
+		rescan()
 
 
 func rescan() -> void:

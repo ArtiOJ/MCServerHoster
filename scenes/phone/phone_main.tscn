@@ -1,0 +1,305 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/phone/phone_main.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/server_view/server_view.tscn" id="2"]
+[ext_resource type="Script" path="res://scripts/ui/components/toast_stack.gd" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/arrow_left.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/more.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/logo.svg" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/new_server_wizard.tscn" id="8"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/delete_server_dialog.tscn" id="9"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/update_dialog.tscn" id="10"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/app_settings_dialog.tscn" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/duplicate_server_dialog.tscn" id="12"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/temp_run_dialog.tscn" id="13"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/import_server_dialog.tscn" id="14"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/import_world_dialog.tscn" id="15"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/remote_dialog.tscn" id="16"]
+
+[node name="PhoneMain" type="Control"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+script = ExtResource("1")
+
+[node name="Background" type="Panel" parent="."]
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+mouse_filter = 2
+
+[node name="SafeMargin" type="MarginContainer" parent="."]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+
+[node name="VBox" type="VBoxContainer" parent="SafeMargin"]
+layout_mode = 2
+theme_override_constants/separation = 0
+
+[node name="TopBar" type="PanelContainer" parent="SafeMargin/VBox"]
+layout_mode = 2
+theme_type_variation = &"HeaderPanel"
+
+[node name="HBox" type="HBoxContainer" parent="SafeMargin/VBox/TopBar"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="BackButton" type="Button" parent="SafeMargin/VBox/TopBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+tooltip_text = "Back to your computers"
+focus_mode = 0
+icon = ExtResource("4")
+flat = true
+icon_alignment = 1
+
+[node name="Logo" type="TextureRect" parent="SafeMargin/VBox/TopBar/HBox"]
+custom_minimum_size = Vector2(28, 28)
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("7")
+expand_mode = 1
+stretch_mode = 5
+
+[node name="TitleLabel" type="Label" parent="SafeMargin/VBox/TopBar/HBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SubtitleLabel"
+text = "Server Manager"
+text_overrun_behavior = 3
+
+[node name="AddButton" type="Button" parent="SafeMargin/VBox/TopBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+tooltip_text = "Add a computer with the invite code its owner gave you"
+focus_mode = 0
+icon = ExtResource("5")
+flat = true
+icon_alignment = 1
+
+[node name="AppMenu" type="MenuButton" parent="SafeMargin/VBox/TopBar/HBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(44, 44)
+layout_mode = 2
+tooltip_text = "Menu"
+icon = ExtResource("6")
+icon_alignment = 1
+
+[node name="Pages" type="Control" parent="SafeMargin/VBox"]
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Home" type="ScrollContainer" parent="SafeMargin/VBox/Pages"]
+unique_name_in_owner = true
+layout_mode = 1
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+horizontal_scroll_mode = 0
+
+[node name="Margin" type="MarginContainer" parent="SafeMargin/VBox/Pages/Home"]
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_vertical = 3
+theme_override_constants/margin_left = 12
+theme_override_constants/margin_top = 12
+theme_override_constants/margin_right = 12
+theme_override_constants/margin_bottom = 12
+
+[node name="VBox" type="VBoxContainer" parent="SafeMargin/VBox/Pages/Home/Margin"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="CardList" type="VBoxContainer" parent="SafeMargin/VBox/Pages/Home/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="EmptyBox" type="VBoxContainer" parent="SafeMargin/VBox/Pages/Home/Margin/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Spacer" type="Control" parent="SafeMargin/VBox/Pages/Home/Margin/VBox/EmptyBox"]
+custom_minimum_size = Vector2(0, 60)
+layout_mode = 2
+
+[node name="EmptyTitle" type="Label" parent="SafeMargin/VBox/Pages/Home/Margin/VBox/EmptyBox"]
+layout_mode = 2
+theme_type_variation = &"TitleLabel"
+text = "No computers yet"
+horizontal_alignment = 1
+
+[node name="EmptyText" type="Label" parent="SafeMargin/VBox/Pages/Home/Margin/VBox/EmptyBox"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "This app manages servers running on a computer with Server Manager. On that computer, open Remote access, make an access key for yourself and send its invite code to this phone."
+horizontal_alignment = 1
+autowrap_mode = 3
+
+[node name="AddFirstButton" type="Button" parent="SafeMargin/VBox/Pages/Home/Margin/VBox/EmptyBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 44)
+layout_mode = 2
+size_flags_horizontal = 4
+focus_mode = 0
+theme_type_variation = &"AccentButton"
+text = "Add computer"
+icon = ExtResource("5")
+
+[node name="ServerView" parent="SafeMargin/VBox/Pages" instance=ExtResource("2")]
+unique_name_in_owner = true
+visible = false
+layout_mode = 1
+
+[node name="ToastStack" type="VBoxContainer" parent="."]
+layout_mode = 1
+anchors_preset = 12
+anchor_top = 1.0
+anchor_right = 1.0
+anchor_bottom = 1.0
+offset_left = 12.0
+offset_top = -24.0
+offset_right = -12.0
+offset_bottom = -24.0
+grow_horizontal = 2
+grow_vertical = 0
+mouse_filter = 2
+theme_override_constants/separation = 8
+alignment = 2
+script = ExtResource("3")
+
+[node name="NewServerWizard" parent="." instance=ExtResource("8")]
+unique_name_in_owner = true
+
+[node name="DeleteServerDialog" parent="." instance=ExtResource("9")]
+unique_name_in_owner = true
+visible = false
+
+[node name="UpdateDialog" parent="." instance=ExtResource("10")]
+unique_name_in_owner = true
+visible = false
+
+[node name="AppSettingsDialog" parent="." instance=ExtResource("11")]
+unique_name_in_owner = true
+visible = false
+
+[node name="DuplicateServerDialog" parent="." instance=ExtResource("12")]
+unique_name_in_owner = true
+visible = false
+
+[node name="ImportServerDialog" parent="." instance=ExtResource("14")]
+unique_name_in_owner = true
+visible = false
+
+[node name="TempRunDialog" parent="." instance=ExtResource("13")]
+unique_name_in_owner = true
+visible = false
+
+[node name="ImportWorldDialog" parent="." instance=ExtResource("15")]
+unique_name_in_owner = true
+visible = false
+
+[node name="RemoteDialog" parent="." instance=ExtResource("16")]
+unique_name_in_owner = true
+visible = false
+
+[node name="AddComputerDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Add a computer"
+dialog_hide_on_ok = false
+
+[node name="VBox" type="VBoxContainer" parent="AddComputerDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 332.0
+offset_bottom = 260.0
+theme_override_constants/separation = 8
+
+[node name="CodeRow" type="HBoxContainer" parent="AddComputerDialog/VBox"]
+layout_mode = 2
+
+[node name="CodeLabel" type="Label" parent="AddComputerDialog/VBox/CodeRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+text = "Invite code"
+
+[node name="PasteButton" type="Button" parent="AddComputerDialog/VBox/CodeRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 36)
+layout_mode = 2
+tooltip_text = "Paste the invite code you copied"
+focus_mode = 0
+text = "Paste"
+
+[node name="CodeEdit" type="TextEdit" parent="AddComputerDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 110)
+layout_mode = 2
+placeholder_text = "smr1:…"
+wrap_mode = 1
+
+[node name="AddressLabel" type="Label" parent="AddComputerDialog/VBox"]
+layout_mode = 2
+tooltip_text = "Only needed when the addresses in the invite don't work for you, e.g. a domain name or the other network's internet address"
+mouse_filter = 1
+text = "Address (optional)"
+
+[node name="AddressEdit" type="LineEdit" parent="AddComputerDialog/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Only needed when the addresses in the invite don't work for you, e.g. a domain name or the other network's internet address"
+placeholder_text = "From the invite"
+
+[node name="AddError" type="Label" parent="AddComputerDialog/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_override_colors/font_color = Color(0.878, 0.333, 0.333, 1)
+autowrap_mode = 3
+
+[node name="AddressDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Computer address"
+ok_button_text = "Save and connect"
+
+[node name="VBox" type="VBoxContainer" parent="AddressDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 332.0
+offset_bottom = 120.0
+theme_override_constants/separation = 8
+
+[node name="AddressIntro" type="Label" parent="AddressDialog/VBox"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Addresses to try in order, separated by commas. Add :port when it differs from the invite's port."
+autowrap_mode = 3
+
+[node name="LinkAddressEdit" type="LineEdit" parent="AddressDialog/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "192.168.1.20, mc.example.com"
+
+[node name="RemoveDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Remove computer?"
+ok_button_text = "Remove"
+dialog_autowrap = true

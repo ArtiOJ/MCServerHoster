@@ -446,3 +446,38 @@ Notes:
   almost none (troubleshoot reports "missing light-data" for both).
 - Verified with BlueMap 5.29 on Paper 26.3 (`tests/integration/bluemap_test.gd`,
   `tests/integration/bluemap_ui_test.gd`).
+
+## 16. Phone app (iPhone, Android)
+
+The same project exported for phones (`run/main_scene.mobile` → `scenes/phone/phone_main.tscn`;
+`-- --phone` tries it on a desktop in a 390×844 window, with its own settings profile). A phone
+can't run Java servers, so `AppSettings.phone` keeps the hosting side idle (no local servers,
+no remote-access listener, no Java scan, no sleep handling) and the app is a remote client:
+
+- **Computers**: the main screen lists the computers added with invite codes (`ComputerCard`):
+  status, Wake, and a menu (reconnect, change address, remove; for a system admin also new
+  server, import server, access keys, preferences), with the servers each key opens.
+- **Server**: the desktop `ServerView` with its header buttons on a row of their own and the
+  tabs picked from a strip that scrolls sideways; every tab, the plugin menus and the dialogs
+  work as for remote users on the desktop.
+- **Layout**: `PhoneLayout` refits the desktop scenes to the narrow screen instead of keeping
+  phone copies of them: too-wide rows wrap (their children move into a flow container inside
+  the row, so scripts keep their references), two-column forms stack, side-by-side panes go
+  one above the other, fixed widths shrink. Applied again when rows are added. Dialogs become
+  as wide as the screen and as tall as their contents, scrolling past the screen's height.
+- **Touch**: holding a finger on a control shows its tooltip (the desktop's details live in
+  tooltips), without pressing it; lists and text areas scroll with a swipe; the BlueMap viewer
+  pinches to zoom, twists to turn and slides two fingers to tilt. The interface scales with the
+  screen's density and keeps clear of the notch, home indicator and on-screen keyboard.
+- **Builds** (`packaging/build.sh`, when the export templates are installed): an Xcode project
+  for iOS (signed and built on a Mac, see `packaging/ios/BUILDING.txt`; Local Network usage text
+  included, team ID is a placeholder chosen in Xcode) and a debug-signed Android APK (needs the
+  Android SDK and Java set in Godot's Editor Settings).
+
+Notes:
+- iOS needs Apple's multicast entitlement for broadcast packets, so Wake-on-LAN from an iPhone
+  goes only to the computer's addresses; waking by connecting works as on the desktop.
+- Uploading files (plugins, worlds) uses the phone's file picker where Godot has one; on iOS the
+  app's folder is visible in the Files app, so files can be put there and picked.
+- Verified at phone size on the desktop (`tests/integration/phone_ui_test.gd`: every tab,
+  plugin menu and dialog fits, touch tooltips, swipe scrolling); not yet run on a real phone.

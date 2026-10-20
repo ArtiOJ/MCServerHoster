@@ -225,7 +225,8 @@ static func context_text(context: Variant) -> String:
 ## UUID -> name from the server's usercache.json.
 static func usercache_names(server_dir: String) -> Dictionary:
 	var names := {}
-	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(server_dir.path_join("usercache.json")))
+	var path := server_dir.path_join("usercache.json")
+	var data: Variant = JSON.parse_string(FileAccess.get_file_as_string(path)) if FileAccess.file_exists(path) else null
 	if data is Array:
 		for entry in data:
 			if entry is Dictionary and str(entry.get("uuid", "")) != "":

@@ -44,6 +44,25 @@ func _ready() -> void:
 	start_popup.id_pressed.connect(_on_start_menu)
 
 
+## Phone layout: the buttons get a row of their own under the name, Start and Stop
+## taking the free width.
+func use_two_rows() -> void:
+	var top := _start_button.get_parent()
+	if top.get_parent() is VBoxContainer:
+		return
+	var column := VBoxContainer.new()
+	column.add_theme_constant_override("separation", 10)
+	add_child(column)
+	top.reparent(column, false)
+	var buttons := HBoxContainer.new()
+	buttons.add_theme_constant_override("separation", 8)
+	column.add_child(buttons)
+	for button: Control in [_start_button, _start_menu, _stop_button, _restart_button, _kill_button, _more_button]:
+		button.reparent(buttons, false)
+	_start_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+	_stop_button.size_flags_horizontal = Control.SIZE_EXPAND_FILL
+
+
 func bind(inst: ServerHandle) -> void:
 	if instance != null and is_instance_valid(instance):
 		instance.state_changed.disconnect(_on_state_changed)

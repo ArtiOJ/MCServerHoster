@@ -28,6 +28,11 @@ var _source: ServerSource
 
 
 func _ready() -> void:
+	# Phones use their own main scene (project setting run/main_scene.mobile); this covers
+	# trying the phone app on a desktop with `-- --phone`.
+	if AppSettings.phone:
+		get_tree().change_scene_to_file.call_deferred("res://scenes/phone/phone_main.tscn")
+		return
 	if AppSettings.other_instance_pid > 0:
 		var message := "Server Manager is already running (PID %d). Switch to that window instead." % AppSettings.other_instance_pid
 		printerr(message)

@@ -79,9 +79,10 @@ static func worlds(server_dir: String, level: String) -> Array:
 	var out := [{"name": level, "label": "Overworld"}]
 	var root := server_dir.path_join(level).path_join("dimensions")
 	var found := {}
-	for ns in DirAccess.get_directories_at(root):
-		for d in DirAccess.get_directories_at(root.path_join(ns)):
-			found["%s:%s" % [ns, d]] = true
+	if DirAccess.dir_exists_absolute(root):
+		for ns in DirAccess.get_directories_at(root):
+			for d in DirAccess.get_directories_at(root.path_join(ns)):
+				found["%s:%s" % [ns, d]] = true
 	if found.is_empty() or found.has("minecraft:the_nether") or DirAccess.dir_exists_absolute(server_dir.path_join(level + "_nether")):
 		out.append({"name": level + "_nether", "label": "Nether"})
 	if found.is_empty() or found.has("minecraft:the_end") or DirAccess.dir_exists_absolute(server_dir.path_join(level + "_the_end")):

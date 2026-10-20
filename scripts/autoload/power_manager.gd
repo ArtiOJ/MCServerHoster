@@ -76,6 +76,8 @@ static var _re_signal := RegEx.create_from_string("PrepareFor(Sleep|Shutdown) \\
 
 
 func _ready() -> void:
+	if AppSettings.phone:
+		return
 	if _windows:
 		supported = true
 		max_delay_sec = 0.0

@@ -14,8 +14,8 @@ var _instances: Array[ServerInstance] = []
 
 
 func _ready() -> void:
-	if AppSettings.other_instance_pid > 0:
-		return  # Another Server Manager owns these servers.
+	if AppSettings.other_instance_pid > 0 or AppSettings.phone:
+		return  # Another Server Manager owns these servers, or this is the phone app.
 	for dir in AppSettings.server_dirs:
 		var cfg := ServerConfig.load_from_dir(dir)
 		if cfg == null:

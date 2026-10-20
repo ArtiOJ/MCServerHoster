@@ -105,6 +105,8 @@ func open(tab := TabIndex.SHARE, source: ServerSource = null) -> void:
 	_target = source if source != null and source.is_remote_source() and source.can_manage_servers() else ServerManager
 	_access = {}
 	_tabs.current_tab = tab
+	# The phone app lists the computers it connects to on its main screen.
+	_tabs.set_tab_hidden(TabIndex.CONNECT, AppSettings.phone)
 	var remote := _is_remote()
 	_tabs.set_tab_title(TabIndex.SHARE, "Share this computer" if not remote else "Share %s" % _target.source_name())
 	_share_intro.text = "Give someone an access key so they can manage servers on this computer from their own Server Manager. Each key has a role and can be revoked at any time." if not remote \

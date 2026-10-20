@@ -22,6 +22,12 @@ const VIEW_TIPS: PackedStringArray = [
 	"Top-down: drag to move, right-drag to turn, wheel to zoom.",
 	"Free flight: drag to look around, WASD to fly, Space/Shift for up/down, wheel for speed.",
 ]
+## The same on a touch screen.
+const TOUCH_VIEW_TIPS: PackedStringArray = [
+	"Perspective: drag to move, pinch to zoom, twist two fingers to turn, slide two fingers up or down to tilt.",
+	"Top-down: drag to move, pinch to zoom, twist two fingers to turn.",
+	"Free flight: drag to look around, pinch to fly forward or back.",
+]
 ## Hires tiles are shown within this many blocks of the centre (BlueMap's default first).
 const DETAIL_DISTANCES: PackedFloat32Array = [100.0, 200.0, 350.0]
 const DETAIL_NAMES: PackedStringArray = ["Detail: near", "Detail: farther", "Detail: farthest"]
@@ -96,6 +102,8 @@ var _free_yaw := 0.0
 var _free_pitch := -0.5
 var _free_speed := 30.0
 var _drag := 0
+## Fingers on the map (touch index -> position), for pinching and turning with two.
+var _touches := {}
 var _height_smoothing := true
 ## Shader globals as last set (setting them redraws, so only changes are sent).
 var _globals := {}
@@ -120,7 +128,7 @@ var _globals := {}
 func _ready() -> void:
 	for i in VIEW_NAMES.size():
 		_view_option.add_item(VIEW_NAMES[i])
-		_view_option.set_item_tooltip(i, VIEW_TIPS[i])
+		_view_option.set_item_tooltip(i, view_tip(i))
 	_view_option.item_selected.connect(func(i: int) -> void: set_view(i))
 	for i in DETAIL_NAMES.size():
 		_detail_option.add_item(DETAIL_NAMES[i])
@@ -220,6 +228,7 @@ func set_view(v: int) -> void:
 		_yaw = _free_yaw
 	view = v as View
 	_view_option.select(view)
+	_view_option.tooltip_text = view_tip(view)
 	_last_center = Vector3(INF, 0, 0)
 	_update_camera()
 
@@ -396,6 +405,9 @@ func _flat_rotated(v: Vector2) -> Vector3:
 func _gui_input(event: InputEvent) -> void:
 	if not _ready_to_draw:
 		return
+	if event is InputEventScreenTouch or event is InputEventScreenDrag:
+		_touch_input(event)
+		return
 	if event is InputEventMouseButton:
 		var mb := event as InputEventMouseButton
 		if mb.pressed:
@@ -412,7 +424,7 @@ func _gui_input(event: InputEvent) -> void:
 			else:
 				_distance = clampf(_distance * factor, MIN_DISTANCE, MAX_DISTANCE)
 			accept_event()
-	elif event is InputEventMouseMotion and _drag != 0:
+	elif event is InputEventMouseMotion and _drag != 0 and _touches.size() < 2:
 		var rel: Vector2 = (event as InputEventMouseMotion).relative
 		var looking := _drag != MOUSE_BUTTON_LEFT or view == View.FREE
 		if view == View.FREE:
@@ -432,6 +444,50 @@ func _gui_input(event: InputEvent) -> void:
 		var key := (event as InputEventKey).physical_keycode
 		if key in [KEY_W, KEY_A, KEY_S, KEY_D, KEY_Q, KEY_E, KEY_UP, KEY_DOWN, KEY_LEFT, KEY_RIGHT, KEY_SPACE, KEY_SHIFT, KEY_PAGEUP, KEY_PAGEDOWN, KEY_EQUAL, KEY_MINUS]:
 			accept_event()
+
+
+## Two fingers: pinch zooms (or flies in free view), twisting turns, sliding both up or
+## down tilts. One finger arrives as mouse dragging and moves the map.
+func _touch_input(event: InputEvent) -> void:
+	if event is InputEventScreenTouch:
+		var touch := event as InputEventScreenTouch
+		if touch.pressed:
+			_touches[touch.index] = touch.position
+			grab_focus()
+		else:
+			_touches.erase(touch.index)
+		if _touches.size() >= 2:
+			_drag = 0
+		accept_event()
+		return
+	var drag := event as InputEventScreenDrag
+	if not _touches.has(drag.index):
+		return
+	if _touches.size() < 2:
+		_touches[drag.index] = drag.position
+		return
+	var ids := _touches.keys()
+	var other: int = ids[1] if ids[0] == drag.index else ids[0]
+	var before: Vector2 = _touches[drag.index] - _touches[other]
+	_touches[drag.index] = drag.position
+	var after: Vector2 = _touches[drag.index] - _touches[other]
+	if before.length() > 4.0 and after.length() > 4.0:
+		var zoom := before.length() / after.length()
+		if view == View.FREE:
+			_free_speed = clampf(_free_speed / zoom, 2.0, 2000.0)
+		else:
+			_distance = clampf(_distance * zoom, MIN_DISTANCE, MAX_DISTANCE)
+			# Turning the fingers clockwise turns the map clockwise with them.
+			_yaw += after.angle() - before.angle()
+			if view == View.PERSPECTIVE:
+				# Half the slide: the other finger moving too counts the same again.
+				_angle = clampf(_angle - drag.relative.y * 0.5 * 0.005, 0.0, 1.5)
+	accept_event()
+
+
+## Tip for the current view, for a touch screen or a mouse.
+static func view_tip(v: int) -> String:
+	return TOUCH_VIEW_TIPS[v] if AppSettings.phone else VIEW_TIPS[v]
 
 
 # --- Tiles -------------------------------------------------------------------------------

@@ -1,0 +1,6 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://tests/integration/phone_ui_test.gd" id="1"]
+
+[node name="PhoneUiTest" type="Node"]
+script = ExtResource("1")

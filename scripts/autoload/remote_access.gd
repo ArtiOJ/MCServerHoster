@@ -48,7 +48,7 @@ var _network_dirty := false
 
 
 func _ready() -> void:
-	if AppSettings.other_instance_pid > 0:
+	if AppSettings.other_instance_pid > 0 or AppSettings.phone:
 		set_process(false)
 		return
 	computer_name = _default_computer_name()

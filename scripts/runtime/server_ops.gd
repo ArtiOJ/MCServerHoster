@@ -901,7 +901,7 @@ static func perms_get(inst: ServerInstance) -> Dictionary:
 		else:
 			out.note = str(exported.error)
 			out.restart_needed = inst.plugins_changed_while_running
-	if not out.live:
+	if not out.live and FileAccess.file_exists(dir.path_join(LuckPerms.CACHE_FILE)):
 		var cached: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join(LuckPerms.CACHE_FILE)))
 		if cached is Dictionary:
 			for key in ["groups", "users", "tracks", "read_at"]:

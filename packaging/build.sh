@@ -4,7 +4,11 @@
 #   server-manager-<ver>-linux-x86_64.tar.gz  plain Linux build
 #   ServerManager-<ver>-setup.exe             Windows 10/11 installer (needs makensis)
 #   ServerManager-<ver>-windows-x86_64.zip    portable Windows build
-# Needs Godot 4.7.2 with its export templates.
+#   ServerManager-<ver>-ios-xcode.zip         iPhone app as an Xcode project, built and signed
+#                                             on a Mac (needs the iOS export template)
+#   ServerManager-<ver>-android.apk           Android app (needs the Android export templates,
+#                                             the Android SDK and Java set in Godot's Editor Settings)
+# Needs Godot 4.7.2 with its export templates; the phone apps are skipped when theirs are missing.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 ROOT=$PWD
@@ -54,6 +58,23 @@ if command -v makensis >/dev/null; then
 	makensis -V2 -DVERSION="$VERSION" -DSOURCE="$WIN" -DOUTFILE="$DIST/ServerManager-$VERSION-setup.exe" packaging/windows/installer.nsi
 else
 	echo "makensis not found; skipping the Windows installer (sudo pacman -S nsis)"
+fi
+echo "== Phones"
+TEMPLATES=${GODOT_TEMPLATES:-$HOME/.local/share/godot/export_templates/$("$GODOT" --version | grep -oE '^[0-9]+(\.[0-9]+)+\.[a-z0-9]+')}
+if [ -f "$TEMPLATES/ios.zip" ]; then
+	mkdir -p "$BUILD/ios"
+	"$GODOT" --headless --path . --export-release "iOS" "$BUILD/ios/ServerManager.ipa"
+	cp packaging/ios/BUILDING.txt "$BUILD/ios/"
+	(cd "$BUILD/ios" && bsdtar -a -cf "$DIST/ServerManager-$VERSION-ios-xcode.zip" --exclude '*.ipa' .)
+else
+	echo "No iOS export template ($TEMPLATES/ios.zip); skipping the iPhone app"
+fi
+if [ -f "$TEMPLATES/android_debug.apk" ]; then
+	if ! "$GODOT" --headless --path . --export-debug "Android" "$DIST/ServerManager-$VERSION-android.apk"; then
+		echo "Android export failed: set the Android SDK and Java paths in Godot's Editor Settings (Export > Android)"
+	fi
+else
+	echo "No Android export template ($TEMPLATES/android_debug.apk); skipping the Android app"
 fi
 rm -rf "$DIST/linux" "$DIST/windows"
 echo "== Done"
