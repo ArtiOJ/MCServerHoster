@@ -49,7 +49,7 @@ func _show() -> void:
 	_meta.text = " · ".join(parts)
 	_badge.visible = not integration.is_empty()
 	_badge.text = "Built in: %s" % integration.get("feature", "")
-	_badge.tooltip_text = "Server Manager has its own %s for this plugin." % integration.get("feature", "")
+	_badge.tooltip_text = "Server Manager has its own %s for this plugin: open it from the plugin list once installed." % integration.get("feature", "")
 
 
 static func _count(n: int) -> String:

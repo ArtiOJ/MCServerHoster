@@ -43,8 +43,10 @@ func _ready() -> void:
 	main.show_server(inst.config.id)
 	var view: ServerView = main.get_node("%ServerView")
 	var tabs: TabContainer = view.get_node("%Tabs")
-	tabs.current_tab = _tab(tabs, "BlueMap")
-	var tab: BlueMapTab = tabs.get_child(_tab(tabs, "BlueMap"))
+	tabs.current_tab = _tab(tabs, "Plugins")
+	var plugins: PluginsTab = tabs.get_child(_tab(tabs, "Plugins"))
+	plugins.open_integration("BlueMap")
+	var tab: BlueMapTab = plugins.integration_page("BlueMap")
 	await _wait_for(func() -> bool: return tab.get_node("%InstallButton").visible, 10.0)
 	_check(tab.get_node("%InstallButton").visible and tab.get_node("%Notice").visible, "offers to install BlueMap")
 	await _shot("80_bluemap_not_installed")
@@ -56,6 +58,21 @@ func _ready() -> void:
 	tab.get_node("%AcceptButton").pressed.emit()
 	await _wait_for(func() -> bool: return not tab.get_node("%ConsentCard").visible, 20.0)
 	_check(BlueMap.download_accepted(inst.config.directory) and tab.get_node("%MapPage").visible, "accepted; the map page shows")
+
+	# The menu lives in Plugins: a button on the plugin's row, or Open when it's selected.
+	_check(not tabs.has_node("BlueMap") and not tabs.has_node("Chunky") and not tabs.has_node("Permissions"), "no tabs of their own")
+	plugins.close_integration()
+	await _wait_for(func() -> bool: return _row(plugins, "BlueMap") != null, 15.0)
+	var row_item := _row(plugins, "BlueMap")
+	_check(row_item != null and row_item.get_button_count(0) == 1, "BlueMap's row has an open button")
+	if row_item != null:
+		row_item.select(0)
+	await _frames(2)
+	_check(plugins.get_node("%OpenButton").visible and plugins.get_node("%OpenButton").text == "Open BlueMap", "Open BlueMap offered for the selected plugin")
+	await _shot("81b_plugins_list")
+	plugins.get_node("%OpenButton").pressed.emit()
+	await _frames(5)
+	_check(tab.is_visible_in_tree() and not plugins.get_node("%VBox").visible, "the BlueMap menu opens in Plugins")
 
 	inst.start()
 	await _wait_for(func() -> bool: return inst.is_online() and inst.rcon.is_ready(), 240.0)
@@ -160,7 +177,8 @@ func _ready() -> void:
 	await _wait_for(func() -> bool: return link.is_online() and not link.remote_servers().is_empty(), 20.0)
 	var remote: RemoteServer = link.remote_servers()[0]
 	main.show_server(remote.key())
-	tabs.current_tab = _tab(tabs, "BlueMap")
+	tabs.current_tab = _tab(tabs, "Plugins")
+	plugins.open_integration("BlueMap")
 	await _wait_for(func() -> bool: return tab.handle == remote and tab._shown_map != "", 30.0)
 	await _wait_tiles(viewer)
 	_check(tab.handle == remote and viewer._tiles.size() > 0, "a remote server admin sees the map: %d tiles" % viewer._tiles.size())
@@ -182,6 +200,16 @@ func _ready() -> void:
 		ServerManager.delete_server(inst.config.id, true, true)
 	print("\nBlueMap UI test: %s" % ("OK" if _failures.is_empty() else "%d failure(s)" % _failures.size()))
 	get_tree().quit(0 if _failures.is_empty() else 1)
+
+
+func _row(plugins: PluginsTab, plugin_name: String) -> TreeItem:
+	var root: TreeItem = (plugins.get_node("%PluginTree") as Tree).get_root()
+	if root == null:
+		return null
+	for item in root.get_children():
+		if str(item.get_metadata(1)) == plugin_name:
+			return item
+	return null
 
 
 func _map(state: Dictionary, id: String) -> Dictionary:

@@ -1,5 +1,5 @@
 extends Node
-## LuckPerms from the Permissions tab's operations on a real Paper server: install, read,
+## LuckPerms from the Permissions menu's operations on a real Paper server: install, read,
 ## change groups, players and tracks, notice changes that don't take effect, and keep the
 ## last state readable while the server is stopped.
 ## Usage: godot --headless --path . res://tests/integration/luckperms_test.tscn -- --no-autostart --profile=lp --root=<dir> [--version=26.3]

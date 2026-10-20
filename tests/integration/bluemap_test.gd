@@ -1,5 +1,5 @@
 extends Node
-## BlueMap from the BlueMap tab's operations on a real Paper server: install, the download
+## BlueMap from the BlueMap menu's operations on a real Paper server: install, the download
 ## consent, render status, the rendered files the viewer reads (decoded like the viewer
 ## does), maps for more dimensions, map settings and render areas, render actions, render
 ## threads, BlueMap's settings and removing a map. Needs network access (Modrinth, Mojang).

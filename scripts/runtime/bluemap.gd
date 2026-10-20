@@ -1,6 +1,6 @@
 class_name BlueMap
 extends RefCounted
-## BlueMap (3D map plugin) for the BlueMap tab: its config files (HOCON), console commands
+## BlueMap (3D map plugin) for its menu in the Plugins tab: its config files (HOCON), console commands
 ## and their replies, and where it keeps the rendered map. Verified with BlueMap 5.29 on
 ## Paper 26.3: commands answer over RCON (with § colours). Nothing renders until core.conf
 ## has accept-download: true (BlueMap then downloads Minecraft's client jar for the block

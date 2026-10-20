@@ -1,6 +1,6 @@
 class_name Chunky
 extends RefCounted
-## Chunky (chunk pre-generation plugin) for the Chunky tab: builds its commands from a task
+## Chunky (chunk pre-generation plugin) for the Chunky menu: builds its commands from a task
 ## description and follows its progress in the server's console. Verified with Chunky 1.5 on
 ## Paper 26.3: commands answer over RCON; progress is logged once per "quiet" interval as
 ## "[Chunky] Task running for <world>. Processed: <n> chunks (<p>%), ETA: <h:mm:ss>, Rate:

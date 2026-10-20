@@ -19,11 +19,8 @@ const TAB_ICONS := {
 	"Resources": preload("res://assets/icons/sliders.svg"),
 	"Automation": preload("res://assets/icons/clock.svg"),
 	"Players": preload("res://assets/icons/users.svg"),
-	"Permissions": preload("res://assets/icons/shield.svg"),
 	"Plugins": preload("res://assets/icons/puzzle.svg"),
 	"Worlds": preload("res://assets/icons/map.svg"),
-	"Chunky": preload("res://assets/icons/layers.svg"),
-	"BlueMap": preload("res://assets/icons/box.svg"),
 	"Backups": preload("res://assets/icons/archive.svg"),
 	"Network": preload("res://assets/icons/globe.svg"),
 }

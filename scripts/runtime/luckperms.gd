@@ -1,6 +1,6 @@
 class_name LuckPerms
 extends RefCounted
-## LuckPerms (the permissions plugin) for the Permissions tab: reads its data with
+## LuckPerms (the permissions plugin) for the Permissions menu (Plugins tab): reads its data with
 ## `/lp export` and changes it with `/lp` commands, both over RCON while the server runs.
 ## Verified with LuckPerms 5.5 on Paper 26.3:
 ## - RCON gets no replies from LuckPerms (they arrive after the response), so every batch

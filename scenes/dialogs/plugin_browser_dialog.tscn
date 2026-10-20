@@ -56,7 +56,7 @@ unique_name_in_owner = true
 visible = false
 layout_mode = 2
 mouse_filter = 0
-tooltip_text = "Server Manager has its own pages for these plugins (e.g. the Permissions tab for LuckPerms)."
+tooltip_text = "Server Manager has its own pages for these plugins (e.g. Permissions for LuckPerms), opened from the plugin list."
 theme_type_variation = &"CardTitle"
 text = "WORKS WITH SERVER MANAGER"
 

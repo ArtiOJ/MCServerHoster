@@ -1022,7 +1022,7 @@ static func perms_player(inst: ServerInstance, player_name: String) -> Dictionar
 
 # --- Chunky ----------------------------------------------------------------------------
 
-## The Chunky tab's state: {installed, enabled, version, ready, note, worlds: [{name, label}],
+## The Chunky menu's state: {installed, enabled, version, ready, note, worlds: [{name, label}],
 ## tasks: [{world, state, processed, unit, percent, eta, rate, current, total_time}]}.
 static func chunky_status(inst: ServerInstance) -> Dictionary:
 	var info := Chunky.installed_info(inst.config.directory)
@@ -1140,7 +1140,7 @@ static func _plain_reply(text: String) -> String:
 ## Most bytes of map files one bluemap_files answer carries (the rest are asked for again).
 const BLUEMAP_BATCH_BYTES := 4 * 1024 * 1024
 
-## The BlueMap tab's state: {installed, enabled, version, ready, configs, accepted, loaded,
+## The BlueMap menu's state: {installed, enabled, version, ready, configs, accepted, loaded,
 ## loading, threads, thread_count, current, note, maps: [{id, name, dimension, state,
 ## progress, pending, frozen, viewable, suffix, error}], tasks, settings, dimensions, port}.
 static func bluemap_status(inst: ServerInstance) -> Dictionary:

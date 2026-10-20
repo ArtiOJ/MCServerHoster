@@ -356,7 +356,7 @@ icons are rendered from icon.svg by `packaging/make_icons.gd`.
 
 ## 12. Permissions (LuckPerms)
 
-A Permissions tab per server (local and remote, server admins and up) manages LuckPerms:
+A Permissions menu per server (local and remote, server admins and up) manages LuckPerms:
 groups (weight, prefix, parents, permissions), players (groups, permissions, promote/demote)
 and tracks (order). "Install LuckPerms" downloads the latest Paper build from luckperms.net.
 
@@ -379,16 +379,20 @@ for Paper, Spigot and Bukkit plugins (Paper runs all three) for the server's Min
 - Search filters apply to whole projects, so each result is checked for a version with a
   Paper-compatible loader that lists the server's version; results without one are left out.
 - Plugins Server Manager integrates with (`ModrinthApi.INTEGRATIONS`, e.g. LuckPerms → Permissions
-  tab) are listed first and install from their official source.
+  menu) are listed first and install from their official source.
+- Integrations are not tabs of their own (more would crowd the tab bar): an installed integrated
+  plugin's row in the plugin list has an open button (also double-click, or **Open …** when
+  selected), which shows its menu in place of the list with a back button
+  (`PluginsTab.INTEGRATIONS`).
 - Installing runs on the server's computer (`plugin_install_modrinth`, server admins and up): the
   newest compatible release, checked by SHA-1, plus required plugins (3 levels deep); an installed
   copy of the same project is replaced (update). Installed jars are recognised by hash.
-- The Permissions tab's **Browse…** lists permissions declared in the installed plugins'
+- The Permissions menu's **Browse…** lists permissions declared in the installed plugins'
   plugin.yml, Minecraft's commands (from `minecraft:help`) and Paper's/LuckPerms' main ones.
 
 ## 14. Chunky (chunk pre-generation)
 
-A Chunky tab (shown with an Install button until Chunky is installed from Modrinth) starts
+A Chunky menu (with an Install button until Chunky is installed from Modrinth) starts
 tasks on a running server: generate an area (Chunky's nine shapes, centred on spawn, the world
 border's centre or coordinates), fill the world border, or **load existing chunks only** (Chunky's
 `world` pattern: it visits the chunks saved in the region files and generates nothing new, for
@@ -409,7 +413,7 @@ an area after a world backup; the server must restart afterwards.
 
 ## 15. BlueMap (3D map)
 
-A BlueMap tab installs BlueMap (the Paper build from Modrinth), asks for the consent BlueMap
+A BlueMap menu installs BlueMap (the Paper build from Modrinth), asks for the consent BlueMap
 needs before it downloads Minecraft's client jar from Mojang (`accept-download` in core.conf;
 can be given before the first start), and then has two pages:
 

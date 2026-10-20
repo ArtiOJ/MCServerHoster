@@ -1,15 +1,26 @@
 class_name PluginsTab
 extends ServerTab
 ## Lists the server's plugin jars and installs, enables, disables or removes them.
+## Plugins Server Manager integrates with (LuckPerms, Chunky, BlueMap) open their own menu
+## here, in place of the list, so more integrations don't crowd the server's tabs.
 ## Works the same for servers on other computers: chosen jars are uploaded there.
 
 const DISABLED_SUFFIX := ServerOps.DISABLED_SUFFIX
+## Plugin name (plugin.yml) -> its menu: page node under Pages, title, icon.
+const INTEGRATIONS := {
+	"LuckPerms": {"page": "Permissions", "title": "Permissions", "icon": preload("res://assets/icons/shield.svg")},
+	"Chunky": {"page": "Chunky", "title": "Chunky", "icon": preload("res://assets/icons/layers.svg")},
+	"BlueMap": {"page": "BlueMap", "title": "BlueMap", "icon": preload("res://assets/icons/box.svg")},
+}
+const OPEN_BUTTON_ID := 1
 
 enum Column { NAME, VERSION, FILE, SIZE, STATUS }
 
 var _serial := 0
 var _busy := false
 var _folder := ""
+## The plugin whose menu is open ("" for the list).
+var _open := ""
 
 @onready var _browse_button: Button = %BrowseButton
 @onready var _browser_dialog: PluginBrowserDialog = %BrowserDialog
@@ -23,6 +34,13 @@ var _folder := ""
 @onready var _restart_notice: PanelContainer = %RestartNotice
 @onready var _file_dialog: FileDialog = %InstallDialog
 @onready var _delete_dialog: ConfirmationDialog = %DeleteDialog
+@onready var _list_page: VBoxContainer = %VBox
+@onready var _open_menu_button: Button = %OpenButton
+@onready var _integration_page: VBoxContainer = %IntegrationPage
+@onready var _back_button: Button = %BackButton
+@onready var _page_icon: TextureRect = %PageIcon
+@onready var _page_title: Label = %PageTitle
+@onready var _pages: MarginContainer = %Pages
 
 
 func _ready() -> void:
@@ -49,6 +67,14 @@ func _ready() -> void:
 	_delete_dialog.confirmed.connect(_delete_selected)
 	_file_dialog.files_selected.connect(install_files)
 	_tree.item_selected.connect(_update_buttons)
+	_tree.item_activated.connect(func() -> void:
+		if INTEGRATIONS.has(_selected_name()):
+			open_integration(_selected_name()))
+	_tree.button_clicked.connect(func(item: TreeItem, _column: int, id: int, _button: int) -> void:
+		if id == OPEN_BUTTON_ID:
+			open_integration(str(item.get_metadata(1))))
+	_open_menu_button.pressed.connect(func() -> void: open_integration(_selected_name()))
+	_back_button.pressed.connect(close_integration)
 	_tree.nothing_selected.connect(func() -> void:
 		_tree.deselect_all()
 		_update_buttons())
@@ -58,6 +84,8 @@ func _ready() -> void:
 
 
 func _on_bound() -> void:
+	for page in _pages.get_children():
+		(page as ServerTab).bind(handle)
 	_folder = ""
 	_tree.clear()
 	_open_button.visible = handle.supports(ServerHandle.FEATURE_OPEN_FOLDER)
@@ -68,6 +96,36 @@ func _on_bound() -> void:
 		if area == &"plugins" and is_visible_in_tree():
 			refresh())
 	refresh()
+
+
+## Shows the menu of integrated plugin [param plugin_name] (a key of INTEGRATIONS) in place
+## of the list.
+func open_integration(plugin_name: String) -> void:
+	if not INTEGRATIONS.has(plugin_name):
+		return
+	var info: Dictionary = INTEGRATIONS[plugin_name]
+	_open = plugin_name
+	_page_icon.texture = info.icon
+	_page_title.text = info.title
+	for page in _pages.get_children():
+		page.visible = page.name == info.page
+	_list_page.visible = false
+	_integration_page.visible = true
+
+
+## Back to the plugin list.
+func close_integration() -> void:
+	_open = ""
+	_integration_page.visible = false
+	for page in _pages.get_children():
+		page.visible = false
+	_list_page.visible = true
+	refresh()
+
+
+## The menu of integrated plugin [param plugin_name] (for tests and links).
+func integration_page(plugin_name: String) -> ServerTab:
+	return _pages.get_node(str(INTEGRATIONS[plugin_name].page)) as ServerTab
 
 
 ## Installs plugin jars (from the Install dialog or files dropped onto the window).
@@ -92,7 +150,7 @@ func install_files(paths: PackedStringArray) -> void:
 
 
 func refresh() -> void:
-	if handle == null or _busy:
+	if handle == null or _busy or _open != "":
 		return
 	_serial += 1
 	var serial := _serial
@@ -122,6 +180,10 @@ func refresh() -> void:
 			item.set_custom_color(Column.NAME, Color("8b93a3"))
 		item.set_tooltip_text(Column.NAME, str(p.description))
 		item.set_metadata(0, str(p.file))
+		item.set_metadata(1, str(p.name))
+		if INTEGRATIONS.has(str(p.name)):
+			var info: Dictionary = INTEGRATIONS[str(p.name)]
+			item.add_button(Column.NAME, info.icon, OPEN_BUTTON_ID, false, "Open the %s menu (double-click works too)" % info.title)
 		if str(p.file) == selected_file:
 			item.select(0)
 		if on:
@@ -138,6 +200,11 @@ func _selected_file() -> String:
 	return str(item.get_metadata(0)) if item != null else ""
 
 
+func _selected_name() -> String:
+	var item := _tree.get_selected()
+	return str(item.get_metadata(1)) if item != null else ""
+
+
 func _update_buttons() -> void:
 	var file := _selected_file()
 	_install_button.disabled = _busy
@@ -145,6 +212,11 @@ func _update_buttons() -> void:
 	_toggle_button.disabled = file == "" or _busy
 	_delete_button.disabled = file == "" or _busy
 	_toggle_button.text = "Enable" if file.ends_with(DISABLED_SUFFIX) else "Disable"
+	var integrated := INTEGRATIONS.has(_selected_name())
+	_open_menu_button.visible = integrated
+	if integrated:
+		_open_menu_button.text = "Open %s" % INTEGRATIONS[_selected_name()].title
+		_open_menu_button.tooltip_text = "Server Manager's own menu for %s" % _selected_name()
 
 
 func _set_busy(on: bool, text := "") -> void:

@@ -5,6 +5,7 @@ extends ServerTab
 ## render actions per map (update, fix edges, re-render, freeze, delete the render), maps
 ## for more dimensions, each map's settings and render areas, and BlueMap's own settings.
 ## Works the same for servers on other computers (see ServerOps.bluemap_*).
+## Opened from the Plugins tab (see PluginsTab.INTEGRATIONS), not a tab of its own.
 
 const POLL_SEC := 3.0
 const ACTION_NAMES := {
@@ -459,7 +460,7 @@ func _troubleshoot() -> void:
 		return
 	var text := str(res.text).replace("BlueMap Troubleshooting >", "").strip_edges()
 	if bool(res.get("missing_light", false)):
-		text += "\n\nTo fix it: in the Chunky tab, run \"Load existing chunks only\" for this world; loading gives the chunks their light. Then Re-render. (Or turn on \"Render unlit chunks\" in the map's settings.)"
+		text += "\n\nTo fix it: in Plugins, open Chunky and run \"Load existing chunks only\" for this world; loading gives the chunks their light. Then Re-render. (Or turn on \"Render unlit chunks\" in the map's settings.)"
 	_trouble_result.text = text
 
 

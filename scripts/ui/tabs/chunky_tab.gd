@@ -4,6 +4,7 @@ extends ServerTab
 ## that already exist), follow their progress, pause, continue or cancel them, and trim
 ## chunks outside or inside an area. Tasks run while the server is online (see Chunky and
 ## ServerOps.chunky_*). Works the same for servers on other computers.
+## Opened from the Plugins tab (see PluginsTab.INTEGRATIONS), not a tab of its own.
 
 ## Area of each shape for a radius of 1, to estimate the number of chunks.
 const SHAPE_AREA := {"square": 4.0, "circle": PI, "rectangle": 4.0, "ellipse": PI, "diamond": 2.0,

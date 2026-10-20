@@ -3,6 +3,7 @@ extends ServerTab
 ## LuckPerms groups, players and tracks (see LuckPerms and ServerOps.perms_*). Changes need
 ## the server running, since LuckPerms only takes them there; a stopped server shows what
 ## was read last, read-only. Works the same for servers on other computers.
+## Opened from the Plugins tab (see PluginsTab.INTEGRATIONS), not a tab of its own.
 
 enum Section { GROUPS, PLAYERS, TRACKS }
 enum Column { NODE, VALUE, WHERE, EXPIRES }

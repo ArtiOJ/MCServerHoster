@@ -13,9 +13,6 @@
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/network_tab.tscn" id="11"]
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/logs_tab.tscn" id="12"]
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/worlds_tab.tscn" id="13"]
-[ext_resource type="PackedScene" path="res://scenes/server_view/tabs/permissions_tab.tscn" id="14"]
-[ext_resource type="PackedScene" path="res://scenes/server_view/tabs/chunky_tab.tscn" id="15"]
-[ext_resource type="PackedScene" path="res://scenes/server_view/tabs/bluemap_tab.tscn" id="16"]
 
 [node name="ServerView" type="VBoxContainer"]
 anchors_preset = 15
@@ -64,24 +61,12 @@ layout_mode = 2
 visible = false
 layout_mode = 2
 
-[node name="Permissions" parent="Tabs" instance=ExtResource("14")]
-visible = false
-layout_mode = 2
-
 [node name="Plugins" parent="Tabs" instance=ExtResource("9")]
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
 
 [node name="Worlds" parent="Tabs" instance=ExtResource("13")]
-visible = false
-layout_mode = 2
-
-[node name="Chunky" parent="Tabs" instance=ExtResource("15")]
-visible = false
-layout_mode = 2
-
-[node name="BlueMap" parent="Tabs" instance=ExtResource("16")]
 visible = false
 layout_mode = 2
 

@@ -1,5 +1,5 @@
 extends Node
-## Chunky from the Chunky tab's operations on a real Paper server: install, tasks (an area,
+## Chunky from the Chunky menu's operations on a real Paper server: install, tasks (an area,
 ## pause/continue/cancel, existing chunks only), trim with its safety backup, and the world
 ## name of an extra dimension. Needs network access (Modrinth).
 ## Usage: godot --headless --path . res://tests/integration/chunky_test.tscn -- --no-autostart --profile=ch --root=<dir> [--version=26.3]

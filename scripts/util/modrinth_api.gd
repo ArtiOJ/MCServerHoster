@@ -16,13 +16,13 @@ const PAGE_SIZE := 20
 ## Sort orders the search supports, with their labels.
 const SORTS: PackedStringArray = ["relevance", "downloads", "updated", "newest"]
 const SORT_NAMES: PackedStringArray = ["Relevance", "Downloads", "Recently updated", "Newest"]
-## Plugins Server Manager has its own support for; listed first. install_op installs them
+## Plugins Server Manager has its own support for (a menu in the Plugins tab); listed first. install_op installs them
 ## from their official source instead of Modrinth (which may lag behind).
 ## plugin_name is its plugin.yml name, to recognise it however it was installed.
 const INTEGRATIONS := [
-	{"slug": "luckperms", "plugin_name": "LuckPerms", "feature": "Permissions tab", "install_op": "perms_install"},
-	{"slug": "chunky", "plugin_name": "Chunky", "feature": "Chunky tab"},
-	{"slug": "bluemap", "plugin_name": "BlueMap", "feature": "BlueMap tab"},
+	{"slug": "luckperms", "plugin_name": "LuckPerms", "feature": "Permissions menu", "install_op": "perms_install"},
+	{"slug": "chunky", "plugin_name": "Chunky", "feature": "Chunky menu"},
+	{"slug": "bluemap", "plugin_name": "BlueMap", "feature": "BlueMap menu"},
 ]
 const TIMEOUT_SEC := 20
 const DOWNLOAD_TIMEOUT_SEC := 300
