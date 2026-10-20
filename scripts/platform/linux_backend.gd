@@ -59,6 +59,14 @@ func copy_tree(src: String, dst: String) -> Error:
 	return FileOps.copy_tree_portable(src, dst)
 
 
+## Through logind, like the desktop's own Sleep button; refused while something holds a
+## block lock (e.g. Server Manager while players are online, depending on the sleep policy).
+func suspend_computer() -> Dictionary:
+	var output: Array = []
+	var code := PlatformBackend.execute("systemctl", ["suspend"], output, true)
+	return {"ok": code == 0, "message": "" if code == 0 else str(output[0]).strip_edges() if not output.is_empty() else "systemctl suspend failed (%d)" % code}
+
+
 func supports_cpu_quota() -> bool:
 	return _systemd_run != "" and _cgroup_v2
 

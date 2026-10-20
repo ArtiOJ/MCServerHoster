@@ -11,6 +11,8 @@ var _serial := 0
 var _busy := false
 var _folder := ""
 
+@onready var _browse_button: Button = %BrowseButton
+@onready var _browser_dialog: PluginBrowserDialog = %BrowserDialog
 @onready var _install_button: Button = %InstallButton
 @onready var _open_button: Button = %OpenFolderButton
 @onready var _refresh_button: Button = %RefreshButton
@@ -37,6 +39,9 @@ func _ready() -> void:
 		_tree.set_column_expand(col, false)
 		_tree.set_column_custom_minimum_width(col, 110)
 	_install_button.pressed.connect(_file_dialog.popup_centered_ratio.bind(0.6))
+	_browse_button.pressed.connect(func() -> void:
+		if handle != null:
+			_browser_dialog.open(handle))
 	_open_button.pressed.connect(_open_folder)
 	_refresh_button.pressed.connect(refresh)
 	_toggle_button.pressed.connect(_toggle_selected)
@@ -136,6 +141,7 @@ func _selected_file() -> String:
 func _update_buttons() -> void:
 	var file := _selected_file()
 	_install_button.disabled = _busy
+	_browse_button.disabled = _busy
 	_toggle_button.disabled = file == "" or _busy
 	_delete_button.disabled = file == "" or _busy
 	_toggle_button.text = "Enable" if file.ends_with(DISABLED_SUFFIX) else "Disable"

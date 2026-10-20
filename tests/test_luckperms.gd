@@ -97,3 +97,44 @@ func test_reads_export_files() -> void:
 	check(LuckPerms.read_export_file(path).is_empty(), "half-written export ignored")
 	DirAccess.remove_absolute(path)
 	check(LuckPerms.read_export_file(path).is_empty(), "missing export")
+
+
+func test_reads_declared_permissions() -> void:
+	var yml := """name: Essentials
+version: 2.21
+commands:
+  fly:
+    description: Toggle flying
+    permission: essentials.fly
+    aliases: [efly]
+  heal:
+    permission: "essentials.heal"
+permissions:
+  essentials.fly:
+    description: Allows flying
+    default: op
+  'essentials.home.*':
+    description: All homes # trailing comment
+    children:
+      essentials.home: true
+      essentials.home.others: true
+  essentials.spawn: {}
+"""
+	var perms := LuckPerms.parse_plugin_permissions(yml)
+	var by_node := {}
+	for p in perms:
+		by_node[p.node] = p
+	check_eq(by_node.keys(), ["essentials.fly", "essentials.heal", "essentials.home.*", "essentials.home", "essentials.home.others", "essentials.spawn"], "commands, permissions and children, in order")
+	check_eq(by_node["essentials.fly"].description, "Allows flying", "the declared description wins over the command's")
+	check_eq(by_node["essentials.fly"].default, "op", "default")
+	check_eq(by_node["essentials.home.*"].description, "All homes", "quoted key, comment dropped")
+	check_eq(by_node["essentials.heal"].description, "Use /heal", "command permissions described by their command")
+	check(perms.all(func(p: Dictionary) -> bool: return p.plugin == "Essentials"), "plugin name attached")
+	check(LuckPerms.parse_plugin_permissions("name: X\nmain: a.B\n").is_empty(), "no permissions declared")
+
+
+func test_reads_vanilla_commands_from_help() -> void:
+	var help := "/advancement (grant|revoke)\n/gamemode <gamemode> [<target>]\n/tp <targets> <location>\nnot a command\n/gamemode again"
+	check_eq(LuckPerms.parse_help_commands(help), ["advancement", "gamemode", "tp"], "unique command names, sorted")
+	var rcon := "/advancement (grant|revoke)/attribute <target> <attribute>/seed/setidletimeout <minutes>/gamemode <gamemode>"
+	check_eq(LuckPerms.parse_help_commands(rcon), ["advancement", "attribute", "gamemode", "seed", "setidletimeout"], "RCON's run-together output")

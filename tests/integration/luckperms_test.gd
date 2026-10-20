@@ -40,6 +40,19 @@ func _ready() -> void:
 	_check(state.ok and state.live and state.editable, "live read: %s" % state.get("note", ""))
 	_check(LuckPerms.find(state, "group", "default") != null, "default group listed")
 
+	# Permissions to pick from: a plugin's declared ones, Minecraft's commands, built-ins.
+	var zip := ZIPPacker.new()
+	zip.open(inst.config.directory.path_join("plugins/homes-1.0.jar"))
+	zip.start_file("plugin.yml")
+	zip.write_file("name: Homes\nversion: 1.0\nmain: a.B\ncommands:\n  home:\n    permission: homes.use\npermissions:\n  homes.use:\n    description: Teleport home\n    default: true\n".to_utf8_buffer())
+	zip.close_file()
+	zip.close()
+	var known: Dictionary = await inst.call_op("perms_known")
+	var nodes: Array = known.get("permissions", []).map(func(p: Dictionary) -> String: return p.node)
+	_check(known.ok and nodes.has("homes.use") and nodes.has("luckperms.*"), "plugin and built-in permissions listed")
+	_check(nodes.has("minecraft.command.gamemode") and nodes.has("minecraft.command.tp"), "Minecraft's commands listed from the server (%d permissions)" % nodes.size())
+	_check(FileAccess.file_exists(inst.config.directory.path_join(LuckPerms.VANILLA_CACHE)), "command list remembered for when it's stopped")
+
 	var steve: Dictionary = await inst.call_op("perms_player", {"name": "Steve"})
 	_check(steve.ok and LuckPerms.is_uuid(str(steve.uuid)), "player looked up: %s" % steve.get("uuid", steve.get("error", "")))
 	var uuid := str(steve.get("uuid", ""))
@@ -84,6 +97,8 @@ func _ready() -> void:
 	await _stop(inst)
 	state = await inst.call_op("perms_get")
 	_check(state.ok and not state.live and not state.editable and LuckPerms.find(state, "group", "mod") != null, "stopped: last read shown read-only (%s)" % state.note)
+	var known_offline: Dictionary = await inst.call_op("perms_known")
+	_check(known_offline.get("permissions", []).any(func(p: Dictionary) -> bool: return p.node == "minecraft.command.gamemode"), "Minecraft's commands still listed while stopped")
 	var offline: Dictionary = await inst.call_op("perms_apply", {"changes": [{"action": "group_create", "group": "later"}]})
 	_check(not offline.ok, "changes need the running server")
 	await _boot(inst)

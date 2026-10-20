@@ -188,6 +188,80 @@ func _run(rule: EventRule, pre_warned := false) -> void:
 			if message == "":
 				message = rule.describe()
 			Notifier.notify(message, Notifier.Level.INFO, Notifier.Category.EVENT, instance.config.display_name)
+		EventRule.Action.WAKE_ON_JOIN_ON, EventRule.Action.WAKE_ON_JOIN_OFF:
+			_set_wake_on_join(rule.action == EventRule.Action.WAKE_ON_JOIN_ON)
+		EventRule.Action.SET_MOTD:
+			_set_property("motd", rule.text.strip_edges())
+		EventRule.Action.SET_SETTING:
+			var setting := EventRule.parse_setting(rule.text)
+			if setting.is_empty():
+				instance.log_system("Event skipped: \"%s\" isn't a setting events can change (use setting=value)." % rule.text.strip_edges())
+			else:
+				_set_property(setting[0], setting[1])
+		EventRule.Action.WHITELIST_ON, EventRule.Action.WHITELIST_OFF:
+			var res: Dictionary = ServerOps.whitelist_set(instance, rule.action == EventRule.Action.WHITELIST_ON, ServerOps.LOCAL_CONTEXT)
+			if not res.ok:
+				instance.log_system("Event: %s" % res.error)
+		EventRule.Action.ENABLE_PLUGIN, EventRule.Action.DISABLE_PLUGIN:
+			var res := ServerOps.plugin_set_enabled(instance, rule.text.strip_edges(), rule.action == EventRule.Action.ENABLE_PLUGIN, ServerOps.LOCAL_CONTEXT)
+			if not res.ok:
+				instance.log_system("Event skipped: %s" % res.error)
+			elif res.get("changed", false) and instance.is_process_alive():
+				instance.log_system("The plugin change applies at the next restart.")
+		EventRule.Action.SET_ASLEEP_MOTD:
+			if instance.config.wake_motd != rule.text.strip_edges():
+				instance.config.wake_motd = rule.text.strip_edges()
+				instance.save_config()
+				instance.log_system("Asleep MOTD set to \"%s\"." % instance.config.wake_motd)
+		EventRule.Action.SLEEP_COMPUTER:
+			instance.log_system("Putting the computer to sleep.")
+			Notifier.info("%s: putting the computer to sleep." % instance.config.display_name, Notifier.Category.POWER, instance.config.display_name)
+			var res: Dictionary = await PowerManager.suspend_computer()
+			if not res.ok:
+				instance.log_system("The computer didn't go to sleep: %s." % res.message)
+
+
+## Writes a server.properties value; the server reads it at its next start.
+func _set_property(key: String, value: String) -> void:
+	var props := instance.get_properties()
+	if props.get_value(key, "") == value:
+		return
+	props.set_value(key, value)
+	var err := props.save_file(instance.config.properties_path())
+	if err != OK:
+		instance.log_system("Could not update server.properties: %s" % error_string(err))
+		return
+	instance.log_system("Set %s to \"%s\"%s." % [key, value, " (applies at the next start)" if instance.is_process_alive() else ""])
+	instance.data_changed.emit(&"settings")
+
+
+## Turns the server's wake on join (listening for players while stopped) on or off.
+func _set_wake_on_join(on: bool) -> void:
+	if instance.config.wake_on_connect == on:
+		return
+	instance.config.wake_on_connect = on
+	instance.save_config()
+	instance.log_system("Wake on join turned %s." % ("on" if on else "off"))
+
+
+## Puts wake on join where the timed on/off events last left it, for runs missed while the
+## computer slept or the app was closed: the most recent past "Turn on/off wake on join"
+## time-of-day event wins. Called when the app starts and after the computer wakes.
+func catch_up_wake_on_join() -> void:
+	if instance == null or instance.config == null:
+		return
+	var now := int(Time.get_unix_time_from_system())
+	var latest := -1
+	var latest_rule: EventRule = null
+	for rule in instance.config.events:
+		if not rule.enabled or rule.action not in [EventRule.Action.WAKE_ON_JOIN_ON, EventRule.Action.WAKE_ON_JOIN_OFF]:
+			continue
+		var t := rule.last_run_at_or_before(now)
+		if t > latest:
+			latest = t
+			latest_rule = rule
+	if latest_rule != null:
+		_set_wake_on_join(latest_rule.action == EventRule.Action.WAKE_ON_JOIN_ON)
 
 
 ## Replaces {server} and {players} in event texts.

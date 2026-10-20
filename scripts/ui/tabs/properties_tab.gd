@@ -55,6 +55,10 @@ func _ready() -> void:
 func _on_bound() -> void:
 	watch(handle.state_changed, _on_state_changed)
 	watch(handle.config_changed, _on_config_changed)
+	# An event changed server.properties.
+	watch(handle.data_changed, func(area: StringName) -> void:
+		if area == &"settings":
+			_on_config_changed())
 	if _raw_toggle.button_pressed:
 		_raw_toggle.set_pressed_no_signal(false)
 		_show_raw(false)

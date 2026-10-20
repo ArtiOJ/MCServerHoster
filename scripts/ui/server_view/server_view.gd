@@ -22,6 +22,7 @@ const TAB_ICONS := {
 	"Permissions": preload("res://assets/icons/shield.svg"),
 	"Plugins": preload("res://assets/icons/puzzle.svg"),
 	"Worlds": preload("res://assets/icons/map.svg"),
+	"Chunky": preload("res://assets/icons/layers.svg"),
 	"Backups": preload("res://assets/icons/archive.svg"),
 	"Network": preload("res://assets/icons/globe.svg"),
 }

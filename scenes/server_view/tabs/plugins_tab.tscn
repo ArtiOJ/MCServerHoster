@@ -6,6 +6,8 @@
 [ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="4"]
 [ext_resource type="Texture2D" path="res://assets/icons/trash.svg" id="5"]
 [ext_resource type="Texture2D" path="res://assets/icons/puzzle.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="7"]
+[ext_resource type="PackedScene" path="res://scenes/dialogs/plugin_browser_dialog.tscn" id="8"]
 
 [node name="Plugins" type="MarginContainer"]
 layout_mode = 3
@@ -29,12 +31,19 @@ theme_override_constants/separation = 12
 layout_mode = 2
 theme_override_constants/separation = 8
 
-[node name="InstallButton" type="Button" parent="VBox/Toolbar"]
+[node name="BrowseButton" type="Button" parent="VBox/Toolbar"]
 unique_name_in_owner = true
 layout_mode = 2
 theme_type_variation = &"AccentButton"
+tooltip_text = "Find plugins for this server's Minecraft version on Modrinth and install them"
+text = "Get plugins"
+icon = ExtResource("7")
+
+[node name="InstallButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
 tooltip_text = "Copy plugin .jar files into this server's plugins folder"
-text = "Install…"
+text = "Install file…"
 icon = ExtResource("2")
 
 [node name="OpenFolderButton" type="Button" parent="VBox/Toolbar"]
@@ -133,6 +142,10 @@ file_mode = 1
 access = 2
 filters = PackedStringArray("*.jar ; Plugin jars")
 use_native_dialog = true
+
+[node name="BrowserDialog" parent="." instance=ExtResource("8")]
+unique_name_in_owner = true
+visible = false
 
 [node name="DeleteDialog" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true

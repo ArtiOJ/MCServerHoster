@@ -1,0 +1,95 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/dialogs/plugin_browser_dialog.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="2"]
+
+[node name="PluginBrowserDialog" type="AcceptDialog"]
+title = "Get plugins"
+size = Vector2i(1040, 720)
+ok_button_text = "Close"
+script = ExtResource("1")
+
+[node name="VBox" type="VBoxContainer" parent="."]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 1032.0
+offset_bottom = 671.0
+theme_override_constants/separation = 10
+
+[node name="Top" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SearchEdit" type="LineEdit" parent="VBox/Top"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "Search Modrinth plugins"
+clear_button_enabled = true
+right_icon = ExtResource("2")
+
+[node name="SortOption" type="OptionButton" parent="VBox/Top"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Sort order"
+
+[node name="FilterLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Only plugins with a Paper, Spigot or Bukkit build that lists this server's Minecraft version are shown (Paper runs all three)."
+theme_type_variation = &"MutedLabel"
+
+[node name="Scroll" type="ScrollContainer" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="List" type="VBoxContainer" parent="VBox/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 8
+
+[node name="BuiltInHeader" type="Label" parent="VBox/Scroll/List"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Server Manager has its own pages for these plugins (e.g. the Permissions tab for LuckPerms)."
+theme_type_variation = &"CardTitle"
+text = "WORKS WITH SERVER MANAGER"
+
+[node name="BuiltInList" type="VBoxContainer" parent="VBox/Scroll/List"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="ResultsHeader" type="Label" parent="VBox/Scroll/List"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CardTitle"
+text = "MODRINTH"
+
+[node name="ResultsList" type="VBoxContainer" parent="VBox/Scroll/List"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="LoadMoreButton" type="Button" parent="VBox/Scroll/List"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 4
+text = "Load more"
+
+[node name="StatusLabel" type="Label" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="SearchTimer" type="Timer" parent="."]
+unique_name_in_owner = true
+wait_time = 0.4
+one_shot = true

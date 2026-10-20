@@ -47,6 +47,20 @@ var wake_plan := {}
 var wake_error := ""
 ## Test hook: when set, called instead of the real helper with (args: Array) -> Dictionary.
 var wake_runner := Callable()
+## Replaces the real "put the computer to sleep" in tests: Callable() -> {ok, message}.
+var suspend_runner := Callable()
+## Wi-Fi recovery after sleep: some cards (e.g. MediaTek MT7921/MT7922) come back with their
+## firmware stuck and never reconnect. After a wake-up the connection gets this long, then the
+## card is restarted through the helper and checked again.
+var wifi_check_delay_sec := 60.0
+var wifi_recheck_sec := 45.0
+## Tests replace the restart (Callable(pci) -> {ok, message}) and the connection check
+## (Callable(interface) -> bool).
+var wifi_runner := Callable()
+var network_probe := Callable()
+## The Wi-Fi card in use when the computer went to sleep: {interface, pci}.
+var _wifi_before_sleep := {}
+var _wifi_watch := 0
 ## Wi-Fi wake-on-WLAN currently armed: {phy, pattern} or empty. Kept armed while the feature is
 ## on (not only at sleep time) so NetworkManager sees it and keeps Wi-Fi connected during sleep.
 var _armed_wowlan := {}
@@ -191,6 +205,7 @@ func _before_sleep() -> void:
 		return
 	asleep = true
 	_handling = true
+	_wifi_before_sleep = _wifi_device()
 	sleeping.emit()
 	for inst in ServerManager.get_instances():
 		inst.scheduler.fire(EventRule.Trigger.SYSTEM_SLEEP)
@@ -233,7 +248,55 @@ func _after_wake() -> void:
 	_stopped_for_sleep.clear()
 	resumed.emit()
 	for inst in ServerManager.get_instances():
+		inst.scheduler.catch_up_wake_on_join()
 		inst.scheduler.fire(EventRule.Trigger.SYSTEM_WAKE)
+	if not _wifi_before_sleep.is_empty():
+		_watch_wifi(_wifi_before_sleep)
+	_wifi_before_sleep = {}
+
+
+## The Wi-Fi card the computer is online through, {interface, pci}, or {} (wired, Windows).
+func _wifi_device() -> Dictionary:
+	if _windows:
+		return {}
+	var iface := WakeHelper.wake_interface()
+	if not iface.get("wireless", false):
+		return {}
+	var pci := WakeHelper.pci_address(str(iface.interface))
+	return {"interface": str(iface.interface), "pci": pci} if pci != "" else {}
+
+
+## Restarts the Wi-Fi card when the connection hasn't come back a while after waking up.
+func _watch_wifi(device: Dictionary) -> void:
+	_wifi_watch += 1
+	var watch := _wifi_watch
+	await get_tree().create_timer(wifi_check_delay_sec).timeout
+	if watch != _wifi_watch or asleep or _network_ok(device.interface):
+		return
+	if not wifi_runner.is_valid() and not (WakeHelper.is_current() and AppSettings.autostart_enabled):
+		Notifier.warn("Wi-Fi hasn't reconnected since the computer woke up. If it stays down, restart the computer%s." % (
+				" (or update the wake-up helper in Preferences → Power, so Server Manager can restart the Wi-Fi card itself)" if WakeHelper.is_installed() else ""),
+				Notifier.Category.POWER)
+		return
+	Notifier.warn("Wi-Fi didn't reconnect after sleep; restarting the Wi-Fi card…", Notifier.Category.POWER)
+	var runner := wifi_runner if wifi_runner.is_valid() else func(pci: String) -> Dictionary: return WakeHelper.reset_wifi(pci)
+	var result: Dictionary = await FileOps.run_async(self, runner.bind(str(device.pci)))
+	await get_tree().create_timer(wifi_recheck_sec).timeout
+	if watch != _wifi_watch or asleep:
+		return
+	if _network_ok(device.interface):
+		Notifier.success("Wi-Fi is back after restarting the card.", Notifier.Category.POWER)
+	else:
+		Notifier.error("Wi-Fi is still down after restarting the card%s. Restart the computer to bring it back." % (
+				"" if result.get("ok", false) else " (%s)" % result.get("message", "")), Notifier.Category.POWER)
+
+
+## Whether the computer is online again: a default route with an address (through any
+## interface, so a cable plugged in meanwhile counts).
+func _network_ok(iface: String) -> bool:
+	if network_probe.is_valid():
+		return network_probe.call(iface)
+	return str(PlatformBackend.get_current().default_route().get("address", "")) != ""
 
 
 # --- Waking from sleep -------------------------------------------------------------
@@ -368,6 +431,17 @@ func remote_wake_info() -> Dictionary:
 	return {"ready": ready, "mac": str(iface.get("mac", "")) if ready else ""}
 
 
+## Puts the computer to sleep (the "Put computer to sleep" event). Runs that may not act on
+## the computer (tests, `--no-autostart`) only report what they would have done.
+func suspend_computer() -> Dictionary:
+	if suspend_runner.is_valid():
+		return suspend_runner.call()
+	if not AppSettings.autostart_enabled:
+		return {"ok": false, "message": "test runs never put the computer to sleep"}
+	var backend := PlatformBackend.get_current()
+	return await FileOps.run_async(self, func() -> Dictionary: return backend.suspend_computer())
+
+
 ## Where a chosen wake-port block leaves something out: one line per server with
 ## "Start on connect" or remote access whose port it doesn't cover.
 func wake_port_warnings() -> PackedStringArray:
@@ -415,6 +489,9 @@ func describe_wake() -> String:
 		var iface := WakeHelper.wake_interface()
 		parts.append("connection wake-up needs a server with Start on connect or remote access turned on" if iface.get("wireless", false)
 				else "connection wake-up currently works only over Wi-Fi")
+	if not _windows and WakeHelper.wake_interface().get("wireless", false):
+		parts.append("restarts the Wi-Fi card if it doesn't reconnect after sleep" if WakeHelper.is_current()
+				else "update the helper to let Server Manager restart a Wi-Fi card that doesn't reconnect after sleep")
 	return "Ready · " + "; ".join(parts) if not parts.is_empty() else "Ready."
 
 

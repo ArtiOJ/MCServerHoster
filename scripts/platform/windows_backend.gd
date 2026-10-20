@@ -187,6 +187,12 @@ func sample_host() -> Dictionary:
 
 
 ## Keeps the computer from sleeping on its own (SetThreadExecutionState in the helper).
+func suspend_computer() -> Dictionary:
+	var out := WindowsBackend.run_powershell("Add-Type -AssemblyName System.Windows.Forms; " +
+			"if ([System.Windows.Forms.Application]::SetSuspendState('Suspend', $false, $false)) { 'ok' } else { 'refused' }")
+	return {"ok": out.strip_edges() == "ok", "message": "" if out.strip_edges() == "ok" else "Windows refused to sleep."}
+
+
 func set_sleep_block(on: bool) -> void:
 	if on == _block_sleep and not _monitor.is_empty():
 		return

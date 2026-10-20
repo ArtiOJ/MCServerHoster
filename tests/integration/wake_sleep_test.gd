@@ -75,6 +75,34 @@ func _ready() -> void:
 		_check(_calls.any(func(c: Array) -> bool: return c[0] == "wowlan" and c[2] == "off"), "Wi-Fi wake cleared when the feature is switched off")
 	_check(not _inhibitors().contains("Stopping Minecraft servers cleanly"), "no lock when waking is switched off and no server runs")
 	PowerManager.wake_runner = Callable()
+
+	# Wi-Fi recovery: the connection doesn't come back after waking, so the card is restarted
+	# (stand-ins for the restart and the connection check; the real card is never touched).
+	if iface.get("wireless", false):
+		var resets := []
+		var online := [false]
+		PowerManager.wifi_check_delay_sec = 1.0
+		PowerManager.wifi_recheck_sec = 1.0
+		PowerManager.network_probe = func(_i: String) -> bool: return online[0]
+		PowerManager.wifi_runner = func(pci: String) -> Dictionary:
+			resets.append(pci)
+			online[0] = true
+			return {"ok": true, "message": "ok"}
+		PowerManager.handle_monitor_line("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (true,)")
+		await get_tree().create_timer(0.5).timeout
+		PowerManager.handle_monitor_line("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (false,)")
+		await _wait_for(func() -> bool: return not resets.is_empty(), 5.0)
+		_check(resets.size() == 1 and WakeHelper.pci_address(iface.interface) == resets[0], "Wi-Fi card restarted when the connection didn't come back (%s)" % [resets])
+		await get_tree().create_timer(1.5).timeout
+		resets.clear()
+		PowerManager.handle_monitor_line("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (true,)")
+		await get_tree().create_timer(0.5).timeout
+		PowerManager.handle_monitor_line("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (false,)")
+		await get_tree().create_timer(2.0).timeout
+		_check(resets.is_empty(), "left alone when the connection came back by itself")
+		PowerManager.wifi_runner = Callable()
+		PowerManager.network_probe = Callable()
+
 	ServerManager.delete_server(inst.config.id, true, true)
 	FileOps.remove_path(root)
 	print("\nWake sleep test: %s" % ("OK" if _failures.is_empty() else "%d failure(s)" % _failures.size()))

@@ -1,0 +1,270 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/chunky_tab.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/download.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/play.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/trash.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/layers.svg" id="6"]
+
+[node name="Chunky" type="MarginContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+script = ExtResource("1")
+remote_ready = true
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="Toolbar" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RefreshButton" type="Button" parent="Scroll/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Refresh"
+icon = ExtResource("2")
+
+[node name="StatusLabel" type="Label" parent="Scroll/VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="InstallButton" type="Button" parent="Scroll/VBox/Toolbar"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+tooltip_text = "Install Chunky from Modrinth (the build for this server's Minecraft version)"
+text = "Install Chunky"
+icon = ExtResource("3")
+
+[node name="Notice" type="PanelContainer" parent="Scroll/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="NoticeLabel" type="Label" parent="Scroll/VBox/Notice"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="TasksCard" type="PanelContainer" parent="Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/VBox/TasksCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="Scroll/VBox/TasksCard/VBox"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Tasks"
+
+[node name="TaskList" type="VBoxContainer" parent="Scroll/VBox/TasksCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="NoTasksLabel" type="Label" parent="Scroll/VBox/TasksCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "No tasks yet. Start one below; it keeps running while the server is online, and continues after a restart."
+autowrap_mode = 3
+
+[node name="NewCard" type="PanelContainer" parent="Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/VBox/NewCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Scroll/VBox/NewCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="Scroll/VBox/NewCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("6")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="Scroll/VBox/NewCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "New task"
+
+[node name="Grid" type="GridContainer" parent="Scroll/VBox/NewCard/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 10
+columns = 2
+
+[node name="WorldLabel" type="Label" parent="Scroll/VBox/NewCard/VBox/Grid"]
+layout_mode = 2
+text = "World"
+
+[node name="WorldOption" type="OptionButton" parent="Scroll/VBox/NewCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="ModeLabel" type="Label" parent="Scroll/VBox/NewCard/VBox/Grid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Generate an area: create every chunk in the shape below.
+Fill the world border: generate everything inside the world's border.
+Load existing chunks only: visit just the chunks already saved in the world and nothing new (e.g. a map surrounded by void), so they are loaded and upgraded to this Minecraft version."
+text = "Task"
+
+[node name="ModeOption" type="OptionButton" parent="Scroll/VBox/NewCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Generate an area: create every chunk in the shape below.
+Fill the world border: generate everything inside the world's border.
+Load existing chunks only: visit just the chunks already saved in the world and nothing new (e.g. a map surrounded by void), so they are loaded and upgraded to this Minecraft version."
+
+[node name="ShapeLabel" type="Label" parent="Scroll/VBox/NewCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Shape"
+
+[node name="ShapeOption" type="OptionButton" parent="Scroll/VBox/NewCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="CenterLabel" type="Label" parent="Scroll/VBox/NewCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Centre"
+
+[node name="CenterRow" type="HBoxContainer" parent="Scroll/VBox/NewCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="CenterOption" type="OptionButton" parent="Scroll/VBox/NewCard/VBox/Grid/CenterRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="XSpin" type="SpinBox" parent="Scroll/VBox/NewCard/VBox/Grid/CenterRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+tooltip_text = "X (block)"
+min_value = -30000000.0
+max_value = 30000000.0
+prefix = "X"
+
+[node name="ZSpin" type="SpinBox" parent="Scroll/VBox/NewCard/VBox/Grid/CenterRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+tooltip_text = "Z (block)"
+min_value = -30000000.0
+max_value = 30000000.0
+prefix = "Z"
+
+[node name="RadiusLabel" type="Label" parent="Scroll/VBox/NewCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "In blocks from the centre to the edge (a square of radius 1000 is 2000 × 2000 blocks)."
+text = "Radius"
+
+[node name="RadiusRow" type="HBoxContainer" parent="Scroll/VBox/NewCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RadiusSpin" type="SpinBox" parent="Scroll/VBox/NewCard/VBox/Grid/RadiusRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+tooltip_text = "In blocks from the centre to the edge (a square of radius 1000 is 2000 × 2000 blocks)."
+min_value = 1.0
+max_value = 30000000.0
+value = 1000.0
+suffix = "blocks"
+
+[node name="RadiusZSpin" type="SpinBox" parent="Scroll/VBox/NewCard/VBox/Grid/RadiusRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+tooltip_text = "Radius along Z (rectangles and ellipses)"
+min_value = 1.0
+max_value = 30000000.0
+value = 1000.0
+prefix = "Z"
+suffix = "blocks"
+
+[node name="EstimateLabel" type="Label" parent="Scroll/VBox/NewCard/VBox/Grid/RadiusRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+
+[node name="Actions" type="HBoxContainer" parent="Scroll/VBox/NewCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="StartButton" type="Button" parent="Scroll/VBox/NewCard/VBox/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+text = "Start"
+icon = ExtResource("4")
+
+[node name="Spacer" type="Control" parent="Scroll/VBox/NewCard/VBox/Actions"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="TrimSideOption" type="OptionButton" parent="Scroll/VBox/NewCard/VBox/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Which chunks Trim deletes: those outside the shape above, or those inside it (inside needs coordinates as the centre)."
+selected = 0
+item_count = 2
+popup/item_0/text = "Outside the area"
+popup/item_0/id = 0
+popup/item_1/text = "Inside the area"
+popup/item_1/id = 1
+
+[node name="TrimButton" type="Button" parent="Scroll/VBox/NewCard/VBox/Actions"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DangerButton"
+tooltip_text = "Permanently delete the chunks outside (or inside) the area above, e.g. to shrink a world. A backup of the worlds is made first; restart the server afterwards."
+text = "Trim…"
+icon = ExtResource("5")
+
+[node name="TrimDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Trim chunks"
+ok_button_text = "Back up and trim"
+dialog_autowrap = true

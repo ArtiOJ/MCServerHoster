@@ -27,9 +27,13 @@ const CONFIG_FIELDS: PackedStringArray = [
 const SYSTEM_FIELDS: PackedStringArray = ["java_path", "extra_jvm_args", "extra_server_args"]
 ## How long an analysed world import waits for the user's decision.
 const IMPORT_TTL_MSEC := 3600 * 1000
+## Required plugins are installed this many levels deep at most.
+const MAX_DEPENDENCY_DEPTH := 3
 
 ## Analysed world imports waiting for confirmation: token -> {server, analysis, msec}.
 static var _imports := {}
+## SHA-1 of plugin jars by path, with the modification time and size they were read at.
+static var _jar_sha1 := {}
 
 
 static func run(inst: ServerInstance, op: String, args: Dictionary, ctx := LOCAL_CONTEXT) -> Dictionary:
@@ -38,6 +42,7 @@ static func run(inst: ServerInstance, op: String, args: Dictionary, ctx := LOCAL
 		"plugin_install": return plugin_install(inst, _paths(args.get("files")), ctx)
 		"plugin_toggle": return plugin_toggle(inst, str(args.get("file", "")), ctx)
 		"plugin_delete": return plugin_delete(inst, str(args.get("file", "")), ctx)
+		"plugin_install_modrinth": return await plugin_install_modrinth(inst, str(args.get("project_id", "")), ctx)
 		"backups_list": return backups_list(inst)
 		"backup_create": return await backup_create(inst, bool(args.get("full", false)), ctx)
 		"backup_restore": return await backup_restore(inst, str(args.get("name", "")), ctx)
@@ -76,6 +81,11 @@ static func run(inst: ServerInstance, op: String, args: Dictionary, ctx := LOCAL
 		"perms_apply": return await perms_apply(inst, args.get("changes", []) if args.get("changes") is Array else [], ctx)
 		"perms_install": return await perms_install(inst, ctx)
 		"perms_player": return await perms_player(inst, str(args.get("name", "")))
+		"perms_known": return await perms_known(inst)
+		"chunky_status": return chunky_status(inst)
+		"chunky_start": return await chunky_start(inst, _dict(args.get("task")), ctx)
+		"chunky_control": return await chunky_control(inst, str(args.get("action", "")), str(args.get("world", "")), ctx)
+		"chunky_trim": return await chunky_trim(inst, _dict(args.get("task")), ctx)
 	return {"ok": false, "error": "Unknown request \"%s\"." % op}
 
 
@@ -152,10 +162,93 @@ static func plugins_list(inst: ServerInstance) -> Dictionary:
 		out.append({
 			"file": f, "name": meta.get("name", f.trim_suffix(DISABLED_SUFFIX).trim_suffix(".jar")),
 			"version": meta.get("version", ""), "description": meta.get("description", ""),
-			"size": file.get_length() if file != null else 0, "enabled": enabled,
+			"size": file.get_length() if file != null else 0, "enabled": enabled, "sha1": _jar_hash(path),
 		})
 	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.file).naturalnocasecmp_to(str(b.file)) < 0)
 	return _ok({"plugins": out, "folder": dir, "restart_needed": inst.plugins_changed_while_running and inst.is_process_alive()})
+
+
+static func _jar_hash(path: String) -> String:
+	var stamp := "%d:%d" % [FileAccess.get_modified_time(path), FileAccess.get_size(path)]
+	var cached: Dictionary = _jar_sha1.get(path, {})
+	if cached.get("stamp", "") != stamp:
+		cached = {"stamp": stamp, "sha1": ModrinthApi.file_hash(path)}
+		_jar_sha1[path] = cached
+	return cached.sha1
+
+
+## Installs a plugin from Modrinth: the newest build of [param project_id] that runs on this
+## server's Paper version, plus the plugins it requires. One already installed is replaced
+## (an update). {installed: [{title, version, file, replaced}], warnings, restart_needed}.
+static func plugin_install_modrinth(inst: ServerInstance, project_id: String, ctx: Dictionary) -> Dictionary:
+	if project_id.strip_edges() == "":
+		return _fail("No plugin chosen.")
+	DirAccess.make_dir_recursive_absolute(plugins_dir(inst))
+	var installed: Dictionary = await _modrinth_installed(inst)
+	var done := []
+	var warnings := PackedStringArray()
+	var res: Dictionary = await _install_modrinth_project(inst, project_id, installed, done, warnings, 0)
+	if not done.is_empty():
+		_plugins_changed(inst)
+		for d in done:
+			_log(inst, ctx, "Installed %s %s from Modrinth%s." % [d.title, d.version, (" (replaced %s)" % d.replaced) if d.replaced != "" else ""])
+	if not res.ok:
+		return res
+	return _ok({"installed": done, "warnings": Array(warnings), "restart_needed": inst.is_process_alive() and not done.is_empty(),
+			"already": res.get("already", false)})
+
+
+## Installed jars that came from Modrinth: project id -> {file, version_id}.
+static func _modrinth_installed(inst: ServerInstance) -> Dictionary:
+	var by_sha := {}
+	for p in plugins_list(inst).plugins:
+		if str(p.sha1) != "":
+			by_sha[str(p.sha1)] = str(p.file)
+	var lookup: Dictionary = await ModrinthApi.lookup_sha1(inst, by_sha.keys())
+	var out := {}
+	if lookup.ok:
+		for sha in lookup.found:
+			out[str(lookup.found[sha].project_id)] = {"file": by_sha.get(sha, ""), "version_id": str(lookup.found[sha].version_id)}
+	return out
+
+
+static func _install_modrinth_project(inst: ServerInstance, project_id: String, installed: Dictionary, done: Array,
+		warnings: PackedStringArray, depth: int) -> Dictionary:
+	var info: Dictionary = await ModrinthApi.project(inst, project_id)
+	var title: String = str(info.project.title) if info.ok else project_id
+	var found: Dictionary = await ModrinthApi.compatible_version(inst, project_id, inst.config.mc_version)
+	if not found.ok:
+		return found
+	var v: Dictionary = found.version
+	if v.is_empty():
+		return _fail("%s has no Paper, Spigot or Bukkit build for Minecraft %s." % [title, inst.config.mc_version])
+	var pid: String = str(v.project_id) if str(v.project_id) != "" else project_id
+	var have: Dictionary = installed.get(pid, {})
+	if str(have.get("version_id", "")) == str(v.id):
+		return _ok({"already": true})
+	var file: String = str(v.file.filename)
+	if not _is_plain_name(file) or not file.ends_with(".jar"):
+		return _fail("Modrinth offered an unexpected file for %s." % title)
+	var got: Dictionary = await ModrinthApi.download(inst, str(v.file.url), plugins_dir(inst).path_join(file), str(v.file.sha1))
+	if not got.ok:
+		return _fail("Couldn't install %s: %s." % [title, got.error])
+	var replaced := ""
+	var old := str(have.get("file", ""))
+	if old != "" and old != file and _is_plain_name(old):
+		DirAccess.remove_absolute(plugins_dir(inst).path_join(old))
+		replaced = old
+	installed[pid] = {"file": file, "version_id": str(v.id)}
+	done.append({"project_id": pid, "title": title, "version": str(v.version_number), "file": file, "replaced": replaced})
+	for dep in v.dependencies:
+		if installed.has(dep):
+			continue
+		if depth >= MAX_DEPENDENCY_DEPTH:
+			warnings.append("%s needs more plugins than can be installed automatically; check its Modrinth page." % title)
+			break
+		var sub: Dictionary = await _install_modrinth_project(inst, str(dep), installed, done, warnings, depth + 1)
+		if not sub.ok:
+			warnings.append("%s needs another plugin that couldn't be installed: %s" % [title, sub.error])
+	return _ok()
 
 
 ## Copies plugin jars into the plugins folder. {installed: [names], skipped: [messages]}
@@ -205,6 +298,24 @@ static func plugin_toggle(inst: ServerInstance, file: String, ctx: Dictionary) -
 	return _ok({"file": target})
 
 
+## Enables or disables the plugin named [param plugin] (its plugin.yml name or file name,
+## any case). {ok, changed} or {ok: false, error}.
+static func plugin_set_enabled(inst: ServerInstance, plugin: String, enabled: bool, ctx: Dictionary) -> Dictionary:
+	var wanted := plugin.to_lower().trim_suffix(DISABLED_SUFFIX).trim_suffix(".jar")
+	if wanted == "":
+		return _fail("No plugin named.")
+	for p in plugins_list(inst).plugins:
+		var file := str(p.file).to_lower().trim_suffix(DISABLED_SUFFIX).trim_suffix(".jar")
+		if str(p.name).to_lower() != wanted and file != wanted:
+			continue
+		if bool(p.enabled) == enabled:
+			return _ok({"changed": false})
+		var res := plugin_toggle(inst, str(p.file), ctx)
+		res.changed = res.ok
+		return res
+	return _fail("There is no plugin \"%s\"." % plugin)
+
+
 static func plugin_delete(inst: ServerInstance, file: String, ctx: Dictionary) -> Dictionary:
 	var path := plugins_dir(inst).path_join(file)
 	if not _is_plain_name(file) or not FileAccess.file_exists(path) or not (file.ends_with(".jar") or file.ends_with(".jar" + DISABLED_SUFFIX)):
@@ -221,6 +332,20 @@ static func _plugins_changed(inst: ServerInstance) -> void:
 	if inst.is_process_alive():
 		inst.plugins_changed_while_running = true
 	inst.data_changed.emit(&"plugins")
+
+
+## {installed, enabled, file, version} of the plugin named [param plugin_name] (its plugin.yml
+## name) in [param server_dir]'s plugins folder.
+static func installed_plugin(server_dir: String, plugin_name: String) -> Dictionary:
+	var dir := server_dir.path_join("plugins")
+	for file in DirAccess.get_files_at(dir):
+		var enabled := file.ends_with(".jar")
+		if not enabled and not file.ends_with(".jar" + DISABLED_SUFFIX):
+			continue
+		var meta := read_plugin_meta(dir.path_join(file))
+		if str(meta.get("name", "")) == plugin_name:
+			return {"installed": true, "enabled": enabled, "file": file, "version": str(meta.get("version", ""))}
+	return {"installed": false, "enabled": false, "file": "", "version": ""}
 
 
 ## Reads name/version/description from plugin.yml or paper-plugin.yml inside a jar.
@@ -858,12 +983,133 @@ static func perms_install(inst: ServerInstance, ctx: Dictionary) -> Dictionary:
 	return _ok({"version": res.version, "restart_needed": inst.is_process_alive()})
 
 
+## Permissions that can be picked from a list: what the enabled plugins declare, Paper's own,
+## and vanilla commands (read from the running server once per version).
+## {permissions: [{node, plugin, description, default}] sorted by node, note}.
+static func perms_known(inst: ServerInstance) -> Dictionary:
+	var vanilla: Array = await LuckPerms.vanilla_permissions(inst)
+	var all := LuckPerms.plugin_permissions(inst.config.directory) + vanilla
+	for p in LuckPerms.BUILT_IN_PERMISSIONS:
+		all.append({"node": p[0], "plugin": p[1], "description": p[2], "default": "op"})
+	var seen := {}
+	var out := []
+	for p in all:
+		if not seen.has(p.node):
+			seen[p.node] = true
+			out.append(p)
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return str(a.node) < str(b.node))
+	return _ok({"permissions": out, "note": "" if not vanilla.is_empty() else "Start the server once to list Minecraft's own commands too."})
+
+
 ## Looks up a player by name for the permissions list: {uuid, name}.
 static func perms_player(inst: ServerInstance, player_name: String) -> Dictionary:
 	var res: Dictionary = await PlayerLists.resolve(inst, inst.config.directory, player_name)
 	if not res.ok:
 		return res
 	return _ok({"uuid": str(res.uuid), "name": str(res.name)})
+
+
+# --- Chunky ----------------------------------------------------------------------------
+
+## The Chunky tab's state: {installed, enabled, version, ready, note, worlds: [{name, label}],
+## tasks: [{world, state, processed, unit, percent, eta, rate, current, total_time}]}.
+static func chunky_status(inst: ServerInstance) -> Dictionary:
+	var info := Chunky.installed_info(inst.config.directory)
+	var level := inst.get_properties().get_value("level-name", "world")
+	var ready: bool = info.installed and info.enabled and inst.is_online() and inst.rcon.is_ready() and not inst.plugins_changed_while_running
+	var note := ""
+	if not info.installed:
+		note = "Chunky isn't installed on this server."
+	elif not info.enabled:
+		note = "Chunky is disabled in Plugins."
+	elif inst.plugins_changed_while_running and inst.is_process_alive():
+		note = "Restart the server to load Chunky."
+	elif not inst.is_online():
+		note = "Start the server to run Chunky tasks; they run while it is online."
+	var tasks := []
+	var worlds := inst.chunky_tasks.keys()
+	worlds.sort()
+	for world in worlds:
+		var t: Dictionary = inst.chunky_tasks[world].duplicate()
+		if t.state == "running" and not inst.is_online():
+			t.state = "paused"  # Chunky saves running tasks when the server stops.
+		t.world = world
+		tasks.append(t)
+	return _ok({"installed": info.installed, "enabled": info.enabled, "version": info.version, "ready": ready, "note": note,
+			"worlds": Chunky.worlds(inst.config.directory, level), "tasks": tasks})
+
+
+## Starts a Chunky task (see Chunky.start_commands). {ok, text} or {ok: false, error}.
+static func chunky_start(inst: ServerInstance, task: Dictionary, ctx: Dictionary) -> Dictionary:
+	var built := Chunky.start_commands(task)
+	if not built.ok:
+		return built
+	var res: Dictionary = await _chunky_run(inst, built.commands)
+	if not res.ok:
+		return res
+	if not str(res.reply).contains("Task started"):
+		return _fail("Chunky didn't start the task: %s" % _plain_reply(str(res.reply)))
+	_log(inst, ctx, "Chunky: %s." % built.text)
+	return _ok({"text": built.text})
+
+
+## Pauses, continues or cancels the Chunky task of [param world] ("" = all).
+static func chunky_control(inst: ServerInstance, action: String, world: String, ctx: Dictionary) -> Dictionary:
+	if action not in ["pause", "continue", "cancel"]:
+		return _fail("Unknown action.")
+	if world != "" and not RegEx.create_from_string("^[A-Za-z0-9_.\\-]{1,64}$").search(world):
+		return _fail("Unknown world.")
+	var res: Dictionary = await _chunky_run(inst, ["chunky %s %s" % [action, world]])
+	if not res.ok:
+		return res
+	# Cancelling asks for confirmation (it deletes the task's saved progress).
+	if action == "cancel" and str(res.reply).contains("confirm"):
+		res = await _chunky_run(inst, ["chunky confirm"])
+		if not res.ok:
+			return res
+	if action == "cancel":
+		if world == "":
+			inst.chunky_tasks.clear()
+		else:
+			inst.chunky_tasks.erase(world)
+		inst.data_changed.emit(&"chunky")
+	_log(inst, ctx, "Chunky: %s %s." % [action, world if world != "" else "all tasks"])
+	return _ok({"reply": _plain_reply(res.reply)})
+
+
+## Deletes chunks outside (or inside) an area after a world backup; the server must restart
+## afterwards. {ok, backup, text, restart_needed} or {ok: false, error}.
+static func chunky_trim(inst: ServerInstance, task: Dictionary, ctx: Dictionary) -> Dictionary:
+	var built := Chunky.trim_commands(task)
+	if not built.ok:
+		return built
+	if not inst.is_online() or not inst.rcon.is_ready():
+		return _fail("Start the server to trim chunks.")
+	_progress(ctx, "Backing up the worlds first…")
+	var backup: String = await inst.backups.create_backup(false, "", "pre-trim")
+	if backup == "":
+		return _fail("The safety backup failed, so nothing was deleted.")
+	var res: Dictionary = await _chunky_run(inst, built.commands)
+	if not res.ok:
+		return res
+	_log(inst, ctx, "Chunky: %s (backup %s)." % [built.text, backup.get_file()])
+	return _ok({"backup": backup.get_file(), "text": built.text, "restart_needed": true, "reply": _plain_reply(res.reply)})
+
+
+## Runs Chunky commands in order over RCON. {ok, reply (of the last)} or {ok: false, error}.
+static func _chunky_run(inst: ServerInstance, commands: Array) -> Dictionary:
+	if not inst.is_online() or not inst.rcon.is_ready():
+		return _fail("Start the server to run Chunky.")
+	var reply := ""
+	for command in commands:
+		reply = await inst.rcon.execute(command)
+		if reply.contains("Unknown or incomplete command"):
+			return _fail("Chunky isn't loaded on the running server. Restart the server to load it.")
+	return _ok({"reply": reply})
+
+
+static func _plain_reply(text: String) -> String:
+	return RegEx.create_from_string("§.").sub(text, "", true).strip_edges()
 
 
 # --- Resources & automation ------------------------------------------------------------------
@@ -950,7 +1196,7 @@ static func config_save(inst: ServerInstance, changes: Dictionary, ctx: Dictiona
 				return _fail("Only a system admin can change the Java executable or its arguments.")
 			values.erase(key)
 		if values.has("events"):
-			values.events = _keep_wake_flags(inst.config.events, values.events)
+			values.events = _guard_computer_events(inst.config.events, values.events)
 	if values.has("cpu_affinity") and str(values.cpu_affinity).strip_edges() != "":
 		var err := affinity_error(str(values.cpu_affinity), OS.get_processor_count())
 		if err != "":
@@ -986,14 +1232,19 @@ static func config_save(inst: ServerInstance, changes: Dictionary, ctx: Dictiona
 
 ## Rules from a server admin keep the saved "wake the computer" choice: an unchanged rule
 ## keeps it, every other rule gets it off.
-static func _keep_wake_flags(saved: Array[EventRule], incoming: Variant) -> Array:
+## Events as a server admin may save them: "Wake computer" only stays ticked on rules that
+## already had it, and computer actions (sleep) can't be added, changed or removed.
+static func _guard_computer_events(saved: Array[EventRule], incoming: Variant) -> Array:
 	var out: Array = []
 	if not incoming is Array:
 		return out
 	var saved_dicts := saved.map(func(r: EventRule) -> Dictionary: return r.to_dict())
+	var computer := func(d: Dictionary) -> bool: return int(d.get("action", -1)) in EventRule.COMPUTER_ACTIONS
 	for item in incoming:
 		if not item is Dictionary:
 			continue
+		if computer.call(item) and not saved_dicts.any(func(s: Dictionary) -> bool: return str(EventRule.from_dict(item).to_dict()) == str(s)):
+			continue  # A new or changed computer action.
 		var rule: Dictionary = item.duplicate()
 		var without := rule.duplicate()
 		without.erase("wake_computer")
@@ -1006,6 +1257,10 @@ static func _keep_wake_flags(saved: Array[EventRule], incoming: Variant) -> Arra
 				break
 		rule["wake_computer"] = keep
 		out.append(rule)
+	# Removing one isn't theirs to do either.
+	for s: Dictionary in saved_dicts:
+		if computer.call(s) and not out.any(func(o: Dictionary) -> bool: return str(EventRule.from_dict(o).to_dict()) == str(s)):
+			out.append(s)
 	return out
 
 

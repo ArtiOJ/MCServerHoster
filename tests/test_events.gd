@@ -84,3 +84,51 @@ func test_logind_signal_parsing() -> void:
 	check_eq(PM.parse_signal("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForSleep (false,)"), ["Sleep", false], "wake")
 	check_eq(PM.parse_signal("/org/freedesktop/login1: org.freedesktop.login1.Manager.PrepareForShutdown (true,)"), ["Shutdown", true], "shutdown")
 	check_eq(PM.parse_signal("/org/freedesktop/login1: org.freedesktop.login1.Manager.SessionNew ('3', ...)"), [], "ignored")
+
+
+func test_wake_on_join_actions() -> void:
+	check_eq(EventRule.ACTION_NAMES.size(), EventRule.Action.size(), "every action has a name")
+	var on := EventRule.from_dict({"trigger": EventRule.Trigger.TIME, "action": EventRule.Action.WAKE_ON_JOIN_ON, "time_of_day": "18:00"})
+	check(on.wake_computer, "turning listening on wakes the computer by default")
+	var off := EventRule.from_dict({"trigger": EventRule.Trigger.TIME, "action": EventRule.Action.WAKE_ON_JOIN_OFF, "time_of_day": "23:00"})
+	check(not off.wake_computer, "turning it off doesn't")
+	check_eq(on.describe(), "At 18:00 → turn on wake on join", "described")
+	# Latest past run: local 20:00 today -> 18:00 today; local 10:00 -> 18:00 yesterday.
+	var bias := int(Time.get_time_zone_from_system().get("bias", 0)) * 60
+	var day := 20000 * 86400
+	check_eq(on.last_run_at_or_before(day + 20 * 3600 - bias), day + 18 * 3600 - bias, "earlier today")
+	check_eq(on.last_run_at_or_before(day + 10 * 3600 - bias), day - 86400 + 18 * 3600 - bias, "yesterday")
+	check_eq(on.last_run_at_or_before(day + 18 * 3600 - bias), day + 18 * 3600 - bias, "exactly at the time")
+	on.weekdays = 1 << Time.get_datetime_dict_from_unix_time(day - 2 * 86400).weekday
+	check_eq(on.last_run_at_or_before(day + 20 * 3600 - bias), day - 2 * 86400 + 18 * 3600 - bias, "skips days that aren't allowed")
+
+
+func test_setting_actions() -> void:
+	check_eq(EventRule.parse_setting("max-players=30"), ["max-players", "30"], "setting=value")
+	check_eq(EventRule.parse_setting(" motd = Event night! = fun "), ["motd", "Event night! = fun"], "value may contain =")
+	check(EventRule.parse_setting("server-port=25566").is_empty(), "managed port refused")
+	check(EventRule.parse_setting("enable-rcon=false").is_empty(), "managed RCON refused")
+	check(EventRule.parse_setting("no equals").is_empty() and EventRule.parse_setting("=x").is_empty() and EventRule.parse_setting("Bad Key=1").is_empty(), "malformed refused")
+	var motd := EventRule.from_dict({"action": EventRule.Action.SET_MOTD, "text": "Event night!"})
+	check_eq(motd.describe_action(), "set the MOTD to \"Event night!\"", "MOTD described")
+	check(EventRule.TEXT_ACTIONS.has(EventRule.Action.SET_SETTING) and not EventRule.TEXT_ACTIONS.has(EventRule.Action.WHITELIST_ON), "which actions take text")
+
+
+func test_server_admins_cant_touch_computer_actions() -> void:
+	var sleep := EventRule.from_dict({"trigger": EventRule.Trigger.TIME, "time_of_day": "02:00", "action": EventRule.Action.SLEEP_COMPUTER})
+	var backup := EventRule.from_dict({"trigger": EventRule.Trigger.TIME, "time_of_day": "03:00", "action": EventRule.Action.BACKUP_WORLD})
+	var saved: Array[EventRule] = [sleep, backup]
+	var kept := ServerOps._guard_computer_events(saved, [backup.to_dict()])
+	check(kept.any(func(d: Dictionary) -> bool: return int(d.action) == EventRule.Action.SLEEP_COMPUTER), "removing a sleep event is undone")
+	var changed := sleep.to_dict()
+	changed.time_of_day = "04:00"
+	var out := ServerOps._guard_computer_events(saved, [changed, backup.to_dict()])
+	var sleeps := out.filter(func(d: Dictionary) -> bool: return int(d.action) == EventRule.Action.SLEEP_COMPUTER)
+	check(sleeps.size() == 1 and sleeps[0].time_of_day == "02:00", "changing one is undone")
+	var added := ServerOps._guard_computer_events([backup] as Array[EventRule], [backup.to_dict(), changed])
+	check(not added.any(func(d: Dictionary) -> bool: return int(d.action) == EventRule.Action.SLEEP_COMPUTER), "adding one is refused")
+	var mod := backup.to_dict()
+	mod.time_of_day = "05:00"
+	var edited := ServerOps._guard_computer_events(saved, [sleep.to_dict(), mod])
+	check(edited.size() == 2 and edited.any(func(d: Dictionary) -> bool: return d.get("time_of_day") == "05:00"), "other events stay editable")
+	check_eq(EventRule.from_dict({"action": EventRule.Action.DISABLE_PLUGIN, "text": "Dynmap"}).describe_action(), "disable plugin Dynmap", "plugin action described")

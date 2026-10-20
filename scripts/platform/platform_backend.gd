@@ -64,6 +64,11 @@ func forget_process(_pid: int) -> void:
 	pass
 
 
+## Puts the computer to sleep now. Returns {ok, message}.
+func suspend_computer() -> Dictionary:
+	return {"ok": false, "message": "Putting the computer to sleep isn't supported here."}
+
+
 ## Keeps the computer from going to sleep by itself while [param on] (Windows; Linux uses logind).
 func set_sleep_block(_on: bool) -> void:
 	pass

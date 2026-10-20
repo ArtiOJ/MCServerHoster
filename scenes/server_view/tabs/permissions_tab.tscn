@@ -298,6 +298,13 @@ size_flags_stretch_ratio = 2.0
 tooltip_text = "A permission node, e.g. essentials.fly. * matches everything below, e.g. worldedit.*"
 placeholder_text = "Permission, e.g. essentials.fly"
 
+[node name="BrowseButton" type="Button" parent="VBox/Body/DetailCard/Detail/PermsSection/PermActions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Pick from the permissions the server's plugins declare, Paper's own and Minecraft's commands"
+text = "Browse…"
+icon = ExtResource("8")
+
 [node name="ValueOption" type="OptionButton" parent="VBox/Body/DetailCard/Detail/PermsSection/PermActions"]
 unique_name_in_owner = true
 layout_mode = 2
@@ -402,6 +409,41 @@ unique_name_in_owner = true
 layout_mode = 2
 tooltip_text = "Take the selected group off the track"
 text = "Remove"
+
+[node name="KnownDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Choose a permission"
+size = Vector2i(900, 560)
+ok_button_text = "Use"
+
+[node name="VBox" type="VBoxContainer" parent="KnownDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 892.0
+offset_bottom = 511.0
+theme_override_constants/separation = 8
+
+[node name="KnownSearch" type="LineEdit" parent="KnownDialog/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Search permissions, plugins or descriptions"
+clear_button_enabled = true
+right_icon = ExtResource("8")
+
+[node name="KnownTree" type="Tree" parent="KnownDialog/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+columns = 4
+column_titles_visible = true
+hide_root = true
+select_mode = 1
+
+[node name="KnownHint" type="Label" parent="KnownDialog/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
 
 [node name="DeleteDialog" type="ConfirmationDialog" parent="."]
 unique_name_in_owner = true

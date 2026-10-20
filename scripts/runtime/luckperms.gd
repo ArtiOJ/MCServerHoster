@@ -38,15 +38,7 @@ static var _regexes := {}
 
 ## {installed, enabled, file, version} for the LuckPerms jar in [param server_dir]'s plugins.
 static func installed_info(server_dir: String) -> Dictionary:
-	var dir := server_dir.path_join("plugins")
-	for file in DirAccess.get_files_at(dir):
-		var enabled := file.ends_with(".jar")
-		if not enabled and not file.ends_with(".jar" + ServerOps.DISABLED_SUFFIX):
-			continue
-		var meta := ServerOps.read_plugin_meta(dir.path_join(file))
-		if str(meta.get("name", "")) == PLUGIN_NAME:
-			return {"installed": true, "enabled": enabled, "file": file, "version": str(meta.get("version", ""))}
-	return {"installed": false, "enabled": false, "file": "", "version": ""}
+	return ServerOps.installed_plugin(server_dir, PLUGIN_NAME)
 
 
 ## Downloads the latest LuckPerms for Paper/Bukkit into the server's plugins folder.
@@ -239,6 +231,162 @@ static func usercache_names(server_dir: String) -> Dictionary:
 			if entry is Dictionary and str(entry.get("uuid", "")) != "":
 				names[str(entry.uuid)] = str(entry.get("name", ""))
 	return names
+
+
+# --- Known permissions ----------------------------------------------------------------
+
+## Where the vanilla command list is remembered (per server, with its Minecraft version).
+const VANILLA_CACHE := ".manager/vanilla-commands.json"
+## Permissions no plugin.yml declares: Paper/Bukkit's own, and LuckPerms' main ones (it
+## registers its permissions at runtime). [node, from, description].
+const BUILT_IN_PERMISSIONS := [
+	["bukkit.command.plugins", "Paper", "Use /plugins"], ["bukkit.command.version", "Paper", "Use /version"],
+	["bukkit.command.help", "Paper", "Use /help"], ["bukkit.command.reload", "Paper", "Use /reload"],
+	["bukkit.command.timings", "Paper", "Use /timings"], ["bukkit.broadcast.user", "Paper", "Receive user broadcasts"],
+	["bukkit.broadcast.admin", "Paper", "Receive admin broadcasts"],
+	["luckperms.*", "LuckPerms", "Every LuckPerms command"], ["luckperms.user.*", "LuckPerms", "Manage players' permissions"],
+	["luckperms.group.*", "LuckPerms", "Manage groups"], ["luckperms.track.*", "LuckPerms", "Manage tracks"],
+	["luckperms.editor", "LuckPerms", "Open the web editor"], ["luckperms.info", "LuckPerms", "Show LuckPerms information"],
+]
+
+static var _jar_cache := {}
+
+
+## Permissions the server's enabled plugins declare: [{node, plugin, description, default}].
+## Read from each jar's plugin.yml / paper-plugin.yml ("permissions", their "children", and the
+## permission of each command); cached per jar until it changes. Plugins can also check
+## permissions they never declare; those can't be listed.
+static func plugin_permissions(server_dir: String) -> Array:
+	var out := []
+	var dir := server_dir.path_join("plugins")
+	for file in DirAccess.get_files_at(dir):
+		if not file.ends_with(".jar"):
+			continue
+		var path := dir.path_join(file)
+		var stamp := "%d:%d" % [FileAccess.get_modified_time(path), FileAccess.get_size(path) if FileAccess.file_exists(path) else 0]
+		var cached: Dictionary = _jar_cache.get(path, {})
+		if cached.get("stamp", "") != stamp:
+			cached = {"stamp": stamp, "permissions": _jar_permissions(path)}
+			_jar_cache[path] = cached
+		out.append_array(cached.permissions)
+	return out
+
+
+static func _jar_permissions(jar: String) -> Array:
+	var reader := ZIPReader.new()
+	if reader.open(jar) != OK:
+		return []
+	var text := ""
+	for descriptor in ["paper-plugin.yml", "plugin.yml"]:
+		if reader.file_exists(descriptor):
+			text = reader.read_file(descriptor).get_string_from_utf8()
+			break
+	reader.close()
+	return parse_plugin_permissions(text) if text != "" else []
+
+
+## The permissions declared in a plugin.yml's text (see [method plugin_permissions]).
+static func parse_plugin_permissions(text: String) -> Array:
+	var lines := text.replace("\r\n", "\n").replace("\t", "  ").split("\n")
+	var plugin := ""
+	var found := {}  # node -> {description, default, guessed}
+	var order := []
+	# [param guessed] descriptions ("Use /fly", from a command) give way to declared ones.
+	var add := func(node: String, description := "", default := "", guessed := false) -> void:
+		if node == "" or not is_valid_node(node):
+			return
+		if not found.has(node):
+			found[node] = {"description": "", "default": "", "guessed": true}
+			order.append(node)
+		if description != "" and (found[node].description == "" or (found[node].guessed and not guessed)):
+			found[node].description = description
+			found[node].guessed = guessed
+		if default != "":
+			found[node].default = default
+	# Stack of open keys: [indent, key]; the path tells which section a line belongs to.
+	var stack := []
+	var current := {}  # The open permission or command: {kind, name, indent}
+	for raw in lines:
+		var line := raw.split(" #")[0].rstrip(" ") if not raw.strip_edges().begins_with("#") else ""
+		if line.strip_edges() == "" or line.strip_edges().begins_with("- "):
+			continue
+		var indent := line.length() - line.lstrip(" ").length()
+		var colon := _key_colon(line)
+		if colon < 0:
+			continue
+		var key := YamlDoc.unquote(line.substr(indent, colon - indent).strip_edges())
+		var value := YamlDoc.unquote(line.substr(colon + 1).strip_edges())
+		while not stack.is_empty() and stack[-1][0] >= indent:
+			stack.pop_back()
+		var path := stack.map(func(e: Array) -> String: return e[1])
+		if path.is_empty() and key == "name":
+			plugin = value
+		elif path == ["permissions"]:
+			add.call(key)
+			current = {"kind": "permission", "name": key}
+		elif path.size() == 2 and path[0] == "permissions":
+			if key == "description":
+				add.call(path[1], value)
+			elif key == "default":
+				add.call(path[1], "", value)
+		elif path.size() == 3 and path[0] == "permissions" and path[2] == "children":
+			add.call(key)
+		elif path.size() == 2 and path[0] == "commands":
+			if key == "permission":
+				add.call(value, "Use /%s" % path[1], "", true)
+		stack.append([indent, key])
+	var out := []
+	for node in order:
+		out.append({"node": node, "plugin": plugin, "description": found[node].description, "default": found[node].default})
+	return out
+
+
+## Index of the colon ending a mapping key on [param line], or -1 (quotes respected).
+static func _key_colon(line: String) -> int:
+	var quote := ""
+	for i in line.length():
+		var c := line[i]
+		if quote != "":
+			if c == quote:
+				quote = ""
+		elif c == "'" or c == "\"":
+			quote = c
+		elif c == ":" and (i == line.length() - 1 or line[i + 1] == " "):
+			return i
+	return -1
+
+
+## Vanilla command permissions (minecraft.command.<name>) from the running server's
+## `minecraft:help`, remembered per Minecraft version for when it's stopped.
+static func vanilla_permissions(inst: ServerInstance) -> Array:
+	var path := inst.config.directory.path_join(VANILLA_CACHE)
+	var cached: Variant = JSON.parse_string(FileAccess.get_file_as_string(path))
+	var names: Array = []
+	if cached is Dictionary and str(cached.get("version", "")) == inst.config.mc_version:
+		names = cached.get("commands", [])
+	elif inst.is_online() and inst.rcon.is_ready():
+		names = parse_help_commands(await inst.rcon.execute("minecraft:help"))
+		if not names.is_empty():
+			var f := FileAccess.open(path, FileAccess.WRITE)
+			if f != null:
+				f.store_string(JSON.stringify({"version": inst.config.mc_version, "commands": names}))
+	return names.map(func(n: String) -> Dictionary:
+		return {"node": "minecraft.command." + n, "plugin": "Minecraft", "description": "Use /%s" % n, "default": "op"})
+
+
+## Command names from `minecraft:help` output: "/name …" usages, one per line in the console
+## but run together without line breaks over RCON, so every "/" starts one.
+static func parse_help_commands(text: String) -> Array:
+	var names := {}
+	var head := RegEx.create_from_string("^([a-z0-9_\\-]+)")
+	var pieces := text.split("/")
+	for i in range(1, pieces.size()):
+		var m := head.search(pieces[i])
+		if m != null:
+			names[m.get_string(1)] = true
+	var out := names.keys()
+	out.sort()
+	return out
 
 
 # --- Changing -----------------------------------------------------------------------

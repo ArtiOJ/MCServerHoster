@@ -1,9 +1,11 @@
 class_name WakeHelper
 extends RefCounted
-## Waking the computer from sleep. Writing the RTC wake alarm and configuring Wi-Fi
-## wake-on-WLAN need root, so a one-time setup installs a tiny root-owned helper that
-## can only do those two things, plus a polkit action that lets the active desktop user
-## run it without a password. Everything else here is unprivileged and unit-tested.
+## Waking the computer from sleep. Writing the RTC wake alarm, configuring Wi-Fi
+## wake-on-WLAN and restarting a Wi-Fi card that came back from sleep stuck need root, so a
+## one-time setup installs a tiny root-owned helper that can only do those things, plus a
+## polkit action that lets the active desktop user run it without a password. Everything
+## else here is unprivileged and unit-tested. Older helpers keep working for what they can
+## do; Preferences offers to update them.
 
 const HELPER_PATH := "/usr/local/libexec/server-manager-wake"
 const POLICY_PATH := "/usr/share/polkit-1/actions/io.github.servermanager.wake.policy"
@@ -12,9 +14,12 @@ const LEAD_SEC := 90
 ## The kernel's RTC alarm is limited; Minecraft schedules beyond a month are not worth it.
 const MAX_AHEAD_SEC := 30 * 86400
 
+## First lines of every version of the helper.
+const HELPER_HEADER := "#!/bin/sh\n# Server Manager wake helper"
 const HELPER_SCRIPT := """#!/bin/sh
 # Server Manager wake helper (installed once, run through pkexec).
-# Only sets or clears the RTC wake alarm and Wi-Fi wake-on-WLAN; validates every argument.
+# Only sets or clears the RTC wake alarm and Wi-Fi wake-on-WLAN, and restarts a Wi-Fi card
+# (a PCI device of the wireless network class); validates every argument.
 set -eu
 PATH=/usr/sbin:/usr/bin:/sbin:/bin
 ALARM=/sys/class/rtc/rtc0/wakealarm
@@ -41,7 +46,30 @@ case "${1:-}" in
         iw phy "$phy" wowlan enable magic-packet patterns "$pattern" ;;
       *) echo "usage: wowlan <phy> on <pattern>|off" >&2; exit 2 ;;
     esac ;;
-  *) echo "usage: alarm <epoch>|clear | wowlan <phy> on <pattern>|off" >&2; exit 2 ;;
+  wifi-reset)
+    dev="${2:-}"
+    case "$dev" in [0-9a-f][0-9a-f][0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f].[0-7]) ;; *) echo "invalid device" >&2; exit 2 ;; esac
+    sys="/sys/bus/pci/devices/$dev"
+    if [ ! -e "$sys/class" ]; then echo "no such device" >&2; exit 2; fi
+    case "$(cat "$sys/class")" in 0x0280*) ;; *) echo "not a wireless network card" >&2; exit 2 ;; esac
+    # Reload the driver first; a card whose firmware stays stuck is removed and found again.
+    drv=""
+    if [ -L "$sys/driver" ]; then drv=$(basename "$(readlink "$sys/driver")"); fi
+    case "$drv" in ''|*[!a-z0-9_]*) drv="" ;; esac
+    if [ -n "$drv" ] && modprobe -r "$drv" 2>/dev/null; then
+      sleep 2
+      modprobe "$drv" || true
+      i=0
+      while [ "$i" -lt 15 ]; do
+        if [ -n "$(ls "$sys/net" 2>/dev/null || true)" ]; then exit 0; fi
+        sleep 1
+        i=$((i + 1))
+      done
+    fi
+    if [ -e "$sys/remove" ]; then echo 1 > "$sys/remove"; fi
+    sleep 2
+    echo 1 > /sys/bus/pci/rescan ;;
+  *) echo "usage: alarm <epoch>|clear | wowlan <phy> on <pattern>|off | wifi-reset <pci address>" >&2; exit 2 ;;
 esac
 """
 
@@ -70,16 +98,42 @@ const WINDOWS_TASK := "Server Manager wake-up"
 
 ## True when the helper and its polkit action are installed and up to date. Windows needs
 ## no setup: wake-ups are scheduled tasks of the user.
+## True when some version of the helper is installed (enough for alarms and Wi-Fi wake-up).
 static func is_installed() -> bool:
 	if OS.get_name() == "Windows":
 		return true
 	return FileAccess.file_exists(HELPER_PATH) and FileAccess.file_exists(POLICY_PATH) \
-			and FileAccess.get_file_as_string(HELPER_PATH) == HELPER_SCRIPT
+			and FileAccess.get_file_as_string(HELPER_PATH).begins_with(HELPER_HEADER)
+
+
+## True when the installed helper is this version (it can also restart the Wi-Fi card).
+static func is_current() -> bool:
+	if OS.get_name() == "Windows":
+		return true
+	return is_installed() and FileAccess.get_file_as_string(HELPER_PATH) == HELPER_SCRIPT
+
+
+## Restarts the Wi-Fi card at PCI address [param pci] (reload its driver, else remove and
+## rescan it). Blocking: run on a worker thread. Returns {ok, message}.
+static func reset_wifi(pci: String) -> Dictionary:
+	if not is_current():
+		return {"ok": false, "message": "The wake-up helper needs an update to restart the Wi-Fi card."}
+	return _run(["wifi-reset", pci])
+
+
+## The PCI address of network interface [param iface] ("0000:0d:00.0"), or "".
+static func pci_address(iface: String) -> String:
+	var dir := DirAccess.open("/sys/class/net/%s" % iface)
+	if dir == null:
+		return ""
+	var target := dir.read_link("/sys/class/net/%s/device" % iface)
+	var address := target.get_file()
+	return address if RegEx.create_from_string("^[0-9a-f]{4}:[0-9a-f]{2}:[0-9a-f]{2}\\.[0-7]$").search(address) != null else ""
 
 
 ## Human-readable list of what [method install] puts on the system.
 static func install_summary() -> String:
-	return "• %s — a short root script that can only set or clear the wake alarm and Wi-Fi wake-up.\n• %s — lets you run that script without a password while you are logged in at this computer." % [HELPER_PATH, POLICY_PATH]
+	return "• %s — a short root script that can only set or clear the wake alarm and Wi-Fi wake-up, and restart a Wi-Fi card that came back from sleep stuck.\n• %s — lets you run that script without a password while you are logged in at this computer." % [HELPER_PATH, POLICY_PATH]
 
 
 ## Installs the helper and polkit action (one password prompt). Blocking: run on a worker thread.

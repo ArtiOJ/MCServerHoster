@@ -218,7 +218,10 @@ func _refresh_wake() -> void:
 	var windows := OS.get_name() == "Windows"
 	var available := PowerManager.supported and (OS.get_name() == "Linux" or windows)
 	# Windows needs no helper: wake-ups are the user's own scheduled tasks.
-	_setup_wake_button.visible = not installed and not windows
+	_setup_wake_button.visible = not WakeHelper.is_current() and not windows
+	_setup_wake_button.text = "Update helper…" if installed else "Set up waking…"
+	_setup_wake_button.tooltip_text = "Update the wake-up helper so Server Manager can also restart a Wi-Fi card that comes back from sleep stuck (asks for your password once)." if installed \
+			else "Install the small helper that lets Server Manager set the wake-up alarm (asks for your password once)."
 	_remove_wake_button.visible = installed and not windows
 	for c: Control in [_setup_wake_button, _remove_wake_button]:
 		(c as Button).disabled = _wake_busy or not available

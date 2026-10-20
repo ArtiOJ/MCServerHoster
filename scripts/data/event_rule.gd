@@ -8,7 +8,10 @@ enum Trigger {
 	PLAYER_JOINED, PLAYER_LEFT, SERVER_EMPTY, PLAYERS_AT_LEAST, TPS_BELOW, SYSTEM_SLEEP, SYSTEM_WAKE,
 }
 ## New actions are appended so saved rules keep their meaning.
-enum Action { START, STOP, RESTART, COMMAND, BROADCAST, BACKUP_WORLD, BACKUP_FULL, NOTIFY }
+enum Action {
+	START, STOP, RESTART, COMMAND, BROADCAST, BACKUP_WORLD, BACKUP_FULL, NOTIFY, WAKE_ON_JOIN_ON, WAKE_ON_JOIN_OFF,
+	SET_MOTD, SET_SETTING, WHITELIST_ON, WHITELIST_OFF, ENABLE_PLUGIN, DISABLE_PLUGIN, SLEEP_COMPUTER, SET_ASLEEP_MOTD,
+}
 enum StateFilter { ANY, ONLINE, OFFLINE }
 
 const TRIGGER_NAMES: PackedStringArray = [
@@ -18,8 +21,15 @@ const TRIGGER_NAMES: PackedStringArray = [
 ]
 const ACTION_NAMES: PackedStringArray = [
 	"Start server", "Stop server", "Restart server", "Run command", "Broadcast message",
-	"Back up worlds", "Full backup", "Notify me",
+	"Back up worlds", "Full backup", "Notify me", "Turn on wake on join", "Turn off wake on join",
+	"Set MOTD", "Change a setting", "Turn whitelist on", "Turn whitelist off", "Enable a plugin", "Disable a plugin",
+	"Put computer to sleep", "Set asleep MOTD",
 ]
+## Actions that take [member text].
+const TEXT_ACTIONS: Array[Action] = [Action.COMMAND, Action.BROADCAST, Action.NOTIFY, Action.SET_MOTD, Action.SET_SETTING,
+		Action.ENABLE_PLUGIN, Action.DISABLE_PLUGIN, Action.SET_ASLEEP_MOTD]
+## Actions that reach beyond the server (remote server admins can't add or change them).
+const COMPUTER_ACTIONS: Array[Action] = [Action.SLEEP_COMPUTER]
 const STATE_FILTER_NAMES: PackedStringArray = ["Any state", "Only while online", "Only while offline"]
 ## Godot weekday order (Time.get_datetime_dict_*: 0 = Sunday).
 const DAY_NAMES: PackedStringArray = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
@@ -98,6 +108,14 @@ func describe_action() -> String:
 			return "say \"%s\"" % text.strip_edges()
 		Action.NOTIFY:
 			return "notify \"%s\"" % text.strip_edges()
+		Action.SET_MOTD:
+			return "set the MOTD to \"%s\"" % text.strip_edges()
+		Action.SET_SETTING:
+			return "set %s" % text.strip_edges()
+		Action.ENABLE_PLUGIN, Action.DISABLE_PLUGIN:
+			return "%s plugin %s" % ["enable" if action == Action.ENABLE_PLUGIN else "disable", text.strip_edges()]
+		Action.SET_ASLEEP_MOTD:
+			return "set the asleep MOTD to \"%s\"" % text.strip_edges()
 	var s := ACTION_NAMES[action].to_lower()
 	if delay_seconds > 0:
 		s += " after %s" % Fmt.duration(delay_seconds)
@@ -165,6 +183,34 @@ func next_run_after(now: int, base: int) -> int:
 	return -1
 
 
+## [key, value] of a "setting=value" text for SET_SETTING, or [] when it isn't one an event
+## may change (unknown shape, or a setting Server Manager manages itself, like the port).
+static func parse_setting(setting_text: String) -> Array:
+	var eq := setting_text.find("=")
+	if eq <= 0:
+		return []
+	var key := setting_text.substr(0, eq).strip_edges()
+	if not RegEx.create_from_string("^[a-z0-9][a-z0-9.\\-]*$").search(key) or PropertySchema.is_managed(key):
+		return []
+	return [key, setting_text.substr(eq + 1).strip_edges()]
+
+
+## The latest run at or before [param now] of a time-of-day rule, or -1 (none in the past week).
+func last_run_at_or_before(now: int) -> int:
+	if trigger != Trigger.TIME or weekdays & ALL_DAYS == 0:
+		return -1
+	var bias := _bias()
+	var local_now := now + bias
+	var target := local_now - posmod(local_now, 86400) + _minutes(time_of_day) * 60
+	if target > local_now:
+		target -= 86400
+	for i in 8:
+		if allows_day(target):
+			return target - bias
+		target -= 86400
+	return -1
+
+
 func to_dict() -> Dictionary:
 	return {
 		"enabled": enabled, "label": label, "trigger": trigger, "time_of_day": time_of_day,
@@ -192,9 +238,9 @@ static func from_dict(d: Dictionary) -> EventRule:
 	r.text = str(d.get("text", ""))
 	r.warn_players = bool(d.get("warn_players", true))
 	r.delay_seconds = maxi(int(d.get("delay_seconds", 0)), 0)
-	# Starting a server at a set time only makes sense if the computer is awake, so Start
-	# events wake it unless told otherwise.
-	r.wake_computer = bool(d.get("wake_computer", r.action == Action.START))
+	# Starting a server (or starting to listen for joins) at a set time only makes sense if the
+	# computer is awake, so those events wake it unless told otherwise.
+	r.wake_computer = bool(d.get("wake_computer", r.action in [Action.START, Action.WAKE_ON_JOIN_ON]))
 	return r
 
 

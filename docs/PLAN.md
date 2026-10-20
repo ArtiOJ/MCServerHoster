@@ -370,3 +370,34 @@ and tracks (order). "Install LuckPerms" downloads the latest Paper build from lu
   (`.manager/luckperms.json`) is shown read-only until the server runs again.
 - Verified with LuckPerms 5.5.87 on Paper 26.3 (`tests/integration/luckperms_test.gd`,
   `permissions_ui_test.gd`).
+
+## 13. Plugin browser (Modrinth)
+
+Plugins tab → **Get plugins** searches Modrinth (relevance, downloads, recently updated, newest)
+for Paper, Spigot and Bukkit plugins (Paper runs all three) for the server's Minecraft version.
+
+- Search filters apply to whole projects, so each result is checked for a version with a
+  Paper-compatible loader that lists the server's version; results without one are left out.
+- Plugins Server Manager integrates with (`ModrinthApi.INTEGRATIONS`, e.g. LuckPerms → Permissions
+  tab) are listed first and install from their official source.
+- Installing runs on the server's computer (`plugin_install_modrinth`, server admins and up): the
+  newest compatible release, checked by SHA-1, plus required plugins (3 levels deep); an installed
+  copy of the same project is replaced (update). Installed jars are recognised by hash.
+- The Permissions tab's **Browse…** lists permissions declared in the installed plugins'
+  plugin.yml, Minecraft's commands (from `minecraft:help`) and Paper's/LuckPerms' main ones.
+
+## 14. Chunky (chunk pre-generation)
+
+A Chunky tab (shown with an Install button until Chunky is installed from Modrinth) starts
+tasks on a running server: generate an area (Chunky's nine shapes, centred on spawn, the world
+border's centre or coordinates), fill the world border, or **load existing chunks only** (Chunky's
+`world` pattern: it visits the chunks saved in the region files and generates nothing new, for
+maps surrounded by void). Tasks show progress (from Chunky's console lines), can be paused,
+continued and cancelled, and continue after a restart. **Trim** deletes chunks outside (or inside)
+an area after a world backup; the server must restart afterwards.
+
+- Worlds use Paper's Bukkit names: `<level>`, `<level>_nether`, `<level>_the_end`, and
+  `<level>_<namespace>_<dimension>` for extra dimensions (verified with an imported dimension).
+- Commands answer over RCON. Cancel asks for `/chunky confirm`, which the app sends; a cancelled
+  task's thread still logs "stopped", which must not bring it back.
+- Verified with Chunky 1.5.3 on Paper 26.3 (`tests/integration/chunky_test.gd`).

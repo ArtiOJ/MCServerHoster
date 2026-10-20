@@ -52,11 +52,24 @@ func test_helper_script_rejects_bad_arguments() -> void:
 		[["alarm", "abc"], 2], [["alarm", ""], 2], [["alarm", "1"], 2], [["alarm", "99999999999"], 2],
 		[["wowlan", "eth0", "off"], 2], [["wowlan", "phy0", "on", "d8:zz"], 2], [["wowlan", "phy0", "on", "$(id)"], 2],
 		[["wowlan", "phy0", "maybe"], 2], [["reboot"], 2], [[], 2],
+		[["wifi-reset"], 2], [["wifi-reset", "0000:zz:00.0"], 2], [["wifi-reset", "../../x"], 2],
+		[["wifi-reset", "0000:0d:00.0;reboot"], 2], [["wifi-reset", "0000:ff:1f.7"], 2],
 	]
+	# A real device that isn't a wireless card is refused before anything happens.
+	for dev in DirAccess.get_directories_at("/sys/bus/pci/devices"):
+		if not FileAccess.get_file_as_string("/sys/bus/pci/devices/%s/class" % dev).begins_with("0x0280"):
+			cases.append([["wifi-reset", dev], 2])
+			break
 	for c in cases:
 		var code := OS.execute("/bin/sh", PackedStringArray([path] + c[0]))
 		check_eq(code, c[1], "helper %s" % str(c[0]))
 	DirAccess.remove_absolute(path)
+
+
+func test_helper_versions() -> void:
+	check(WakeHelper.HELPER_SCRIPT.begins_with(WakeHelper.HELPER_HEADER), "every version starts with the same header")
+	check_eq(WakeHelper.pci_address("lo"), "", "no PCI device behind loopback")
+	check_eq(WakeHelper.pci_address("../../etc"), "", "odd names give nothing")
 
 
 func test_policy_points_at_helper() -> void:

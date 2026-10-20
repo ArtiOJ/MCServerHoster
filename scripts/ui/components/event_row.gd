@@ -80,7 +80,12 @@ func _ready() -> void:
 	_window_start.text_changed.connect(func(t: String) -> void: _edit(func() -> void: rule.window_start = t.strip_edges()))
 	_window_end.text_changed.connect(func(t: String) -> void: _edit(func() -> void: rule.window_end = t.strip_edges()))
 	_state_option.item_selected.connect(func(i: int) -> void: _edit(func() -> void: rule.state_filter = i as EventRule.StateFilter))
-	_action_option.item_selected.connect(func(i: int) -> void: _edit(func() -> void: rule.action = i as EventRule.Action))
+	_action_option.item_selected.connect(func(i: int) -> void: _edit(func() -> void:
+		rule.action = i as EventRule.Action
+		# Listening has to start even if the computer sleeps at that time.
+		if rule.action == EventRule.Action.WAKE_ON_JOIN_ON:
+			rule.wake_computer = true
+			_wake_check.set_pressed_no_signal(true)))
 	_text_edit.text_changed.connect(func(t: String) -> void: _edit(func() -> void: rule.text = t))
 	_warn_check.toggled.connect(func(on: bool) -> void: _edit(func() -> void: rule.warn_players = on))
 	_wake_check.toggled.connect(_on_wake_toggled)
@@ -127,6 +132,10 @@ func is_valid() -> bool:
 	if rule.trigger == EventRule.Trigger.TIME and not _valid_time(rule.time_of_day):
 		return false
 	if rule.window_enabled and not rule.is_timed() and not (_valid_time(rule.window_start) and _valid_time(rule.window_end)):
+		return false
+	if rule.action == EventRule.Action.SET_SETTING and EventRule.parse_setting(rule.text).is_empty():
+		return false
+	if rule.action in [EventRule.Action.ENABLE_PLUGIN, EventRule.Action.DISABLE_PLUGIN] and rule.text.strip_edges() == "":
 		return false
 	return true
 
@@ -231,16 +240,35 @@ func _update_view() -> void:
 	_window_start.editable = rule.window_enabled
 	_window_end.editable = rule.window_enabled
 	var a := rule.action
-	_text_edit.visible = a in [EventRule.Action.COMMAND, EventRule.Action.BROADCAST, EventRule.Action.NOTIFY]
+	_text_edit.visible = a in EventRule.TEXT_ACTIONS
 	match a:
 		EventRule.Action.COMMAND:
 			_text_edit.placeholder_text = "command without /"
 		EventRule.Action.NOTIFY:
 			_text_edit.placeholder_text = "notification text — {server} and {players} are filled in"
+		EventRule.Action.SET_MOTD:
+			_text_edit.placeholder_text = "MOTD shown in the server list"
+		EventRule.Action.SET_SETTING:
+			_text_edit.placeholder_text = "setting=value, e.g. max-players=30"
+		EventRule.Action.ENABLE_PLUGIN, EventRule.Action.DISABLE_PLUGIN:
+			_text_edit.placeholder_text = "plugin name, e.g. Dynmap"
+		EventRule.Action.SET_ASLEEP_MOTD:
+			_text_edit.placeholder_text = "shown in the server list while the server is asleep"
 		_:
 			_text_edit.placeholder_text = "message"
-	_text_edit.tooltip_text = "Shown as a notification (see Preferences → Notifications). {server} becomes the server name, {players} the number of players online." \
-		if a == EventRule.Action.NOTIFY else "Console command (without the leading /) or chat message. Only sent while the server is online."
+	match a:
+		EventRule.Action.NOTIFY:
+			_text_edit.tooltip_text = "Shown as a notification (see Preferences → Notifications). {server} becomes the server name, {players} the number of players online."
+		EventRule.Action.SET_MOTD:
+			_text_edit.tooltip_text = "Written to server.properties; a running server shows it after its next restart."
+		EventRule.Action.SET_SETTING:
+			_text_edit.tooltip_text = "Any server.properties setting as setting=value (e.g. pvp=false, difficulty=hard). Written to the file; a running server uses it after its next restart. The port and RCON settings are managed by Server Manager and can't be changed here."
+		EventRule.Action.ENABLE_PLUGIN, EventRule.Action.DISABLE_PLUGIN:
+			_text_edit.tooltip_text = "The plugin's name (as in Plugins) or its jar file. A running server picks the change up at its next restart."
+		EventRule.Action.SET_ASLEEP_MOTD:
+			_text_edit.tooltip_text = "The message players see in their server list while the server is asleep and waiting for a join (Wake on join)."
+		_:
+			_text_edit.tooltip_text = "Console command (without the leading /) or chat message. Only sent while the server is online."
 	_warn_check.visible = a == EventRule.Action.STOP or a == EventRule.Action.RESTART
 	_wake_check.visible = rule.is_timed()
 	_update_wake_setup()
@@ -248,6 +276,8 @@ func _update_view() -> void:
 	_mark(_time_edit, t != EventRule.Trigger.TIME or _valid_time(rule.time_of_day))
 	_mark(_window_start, not rule.window_enabled or _valid_time(rule.window_start))
 	_mark(_window_end, not rule.window_enabled or _valid_time(rule.window_end))
+	_mark(_text_edit, (rule.action != EventRule.Action.SET_SETTING or not EventRule.parse_setting(rule.text).is_empty())
+			and (rule.action not in [EventRule.Action.ENABLE_PLUGIN, EventRule.Action.DISABLE_PLUGIN] or rule.text.strip_edges() != ""))
 	_invalid_badge.visible = not is_valid()
 
 	_summary_label.text = rule.describe()
@@ -287,5 +317,15 @@ func _on_wake_toggled(on: bool) -> void:
 func _update_wake_setup() -> void:
 	_wake_setup_button.visible = _remote_host == "" and _wake_check.visible and rule != null and rule.wake_computer and not WakeHelper.is_installed()
 	_wake_check.disabled = not _can_wake
+	# Computer actions (sleep) belong to system admins: offer them, and edit them, only then.
+	for a in EventRule.COMPUTER_ACTIONS:
+		_action_option.set_item_disabled(a, not _can_wake)
+	var locked := not _can_wake and rule != null and rule.action in EventRule.COMPUTER_ACTIONS
+	if locked and _editor.visible:
+		set_expanded(false)
+	for button: BaseButton in [_expand_button, _delete_button, _enabled_check]:
+		button.disabled = locked
+	if locked:
+		_expand_button.tooltip_text = "Only a system admin of %s can change events that put the computer to sleep." % _remote_host
 	if not _can_wake:
 		_wake_check.tooltip_text = "Only a system admin of %s can let events wake the computer." % _remote_host

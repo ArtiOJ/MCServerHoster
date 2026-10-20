@@ -11,6 +11,9 @@ const PROPERTIES_FILE := "server.properties"
 var start_time_msec := 0
 ## A plugin was added, removed or switched while the process ran (cleared when it stops).
 var plugins_changed_while_running := false
+## Chunky's tasks as followed in the console: world -> {state, processed, unit, percent, ...}
+## (see Chunky.track).
+var chunky_tasks := {}
 ## The game port before the last change, while the Network tab still points it out (0 = none).
 var port_moved_from := 0
 
@@ -691,6 +694,8 @@ func _on_line(text: String, is_stderr: bool) -> void:
 		level = LogParser.Level.ERROR
 	_append_console({"text": text, "plain": plain, "level": level})
 	backups.on_console_line(plain)
+	if Chunky.track(chunky_tasks, plain):
+		data_changed.emit(&"chunky")
 
 	if state == State.STARTING:
 		var secs := LogParser.startup_seconds(plain)

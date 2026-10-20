@@ -14,6 +14,7 @@
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/logs_tab.tscn" id="12"]
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/worlds_tab.tscn" id="13"]
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/permissions_tab.tscn" id="14"]
+[ext_resource type="PackedScene" path="res://scenes/server_view/tabs/chunky_tab.tscn" id="15"]
 
 [node name="ServerView" type="VBoxContainer"]
 anchors_preset = 15
@@ -72,6 +73,10 @@ visible = false
 layout_mode = 2
 
 [node name="Worlds" parent="Tabs" instance=ExtResource("13")]
+visible = false
+layout_mode = 2
+
+[node name="Chunky" parent="Tabs" instance=ExtResource("15")]
 visible = false
 layout_mode = 2
 

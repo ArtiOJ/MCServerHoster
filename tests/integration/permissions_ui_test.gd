@@ -74,6 +74,21 @@ func _ready() -> void:
 		await _wait_idle(tab)
 	mod = LuckPerms.find(tab._state, "group", "mod")
 	_check(mod != null and mod.permissions.size() == 4, "four permissions added (%d)" % (mod.permissions.size() if mod != null else -1))
+	# Browse: pick Minecraft's /gamemode permission from the list.
+	tab.get_node("%BrowseButton").pressed.emit()
+	await _wait_for(func() -> bool: return tab.get_node("%KnownDialog").visible, 20.0)
+	tab.get_node("%KnownSearch").text = "gamemode"
+	tab._fill_known()
+	var known_tree: Tree = tab.get_node("%KnownTree")
+	var first := known_tree.get_root().get_first_child() if known_tree.get_root() != null else null
+	_check(first != null and first.get_text(0) == "minecraft.command.gamemode", "browse finds Minecraft's /gamemode permission")
+	await _shot("71a_perms_browse")
+	if first != null:
+		first.select(0)
+	tab.get_node("%KnownDialog").confirmed.emit()
+	tab.get_node("%KnownDialog").hide()
+	_check(tab.get_node("%NodeEdit").text == "minecraft.command.gamemode", "picked permission filled in")
+	tab.get_node("%NodeEdit").text = ""
 	var tree: Tree = tab.get_node("%PermTree")
 	tree.get_root().get_child(0).select(0)
 	tab.get_node("%ToggleButton").pressed.emit()

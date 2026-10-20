@@ -423,6 +423,7 @@ func _auto_start() -> void:
 		if inst.config.auto_start and inst.orphan_pid <= 0 and not inst.is_temporary():
 			inst.start()
 	for inst in _instances:
+		inst.scheduler.catch_up_wake_on_join()
 		inst.scheduler.fire(EventRule.Trigger.APP_STARTED)
 
 

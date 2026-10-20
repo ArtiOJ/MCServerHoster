@@ -15,7 +15,7 @@ var _busy := false
 
 ## Shows the setup prompt (unless already set up) and returns true once the helper is installed.
 static func prompt(context: Node) -> bool:
-	if WakeHelper.is_installed():
+	if WakeHelper.is_current():
 		return true
 	var dialog: WakeSetupDialog = load(SCENE).instantiate()
 	context.get_tree().root.add_child(dialog)

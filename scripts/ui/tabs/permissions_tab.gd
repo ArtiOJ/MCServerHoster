@@ -19,6 +19,11 @@ var _state := {}
 var _found_players := []
 ## The selected group name, player UUID or track name.
 var _selected := ""
+## Permissions that can be picked (ServerOps.perms_known), loaded when first needed.
+var _known := []
+var _known_note := ""
+## node -> description, for tooltips in the permission table.
+var _known_text := {}
 var _serial := 0
 var _busy := false
 
@@ -68,6 +73,11 @@ var _busy := false
 @onready var _down_button: Button = %DownButton
 @onready var _remove_track_group_button: Button = %RemoveTrackGroupButton
 @onready var _delete_dialog: ConfirmationDialog = %DeleteDialog
+@onready var _browse_button: Button = %BrowseButton
+@onready var _known_dialog: ConfirmationDialog = %KnownDialog
+@onready var _known_search: LineEdit = %KnownSearch
+@onready var _known_tree: Tree = %KnownTree
+@onready var _known_hint: Label = %KnownHint
 
 
 func _ready() -> void:
@@ -122,10 +132,29 @@ func _ready() -> void:
 	visibility_changed.connect(func() -> void:
 		if is_visible_in_tree() and handle != null:
 			refresh())
+	_known_tree.set_column_title(0, "Permission")
+	_known_tree.set_column_title(1, "From")
+	_known_tree.set_column_title(2, "Default")
+	_known_tree.set_column_title(3, "Description")
+	_known_tree.set_column_expand(0, true)
+	_known_tree.set_column_expand_ratio(0, 3)
+	_known_tree.set_column_expand(3, true)
+	_known_tree.set_column_expand_ratio(3, 3)
+	for col in [1, 2]:
+		_known_tree.set_column_expand(col, false)
+		_known_tree.set_column_custom_minimum_width(col, 120 if col == 1 else 70)
+	_browse_button.pressed.connect(_browse)
+	_known_search.text_changed.connect(_fill_known.unbind(1))
+	_known_tree.item_activated.connect(func() -> void:
+		_use_known()
+		_known_dialog.hide())
+	_known_dialog.confirmed.connect(_use_known)
 
 
 func _on_bound() -> void:
 	_state = {}
+	_known = []
+	_known_text = {}
 	_found_players = []
 	_selected = ""
 	_rebuild()
@@ -133,6 +162,8 @@ func _on_bound() -> void:
 		if is_visible_in_tree() and (handle.is_online() or not handle.is_process_alive()):
 			refresh())
 	watch(handle.data_changed, func(area: StringName) -> void:
+		if area == &"plugins":
+			_known = []
 		if area in [&"permissions", &"plugins"] and is_visible_in_tree():
 			refresh())
 	if is_visible_in_tree():
@@ -334,6 +365,8 @@ func _fill_permissions(holder: Dictionary) -> void:
 	for p in holder.permissions:
 		var row := _perm_tree.create_item(root)
 		row.set_text(Column.NODE, str(p.node))
+		if _known_text.has(str(p.node)):
+			row.set_tooltip_text(Column.NODE, str(_known_text[p.node]))
 		row.set_text(Column.VALUE, "Allow" if p.value else "Deny")
 		row.set_custom_color(Column.VALUE, ALLOW_COLOR if p.value else DENY_COLOR)
 		row.set_text(Column.WHERE, str(p.context) if str(p.context) != "" else "Everywhere")
@@ -417,6 +450,7 @@ func _update_controls() -> void:
 	_duration_edit.editable = editable
 	_value_option.disabled = not editable
 	_add_perm_button.disabled = not editable or _node_edit.text.strip_edges() == ""
+	_browse_button.disabled = not editable
 	_remove_perm_button.disabled = not editable or perm.is_empty()
 	_toggle_button.disabled = not editable or perm.is_empty() or int(perm.get("expiry", 0)) > 0
 	_toggle_button.text = "Allow" if not perm.is_empty() and not perm.value else "Deny"
@@ -604,6 +638,77 @@ func _remove_from_track() -> void:
 	if picked.is_empty():
 		return
 	await _apply([{"action": "track_remove", "track": _selected, "group": _track_groups.get_item_text(picked[0])}])
+
+
+func _browse() -> void:
+	if handle == null:
+		return
+	if _known.is_empty():
+		var h := handle
+		_browse_button.disabled = true
+		var res: Dictionary = await h.call_op("perms_known")
+		_browse_button.disabled = not _editable()
+		if h != handle:
+			return
+		if not res.ok:
+			Notifier.warn(str(res.error))
+			return
+		_known = res.permissions
+		_known_note = str(res.get("note", ""))
+		_known_text.clear()
+		for p in _known:
+			var text := str(p.description)
+			_known_text[str(p.node)] = "%s%s" % [text, (" (%s)" % p.plugin) if str(p.plugin) != "" else ""]
+		_rebuild_detail()
+	_known_search.text = _node_edit.text.strip_edges()
+	_fill_known()
+	_known_dialog.popup_centered()
+	_known_search.grab_focus()
+
+
+func _fill_known() -> void:
+	_known_tree.clear()
+	var root := _known_tree.create_item()
+	var words := _known_search.text.strip_edges().to_lower().split(" ", false)
+	var matches := []
+	for p in _known:
+		var haystack := ("%s %s %s" % [p.node, p.plugin, p.description]).to_lower()
+		if Array(words).all(func(w: String) -> bool: return haystack.contains(w)):
+			matches.append([_match_rank(str(p.node).to_lower(), words), p])
+	# Best matches first: a part of the permission equal to the search, then one starting with it.
+	matches.sort_custom(func(a: Array, b: Array) -> bool: return a[0] < b[0] if a[0] != b[0] else str(a[1].node) < str(b[1].node))
+	var shown := 0
+	for m in matches:
+		var p: Dictionary = m[1]
+		var row := _known_tree.create_item(root)
+		row.set_text(0, str(p.node))
+		row.set_text(1, str(p.plugin))
+		row.set_text(2, str(p.default))
+		row.set_text(3, str(p.description))
+		row.set_tooltip_text(3, str(p.description))
+		shown += 1
+	var hint := "%d of %d permissions. Plugins can also check permissions they don't declare; type those in by hand." % [shown, _known.size()]
+	_known_hint.text = hint + (" " + _known_note if _known_note != "" else "")
+
+
+static func _match_rank(node: String, words: PackedStringArray) -> int:
+	if words.is_empty():
+		return 0
+	var parts := node.split(".")
+	if parts.has(words[0]) or node == words[0]:
+		return 0
+	if Array(parts).any(func(p: String) -> bool: return p.begins_with(words[0])):
+		return 1
+	return 2 if node.contains(words[0]) else 3
+
+
+func _use_known() -> void:
+	var item := _known_tree.get_selected()
+	if item == null:
+		return
+	_node_edit.text = item.get_text(0)
+	_update_controls()
+	_node_edit.grab_focus()
 
 
 func _install() -> void:
