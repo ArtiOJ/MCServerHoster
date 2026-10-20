@@ -10,7 +10,7 @@ extends RefCounted
 const PREF_KEYS: PackedStringArray = [
 	"servers_root", "default_ram_mb", "exit_behavior", "check_updates_on_launch", "show_unstable_versions",
 	"sleep_policy", "restart_after_wake", "wake_for_events", "wake_on_connection", "start_at_login",
-	"start_minimized", "desktop_notifications", "notify_when", "notify_categories",
+	"start_minimized", "desktop_notifications", "notify_when", "notify_categories", "wake_port_block",
 ]
 const IMPORT_TTL_MSEC := 3600 * 1000
 
@@ -31,10 +31,10 @@ static func run(op: String, args: Dictionary, ctx := ServerOps.LOCAL_CONTEXT) ->
 		"server_import_cancel": return server_import_cancel(str(args.get("token", "")))
 		"access_get": return access_get()
 		"access_rename": return access_rename(str(args.get("name", "")))
-		"grant_create": return grant_create(args, ctx)
+		"grant_create": return await grant_create(args, ctx)
 		"grant_update": return grant_update(args)
 		"grant_revoke": return grant_revoke(str(args.get("id", "")), ctx)
-		"grant_invite": return grant_invite(str(args.get("id", "")))
+		"grant_invite": return await grant_invite(str(args.get("id", "")))
 	return {"ok": false, "error": "Unknown request \"%s\"." % op}
 
 
@@ -92,6 +92,8 @@ static func prefs_save(changes: Dictionary, ctx: Dictionary) -> Dictionary:
 	for key in ["wake_for_events", "wake_on_connection"]:
 		if changes.has(key):
 			AppSettings.set(key, bool(changes[key]) and WakeHelper.is_installed())
+	if changes.has("wake_port_block"):
+		AppSettings.wake_port_block = clampi(int(changes.wake_port_block), -1, 255)
 	if changes.get("notify_categories") is Dictionary:
 		for key in changes.notify_categories:
 			if AppSettings.DEFAULT_NOTIFY_CATEGORIES.has(key):
@@ -308,7 +310,9 @@ static func grant_create(args: Dictionary, ctx: Dictionary) -> Dictionary:
 	var g: RemoteGrant = RemoteAccess.create_grant(person, role, _server_ids(args.get("servers", [])))
 	if _actor(ctx) != "":
 		Notifier.info("%s (remote) created an access key for %s." % [_actor(ctx), person], Notifier.Category.REMOTE)
-	return {"ok": true, "id": g.id, "invite": RemoteAccess.invite_for(g)}
+	await _know_public_ip()
+	return {"ok": true, "id": g.id, "invite": RemoteAccess.invite_for(g), "addresses": RemoteAccess.invite_addresses(),
+			"public_ip_error": NetworkService.public_ip_error if NetworkService.public_ip == "" else ""}
 
 
 static func grant_update(args: Dictionary) -> Dictionary:
@@ -339,4 +343,12 @@ static func grant_invite(id: String) -> Dictionary:
 	var g: RemoteGrant = RemoteAccess.find_grant(id)
 	if g == null:
 		return {"ok": false, "error": "That key no longer exists."}
-	return {"ok": true, "invite": RemoteAccess.invite_for(g)}
+	await _know_public_ip()
+	return {"ok": true, "invite": RemoteAccess.invite_for(g), "addresses": RemoteAccess.invite_addresses()}
+
+
+## Invites carry the public address, so making one looks it up when it isn't known yet
+## (making an invite is the user's request that allows the lookup).
+static func _know_public_ip() -> void:
+	if NetworkService.public_ip == "":
+		await NetworkService.refresh_public_ip()

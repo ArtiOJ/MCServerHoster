@@ -232,13 +232,20 @@ func _refresh_grants() -> void:
 	_no_keys_label.visible = grants.is_empty()
 
 
+func _has_public_address(addresses: PackedStringArray) -> bool:
+	return Array(addresses).any(func(a: String) -> bool: return NetworkService.classify_ip(a) == "public")
+
+
 func _copy_invite(grant: Dictionary) -> void:
 	var res: Dictionary = await _target.call_host_op("grant_invite", {"id": grant.id})
 	if not res.ok:
 		Notifier.warn(str(res.error))
 		return
 	DisplayServer.clipboard_set(str(res.invite))
-	Notifier.info("Invite code for %s copied. Send it privately." % grant.name)
+	if not _has_public_address(PackedStringArray(res.get("addresses", []))):
+		Notifier.warn("Invite code for %s copied, but your internet address is unknown: it only works on your own network." % grant.name)
+	else:
+		Notifier.info("Invite code for %s copied. Send it privately." % grant.name)
 
 
 func _confirm_revoke(grant: Dictionary) -> void:
@@ -328,17 +335,18 @@ func _save_key() -> void:
 	if not created.ok:
 		Notifier.warn(str(created.error))
 		return
-	_show_invite(person, role, str(created.invite))
+	_show_invite(person, role, str(created.invite), PackedStringArray(created.get("addresses", [])), str(created.get("public_ip_error", "")))
 	_refresh_share()
 
 
-func _show_invite(person: String, role: int, invite: String) -> void:
+func _show_invite(person: String, role: int, invite: String, addresses: PackedStringArray, lookup_error := "") -> void:
 	_invite_dialog.title = "Invite code for %s" % person
 	_invite_intro.text = "Send this code to %s privately, e.g. in a direct message. They paste it in Remote access → Connect to others. Anyone who has it can connect as %s." % [person, RemoteProtocol.ROLE_NAMES[role].to_lower()]
 	_invite_text.text = invite
 	var hints := PackedStringArray()
-	var addresses := PackedStringArray(_access.get("addresses", []))
 	var port := int(_access.get("port", RemoteProtocol.DEFAULT_PORT))
+	if not _has_public_address(addresses):
+		hints.append("Your internet address couldn't be looked up%s, so this code only works on your own network." % (" (%s)" % lookup_error if lookup_error != "" else ""))
 	if not addresses.is_empty():
 		hints.append("It lists %s, port %d." % [" and ".join(addresses), port])
 	if not _access.get("enabled", true):

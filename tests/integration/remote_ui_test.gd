@@ -150,7 +150,7 @@ func _ready() -> void:
 	dialog._update_key_dialog()
 	await _shot("61_new_key")
 	dialog.get_node("%KeyDialog").hide()
-	dialog._show_invite(alice.name, alice.role, RemoteAccess.invite_for(alice))
+	dialog._show_invite(alice.name, alice.role, RemoteAccess.invite_for(alice), RemoteAccess.invite_addresses())
 	await _shot("62_invite")
 	dialog.get_node("%InviteDialog").hide()
 	dialog.open(RemoteDialog.TabIndex.CONNECT)

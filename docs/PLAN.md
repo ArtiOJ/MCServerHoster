@@ -353,3 +353,20 @@ icons are rendered from icon.svg by `packaging/make_icons.gd`.
 - Windows Firewall: checks for port or Java rules in the background, adds and removes the app's
   own rules (group "Server Manager") through a UAC prompt. Toast notifications, login autostart
   through the user's Run key.
+
+## 12. Permissions (LuckPerms)
+
+A Permissions tab per server (local and remote, server admins and up) manages LuckPerms:
+groups (weight, prefix, parents, permissions), players (groups, permissions, promote/demote)
+and tracks (order). "Install LuckPerms" downloads the latest Paper build from luckperms.net.
+
+- **Reading:** `/lp export <unique name>` over RCON, then the app reads and deletes the gzip JSON
+  file. Player names come from the export or usercache.json.
+- **Changing:** `/lp` commands over RCON, built from validated changes (names, nodes, contexts
+  and durations can't inject other arguments). LuckPerms' replies never reach RCON, so each
+  batch is followed by an export and every change is checked against it; ones that didn't take
+  effect are reported.
+- **Stopped servers:** LuckPerms keeps its data in H2, which only it can read, so the last export
+  (`.manager/luckperms.json`) is shown read-only until the server runs again.
+- Verified with LuckPerms 5.5.87 on Paper 26.3 (`tests/integration/luckperms_test.gd`,
+  `permissions_ui_test.gd`).

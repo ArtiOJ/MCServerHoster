@@ -23,6 +23,9 @@ extends ConfirmationDialog
 @onready var _wake_events_check: CheckButton = %WakeEventsCheck
 @onready var _wake_connect_check: CheckButton = %WakeConnectCheck
 @onready var _wake_status: Label = %WakeStatus
+@onready var _wake_ports_option: OptionButton = %WakePortsOption
+@onready var _wake_port_spin: SpinBox = %WakePortSpin
+@onready var _wake_ports_range: Label = %WakePortsRange
 @onready var _setup_wake_button: Button = %SetupWakeButton
 @onready var _remove_wake_button: Button = %RemoveWakeButton
 @onready var _limit_notice: PanelContainer = %LimitNotice
@@ -56,6 +59,8 @@ func _ready() -> void:
 	_remove_wake_button.pressed.connect(_remove_wake)
 	for c: CheckButton in [_wake_events_check, _wake_connect_check]:
 		c.toggled.connect(_on_wake_toggled.bind(c))
+	_wake_ports_option.item_selected.connect(_on_wake_ports_changed.unbind(1))
+	_wake_port_spin.value_changed.connect(_on_wake_ports_changed.unbind(1))
 	confirmed.connect(func() -> void:
 		if _remote != null:
 			_apply_remote()
@@ -68,7 +73,8 @@ func _ready() -> void:
 			return
 		_preview_scale(AppSettings.ui_scale)
 		AppSettings.wake_for_events = _saved_wake[0]
-		AppSettings.wake_on_connection = _saved_wake[1])
+		AppSettings.wake_on_connection = _saved_wake[1]
+		AppSettings.wake_port_block = _saved_wake[2])
 	_browse_button.pressed.connect(_browse_root)
 	_dir_dialog.dir_selected.connect(func(dir: String) -> void: _root_edit.text = dir)
 	_rescan_button.pressed.connect(func() -> void:
@@ -122,7 +128,8 @@ func open(source: ServerSource = null) -> void:
 	_sleep_option.disabled = not PowerManager.supported
 	_wake_check.disabled = not PowerManager.supported
 	_power_status.text = PowerManager.status_text()
-	_saved_wake = [AppSettings.wake_for_events, AppSettings.wake_on_connection]
+	_saved_wake = [AppSettings.wake_for_events, AppSettings.wake_on_connection, AppSettings.wake_port_block]
+	_show_wake_ports(AppSettings.wake_port_block)
 	# Shown as on only when they can work; switching one on before setup offers the setup.
 	_wake_events_check.set_pressed_no_signal(AppSettings.wake_for_events and WakeHelper.is_installed())
 	_wake_connect_check.set_pressed_no_signal(AppSettings.wake_on_connection and WakeHelper.is_installed())
@@ -203,7 +210,7 @@ func _fill_java_list() -> void:
 
 var _wake_busy := false
 ## Wake settings when the dialog opened (toggles apply live for the status line; Cancel restores).
-var _saved_wake := [true, false]
+var _saved_wake := [true, false, -1]
 
 
 func _refresh_wake() -> void:
@@ -217,7 +224,35 @@ func _refresh_wake() -> void:
 		(c as Button).disabled = _wake_busy or not available
 	_wake_events_check.disabled = not available
 	_wake_connect_check.disabled = not available or not (windows or WakeHelper.wake_interface().get("wireless", false))
+	_set_wake_ports_enabled(_wake_connect_check.button_pressed and not _wake_connect_check.disabled and not windows)
 	_wake_status.text = "Waiting for your password…" if _wake_busy else PowerManager.describe_wake()
+
+
+func _show_wake_ports(block: int) -> void:
+	_wake_ports_option.select(0 if block < 0 else 1)
+	if block >= 0 and (int(_wake_port_spin.value) >> 8) != block:
+		_wake_port_spin.set_value_no_signal(block << 8)
+	_wake_port_spin.visible = block >= 0
+	_wake_ports_range.text = WakeHelper.block_range_text(block) if block >= 0 else ""
+
+
+func _set_wake_ports_enabled(on: bool) -> void:
+	_wake_ports_option.disabled = not on
+	_wake_port_spin.editable = on
+
+
+## -1 for Automatic, else the block of the entered port.
+func _chosen_wake_block() -> int:
+	return -1 if _wake_ports_option.selected == 0 else (int(_wake_port_spin.value) >> 8) & 0xFF
+
+
+## Applies live for the status line, like the wake toggles (Cancel restores).
+func _on_wake_ports_changed() -> void:
+	var block := _chosen_wake_block()
+	_show_wake_ports(block)
+	if _remote == null:
+		AppSettings.wake_port_block = block
+		_refresh_wake()
 
 
 func _run_wake_setup() -> void:
@@ -291,6 +326,8 @@ func _open_remote() -> void:
 	_power_status.text = str(res.power_status)
 	_wake_events_check.set_pressed_no_signal(bool(v.wake_for_events) and res.wake_installed)
 	_wake_connect_check.set_pressed_no_signal(bool(v.wake_on_connection) and res.wake_installed)
+	_show_wake_ports(int(v.get("wake_port_block", -1)))
+	_set_wake_ports_enabled(_wake_connect_check.button_pressed and bool(res.wake_wireless))
 	_wake_events_check.disabled = not res.wake_installed
 	_wake_connect_check.disabled = not res.wake_installed or not res.wake_wireless
 	_setup_wake_button.visible = false
@@ -347,6 +384,7 @@ func _apply_remote() -> void:
 		"restart_after_wake": _wake_check.button_pressed,
 		"wake_for_events": _wake_events_check.button_pressed,
 		"wake_on_connection": _wake_connect_check.button_pressed,
+		"wake_port_block": _chosen_wake_block(),
 		"start_at_login": _login_check.button_pressed,
 		"start_minimized": _minimized_check.button_pressed,
 		"desktop_notifications": _desktop_notify_check.button_pressed,

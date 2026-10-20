@@ -163,6 +163,9 @@ func _update_wake_status() -> void:
 		_wake_status.text = "Paused while a temporary copy is pending."
 	else:
 		_wake_status.text = "Listens on port %d whenever the server is stopped." % handle.config.port
+	var block := handle.computer_wake_block()
+	if _draft.wake_on_connect and block >= 0 and not WakeHelper.block_covers(block, handle.config.port):
+		_wake_status.text += "\n⚠ Port %d is outside the computer's wake ports (%s): joining starts the server while the computer is on, but can't wake it from sleep. Change the port or the wake ports in Preferences." % [handle.config.port, WakeHelper.block_range_text(block)]
 	_wake_status.visible = _wake_status.text != ""
 
 

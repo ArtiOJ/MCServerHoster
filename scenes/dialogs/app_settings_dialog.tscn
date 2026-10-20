@@ -248,6 +248,40 @@ size_flags_horizontal = 0
 tooltip_text = "Experimental. While asleep, the Wi-Fi card watches for a player connecting to a server that uses “Start on connect”, or for someone connecting through Remote access, and wakes the computer. Whether this works depends on your hardware keeping Wi-Fi powered during sleep — try it once. The first connection attempt usually times out; players reconnect after a few seconds."
 text = "Experimental"
 
+[node name="WakePortsLabel" type="Label" parent="Scroll/VBox/PowerGrid"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Which ports Wi-Fi wake-up watches. The card holds one pattern, so it can watch one port, one block of 256 ports (e.g. 2304–2559) or every port. Automatic follows the ports in use and watches every port when they are far apart; choosing a block keeps stray traffic from waking the computer, and anything outside it is pointed out."
+text = "Wake ports"
+
+[node name="WakePortsRow" type="HBoxContainer" parent="Scroll/VBox/PowerGrid"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WakePortsOption" type="OptionButton" parent="Scroll/VBox/PowerGrid/WakePortsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Which ports Wi-Fi wake-up watches. The card holds one pattern, so it can watch one port, one block of 256 ports (e.g. 2304–2559) or every port. Automatic follows the ports in use and watches every port when they are far apart; choosing a block keeps stray traffic from waking the computer, and anything outside it is pointed out."
+selected = 0
+item_count = 2
+popup/item_0/text = "Automatic"
+popup/item_0/id = 0
+popup/item_1/text = "Block with port"
+popup/item_1/id = 1
+
+[node name="WakePortSpin" type="SpinBox" parent="Scroll/VBox/PowerGrid/WakePortsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Any port in the block, e.g. one of your servers' ports."
+min_value = 1.0
+max_value = 65535.0
+value = 25565.0
+
+[node name="WakePortsRange" type="Label" parent="Scroll/VBox/PowerGrid/WakePortsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+
 [node name="PowerStatus" type="Label" parent="Scroll/VBox"]
 unique_name_in_owner = true
 custom_minimum_size = Vector2(600, 0)

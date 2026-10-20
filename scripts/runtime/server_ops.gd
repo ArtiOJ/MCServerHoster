@@ -72,6 +72,10 @@ static func run(inst: ServerInstance, op: String, args: Dictionary, ctx := LOCAL
 		"upnp_set": return upnp_set(inst, bool(args.get("on", false)), ctx)
 		"upnp_retry": return upnp_retry(inst)
 		"firewall_allow": return await firewall_allow(inst, ctx)
+		"perms_get": return await perms_get(inst)
+		"perms_apply": return await perms_apply(inst, args.get("changes", []) if args.get("changes") is Array else [], ctx)
+		"perms_install": return await perms_install(inst, ctx)
+		"perms_player": return await perms_player(inst, str(args.get("name", "")))
 	return {"ok": false, "error": "Unknown request \"%s\"." % op}
 
 
@@ -730,6 +734,136 @@ static func _expire_imports() -> void:
 	for token in _imports.keys():
 		if now - int(_imports[token].msec) > IMPORT_TTL_MSEC:
 			world_import_cancel(token)
+
+
+# --- Permissions (LuckPerms) ----------------------------------------------------------
+
+## LuckPerms' groups, players and tracks: {installed, version, enabled, editable, live,
+## read_at, note, restart_needed, groups, users, tracks, players}. Read live from a running
+## server, otherwise the last read (read-only). players lists everyone known (usercache.json
+## and LuckPerms' own users) as [{uuid, name}].
+static func perms_get(inst: ServerInstance) -> Dictionary:
+	var dir := inst.config.directory
+	var info := LuckPerms.installed_info(dir)
+	var out := {"installed": info.installed, "enabled": info.enabled, "version": info.version, "editable": false, "live": false,
+			"read_at": 0, "note": "", "restart_needed": false, "groups": [], "users": [], "tracks": []}
+	var names := LuckPerms.usercache_names(dir)
+	if info.installed and info.enabled and inst.is_online():
+		var exported: Dictionary = await LuckPerms.export(inst)
+		if exported.ok:
+			out.merge(LuckPerms.parse_export(exported.data, names), true)
+			out.live = true
+			out.editable = true
+			out.read_at = int(Time.get_unix_time_from_system())
+			_save_perms_cache(inst, out)
+		else:
+			out.note = str(exported.error)
+			out.restart_needed = inst.plugins_changed_while_running
+	if not out.live:
+		var cached: Variant = JSON.parse_string(FileAccess.get_file_as_string(dir.path_join(LuckPerms.CACHE_FILE)))
+		if cached is Dictionary:
+			for key in ["groups", "users", "tracks", "read_at"]:
+				out[key] = cached.get(key, out[key])
+		if out.note == "":
+			if not info.installed:
+				out.note = "LuckPerms isn't installed on this server."
+			elif not info.enabled:
+				out.note = "LuckPerms is disabled in Plugins."
+			elif inst.is_process_alive():
+				out.note = "The server is starting; permissions can be changed once it's up."
+			else:
+				out.note = "Start the server to change permissions."
+	out.players = _perms_players(names, out.users)
+	return _ok(out)
+
+
+static func _perms_players(names: Dictionary, users: Array) -> Array:
+	var seen := {}
+	var players := []
+	for u in users:
+		seen[str(u.uuid)] = true
+		players.append({"uuid": str(u.uuid), "name": str(u.name)})
+	for uuid in names:
+		if not seen.has(uuid):
+			players.append({"uuid": str(uuid), "name": str(names[uuid])})
+	players.sort_custom(func(a: Dictionary, b: Dictionary) -> bool:
+		return (str(a.name) if str(a.name) != "" else "~" + str(a.uuid)).to_lower() < (str(b.name) if str(b.name) != "" else "~" + str(b.uuid)).to_lower())
+	return players
+
+
+static func _save_perms_cache(inst: ServerInstance, state: Dictionary) -> void:
+	var cache := {}
+	for key in ["groups", "users", "tracks", "read_at"]:
+		cache[key] = state[key]
+	var path := inst.config.directory.path_join(LuckPerms.CACHE_FILE)
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f != null:
+		f.store_string(JSON.stringify(cache))
+
+
+## Applies LuckPerms changes (see LuckPerms.commands_for) on the running server, then reads
+## the result back. Returns perms_get's state plus failed: [what didn't take effect]. Nothing
+## is sent when any change is invalid.
+static func perms_apply(inst: ServerInstance, changes: Array, ctx: Dictionary) -> Dictionary:
+	if changes.is_empty():
+		return await perms_get(inst)
+	if not inst.is_online() or not inst.rcon.is_ready():
+		return _fail("Start the server to change permissions.")
+	var names := LuckPerms.usercache_names(inst.config.directory)
+	var commands := PackedStringArray()
+	var texts := PackedStringArray()
+	for change in changes:
+		if not change is Dictionary:
+			return _fail("Invalid change.")
+		if str(change.get("holder", "")) == "user":
+			change.label = str(names.get(str(change.get("name", "")), "the player"))
+		var built := LuckPerms.commands_for(change)
+		if not built.ok:
+			return _fail(str(built.error))
+		commands.append_array(built.commands)
+		texts.append(str(built.text))
+	for command in commands:
+		await inst.rcon.execute(command)
+	var state: Dictionary = await perms_get(inst)
+	if not state.ok or not state.live:
+		return _fail("The changes were sent, but reading them back failed: %s" % state.get("note", state.get("error", "")))
+	var failed := PackedStringArray()
+	for i in changes.size():
+		if not LuckPerms.applied(changes[i], state):
+			failed.append(texts[i])
+	_log(inst, ctx, "Permissions: %s." % "; ".join(texts))
+	if not failed.is_empty():
+		inst.log_system("LuckPerms didn't apply: %s." % "; ".join(failed))
+	inst.data_changed.emit(&"permissions")
+	state.failed = Array(failed)
+	return state
+
+
+## Downloads LuckPerms into the server's plugins folder (it loads on the next start).
+static func perms_install(inst: ServerInstance, ctx: Dictionary) -> Dictionary:
+	var info := LuckPerms.installed_info(inst.config.directory)
+	if info.installed:
+		return _ok({"version": info.version, "already": true})
+	_log(inst, ctx, "Installing LuckPerms…")
+	var res: Dictionary = await LuckPerms.install(inst)
+	if not res.ok:
+		inst.log_system(str(res.error))
+		return res
+	inst.log_system("Installed LuckPerms %s (%s)." % [res.version, res.file])
+	if inst.is_process_alive():
+		inst.plugins_changed_while_running = true
+	inst.data_changed.emit(&"plugins")
+	inst.data_changed.emit(&"permissions")
+	return _ok({"version": res.version, "restart_needed": inst.is_process_alive()})
+
+
+## Looks up a player by name for the permissions list: {uuid, name}.
+static func perms_player(inst: ServerInstance, player_name: String) -> Dictionary:
+	var res: Dictionary = await PlayerLists.resolve(inst, inst.config.directory, player_name)
+	if not res.ok:
+		return res
+	return _ok({"uuid": str(res.uuid), "name": str(res.name)})
 
 
 # --- Resources & automation ------------------------------------------------------------------

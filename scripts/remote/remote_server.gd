@@ -256,6 +256,10 @@ func wake_error() -> String:
 	return str(_data.get("wake_error", ""))
 
 
+func computer_wake_block() -> int:
+	return int(_data.get("wake_block", -2))
+
+
 func icon_info() -> Dictionary:
 	return {
 		"exists": bool(_data.get("icon_exists", false)), "valid": bool(_data.get("icon_valid", false)),

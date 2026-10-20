@@ -46,7 +46,7 @@ func _ready() -> void:
 	if iface.get("wireless", false):
 		# Armed before any sleep, so NetworkManager sees it and keeps Wi-Fi connected while asleep.
 		var early := _calls.filter(func(c: Array) -> bool: return c[0] == "wowlan" and c[2] == "on")
-		_check(early.size() == 1 and early[0][3] == WakeHelper.tcp_pattern(iface.mac, 25999), "Wi-Fi wake armed before sleeping, for port 25999 on %s" % iface.phy)
+		_check(early.size() == 1 and early[0][3] == WakeHelper.tcp_pattern(iface.mac, PackedInt32Array([25999])), "Wi-Fi wake armed before sleeping, for port 25999 on %s" % iface.phy)
 	_calls.clear()
 
 	var due := inst.scheduler.next_run_of(inst.config.events[0])
@@ -81,10 +81,24 @@ func _ready() -> void:
 	get_tree().quit(0 if _failures.is_empty() else 1)
 
 
+## This test's own sleep locks (another Server Manager running on the computer has its own).
 func _inhibitors() -> String:
 	var out: Array = []
 	OS.execute("systemd-inhibit", ["--list", "--no-pager", "--no-legend"], out)
-	return str(out[0]) if not out.is_empty() else ""
+	# Columns: who (may contain spaces), uid, user, pid (the systemd-inhibit process), …
+	var row := RegEx.create_from_string("^(.*?)\\s+(\\d+)\\s+(\\S+)\\s+(\\d+)\\s")
+	var mine := PackedStringArray()
+	for line in (str(out[0]) if not out.is_empty() else "").split("\n", false):
+		var m := row.search(line)
+		if m != null and _parent_pid(m.get_string(4).to_int()) == OS.get_process_id():
+			mine.append(line)
+	return "\n".join(mine)
+
+
+func _parent_pid(pid: int) -> int:
+	var out: Array = []
+	OS.execute("ps", ["-o", "ppid=", "-p", str(pid)], out)
+	return str(out[0]).strip_edges().to_int() if not out.is_empty() and str(out[0]).strip_edges() != "" else -1
 
 
 func _wait_for(cond: Callable, timeout_sec: float) -> void:

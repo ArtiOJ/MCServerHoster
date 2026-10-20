@@ -245,7 +245,7 @@ func _wake_wanted() -> bool:
 	var instances := ServerManager.get_instances()
 	if AppSettings.wake_for_events and not WakeHelper.flagged_event_times(instances).is_empty():
 		return true
-	return AppSettings.wake_on_connection and WakeHelper.connect_port(instances, _remote_ports()) >= 0
+	return AppSettings.wake_on_connection and not WakeHelper.connect_ports(instances, _remote_ports()).is_empty()
 
 
 ## Works out the wake-up for this sleep: {alarm: unix time or -1, wowlan: pattern or "", phy}.
@@ -255,11 +255,11 @@ func plan_wake() -> Dictionary:
 	if AppSettings.wake_for_events:
 		plan.alarm = WakeHelper.wake_time(WakeHelper.flagged_event_times(instances), int(Time.get_unix_time_from_system()))
 	if AppSettings.wake_on_connection and not _windows:
-		var port := WakeHelper.connect_port(instances, _remote_ports())
+		var ports := WakeHelper.connect_ports(instances, _remote_ports())
 		var iface := WakeHelper.wake_interface()
-		if port >= 0 and iface.get("wireless", false):
+		if not ports.is_empty() and iface.get("wireless", false):
 			plan.phy = iface.phy
-			plan.wowlan = WakeHelper.tcp_pattern(iface.mac, port)
+			plan.wowlan = WakeHelper.tcp_pattern(iface.mac, ports, AppSettings.wake_port_block)
 	return plan
 
 
@@ -368,6 +368,30 @@ func remote_wake_info() -> Dictionary:
 	return {"ready": ready, "mac": str(iface.get("mac", "")) if ready else ""}
 
 
+## Where a chosen wake-port block leaves something out: one line per server with
+## "Start on connect" or remote access whose port it doesn't cover.
+func wake_port_warnings() -> PackedStringArray:
+	var out := PackedStringArray()
+	var block := AppSettings.wake_port_block
+	if block < 0 or not AppSettings.wake_on_connection:
+		return out
+	for inst: ServerInstance in ServerManager.get_instances():
+		if inst.config.wake_on_connect and not WakeHelper.block_covers(block, inst.config.port):
+			out.append("%s's port %d is outside the wake ports, so players joining it can't wake the computer" % [inst.config.display_name, inst.config.port])
+	for port in _remote_ports():
+		if not WakeHelper.block_covers(block, int(port)):
+			out.append("remote access's port %d is outside the wake ports, so remote users can't wake the computer" % int(port))
+	return out
+
+
+## The wake-port block connection wake-up uses, for a server's view: -2 when connection
+## wake-up is off or unavailable, -1 when it follows the ports in use, else the block.
+func wake_block_for_servers() -> int:
+	if not AppSettings.wake_on_connection or not WakeHelper.is_installed() or _windows:
+		return -2
+	return AppSettings.wake_port_block
+
+
 ## What the current settings would arm, for the Preferences status line.
 func describe_wake() -> String:
 	if not WakeHelper.is_installed():
@@ -379,8 +403,12 @@ func describe_wake() -> String:
 	elif AppSettings.wake_for_events:
 		parts.append("no upcoming events ask to wake the computer")
 	if plan.wowlan != "":
-		var port := WakeHelper.connect_port(ServerManager.get_instances(), _remote_ports())
-		parts.append("Wi-Fi watches for connections to %s" % ("any port" if port == 0 else "port %d" % port))
+		var ports := WakeHelper.connect_ports(ServerManager.get_instances(), _remote_ports())
+		var watched := WakeHelper.watched_ports_text(ports, AppSettings.wake_port_block)
+		parts.append("Wi-Fi watches for connections to %s" % watched)
+		if watched == "any port":
+			parts.append("to narrow it, choose wake ports below, or keep the ports in one block of 256")
+		parts.append_array(wake_port_warnings())
 	elif AppSettings.wake_on_connection and _windows:
 		parts.append("other Server Managers can wake it with a Wake-on-LAN packet (turn on “Wake on Magic Packet” for the network adapter in Device Manager)")
 	elif AppSettings.wake_on_connection:

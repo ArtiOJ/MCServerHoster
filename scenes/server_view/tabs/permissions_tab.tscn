@@ -1,0 +1,410 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/permissions_tab.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/download.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/trash.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/chevron_up.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/chevron_down.svg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="8"]
+
+[node name="Permissions" type="MarginContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+script = ExtResource("1")
+remote_ready = true
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Toolbar" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RefreshButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Read the permissions from LuckPerms again"
+text = "Refresh"
+icon = ExtResource("2")
+
+[node name="StatusLabel" type="Label" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="InstallButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+tooltip_text = "Download the latest LuckPerms from luckperms.net into this server's plugins folder"
+text = "Install LuckPerms"
+icon = ExtResource("3")
+
+[node name="Notice" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="NoticeLabel" type="Label" parent="VBox/Notice"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="Body" type="HSplitContainer" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 12
+
+[node name="ListCard" type="PanelContainer" parent="VBox/Body"]
+custom_minimum_size = Vector2(250, 0)
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/Body/ListCard"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="SectionBar" type="TabBar" parent="VBox/Body/ListCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+tab_alignment = 1
+current_tab = 0
+clip_tabs = false
+tab_count = 3
+tab_0/title = "Groups"
+tab_1/title = "Players"
+tab_2/title = "Tracks"
+
+[node name="FilterEdit" type="LineEdit" parent="VBox/Body/ListCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+placeholder_text = "Filter"
+clear_button_enabled = true
+right_icon = ExtResource("8")
+
+[node name="HolderList" type="ItemList" parent="VBox/Body/ListCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="AddRow" type="HBoxContainer" parent="VBox/Body/ListCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NewEdit" type="LineEdit" parent="VBox/Body/ListCard/VBox/AddRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+placeholder_text = "New group"
+
+[node name="AddButton" type="Button" parent="VBox/Body/ListCard/VBox/AddRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Create"
+icon = ExtResource("4")
+
+[node name="DeleteButton" type="Button" parent="VBox/Body/ListCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"DangerButton"
+text = "Delete"
+icon = ExtResource("5")
+
+[node name="DetailCard" type="PanelContainer" parent="VBox/Body"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"CardPanel"
+
+[node name="Detail" type="VBoxContainer" parent="VBox/Body/DetailCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="VBox/Body/DetailCard/Detail"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="TitleLabel" type="Label" parent="VBox/Body/DetailCard/Detail/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+
+[node name="SubtitleLabel" type="Label" parent="VBox/Body/DetailCard/Detail/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="EmptyLabel" type="Label" parent="VBox/Body/DetailCard/Detail"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_type_variation = &"MutedLabel"
+text = "Choose a group, player or track."
+horizontal_alignment = 1
+vertical_alignment = 1
+
+[node name="GroupSettings" type="HBoxContainer" parent="VBox/Body/DetailCard/Detail"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WeightLabel" type="Label" parent="VBox/Body/DetailCard/Detail/GroupSettings"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Higher weights win when a player is in several groups (their prefix shows first, for example)."
+text = "Weight"
+
+[node name="WeightSpin" type="SpinBox" parent="VBox/Body/DetailCard/Detail/GroupSettings"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Higher weights win when a player is in several groups (their prefix shows first, for example)."
+min_value = -100000.0
+max_value = 100000.0
+
+[node name="PrefixLabel" type="Label" parent="VBox/Body/DetailCard/Detail/GroupSettings"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Shown before the name in chat (by chat plugins). & codes set colours, e.g. &c[Mod] "
+text = "Prefix"
+
+[node name="PrefixEdit" type="LineEdit" parent="VBox/Body/DetailCard/Detail/GroupSettings"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Shown before the name in chat (by chat plugins). & codes set colours, e.g. &c[Mod] "
+placeholder_text = "none"
+max_length = 64
+
+[node name="SaveGroupButton" type="Button" parent="VBox/Body/DetailCard/Detail/GroupSettings"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Save"
+
+[node name="ParentsSection" type="VBoxContainer" parent="VBox/Body/DetailCard/Detail"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ParentsLabel" type="Label" parent="VBox/Body/DetailCard/Detail/ParentsSection"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 0
+text = "Inherits from"
+
+[node name="ParentsList" type="ItemList" parent="VBox/Body/DetailCard/Detail/ParentsSection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 64)
+layout_mode = 2
+max_columns = 0
+same_column_width = true
+fixed_column_width = 150
+
+[node name="ParentsRow" type="HBoxContainer" parent="VBox/Body/DetailCard/Detail/ParentsSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ParentOption" type="OptionButton" parent="VBox/Body/DetailCard/Detail/ParentsSection/ParentsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AddParentButton" type="Button" parent="VBox/Body/DetailCard/Detail/ParentsSection/ParentsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add"
+icon = ExtResource("4")
+
+[node name="RemoveParentButton" type="Button" parent="VBox/Body/DetailCard/Detail/ParentsSection/ParentsRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Remove"
+
+[node name="TrackRow" type="HBoxContainer" parent="VBox/Body/DetailCard/Detail/ParentsSection"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TrackLabel" type="Label" parent="VBox/Body/DetailCard/Detail/ParentsSection/TrackRow"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Move the player one step up or down a track (a ladder of groups)."
+text = "Track"
+
+[node name="TrackOption" type="OptionButton" parent="VBox/Body/DetailCard/Detail/ParentsSection/TrackRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="PromoteButton" type="Button" parent="VBox/Body/DetailCard/Detail/ParentsSection/TrackRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Move the player to the next group on the track"
+text = "Promote"
+icon = ExtResource("6")
+
+[node name="DemoteButton" type="Button" parent="VBox/Body/DetailCard/Detail/ParentsSection/TrackRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Move the player to the previous group on the track"
+text = "Demote"
+icon = ExtResource("7")
+
+[node name="PermsSection" type="VBoxContainer" parent="VBox/Body/DetailCard/Detail"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="PermsLabel" type="Label" parent="VBox/Body/DetailCard/Detail/PermsSection"]
+layout_mode = 2
+text = "Permissions"
+
+[node name="PermTree" type="Tree" parent="VBox/Body/DetailCard/Detail/PermsSection"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(0, 140)
+layout_mode = 2
+size_flags_vertical = 3
+columns = 4
+column_titles_visible = true
+hide_root = true
+select_mode = 1
+
+[node name="PermActions" type="HBoxContainer" parent="VBox/Body/DetailCard/Detail/PermsSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="NodeEdit" type="LineEdit" parent="VBox/Body/DetailCard/Detail/PermsSection/PermActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+size_flags_stretch_ratio = 2.0
+tooltip_text = "A permission node, e.g. essentials.fly. * matches everything below, e.g. worldedit.*"
+placeholder_text = "Permission, e.g. essentials.fly"
+
+[node name="ValueOption" type="OptionButton" parent="VBox/Body/DetailCard/Detail/PermsSection/PermActions"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Allow grants the permission; Deny takes it away even when a parent group grants it."
+selected = 0
+item_count = 2
+popup/item_0/text = "Allow"
+popup/item_0/id = 0
+popup/item_1/text = "Deny"
+popup/item_1/id = 1
+
+[node name="WhereEdit" type="LineEdit" parent="VBox/Body/DetailCard/Detail/PermsSection/PermActions"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+tooltip_text = "Leave empty for everywhere, or limit it with key=value pairs, e.g. world=world_nether"
+placeholder_text = "Everywhere"
+
+[node name="DurationEdit" type="LineEdit" parent="VBox/Body/DetailCard/Detail/PermsSection/PermActions"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(90, 0)
+layout_mode = 2
+tooltip_text = "Leave empty to keep it, or make it expire after e.g. 30m, 12h, 7d or 1mo"
+placeholder_text = "Forever"
+
+[node name="AddPermButton" type="Button" parent="VBox/Body/DetailCard/Detail/PermsSection/PermActions"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Add"
+icon = ExtResource("4")
+
+[node name="PermEditRow" type="HBoxContainer" parent="VBox/Body/DetailCard/Detail/PermsSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="ToggleButton" type="Button" parent="VBox/Body/DetailCard/Detail/PermsSection/PermEditRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Switch the selected permission between allow and deny"
+text = "Deny"
+
+[node name="RemovePermButton" type="Button" parent="VBox/Body/DetailCard/Detail/PermsSection/PermEditRow"]
+unique_name_in_owner = true
+layout_mode = 2
+text = "Remove"
+icon = ExtResource("5")
+
+[node name="InheritedHint" type="Label" parent="VBox/Body/DetailCard/Detail/PermsSection/PermEditRow"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text = "Permissions from parent groups apply too."
+horizontal_alignment = 2
+text_overrun_behavior = 3
+
+[node name="TrackSection" type="VBoxContainer" parent="VBox/Body/DetailCard/Detail"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+theme_override_constants/separation = 6
+
+[node name="TrackHint" type="Label" parent="VBox/Body/DetailCard/Detail/TrackSection"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Players are promoted from top to bottom."
+
+[node name="TrackGroups" type="ItemList" parent="VBox/Body/DetailCard/Detail/TrackSection"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="TrackEditRow" type="HBoxContainer" parent="VBox/Body/DetailCard/Detail/TrackSection"]
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="TrackGroupOption" type="OptionButton" parent="VBox/Body/DetailCard/Detail/TrackSection/TrackEditRow"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="AppendButton" type="Button" parent="VBox/Body/DetailCard/Detail/TrackSection/TrackEditRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Add the group at the end of the track"
+text = "Add"
+icon = ExtResource("4")
+
+[node name="UpButton" type="Button" parent="VBox/Body/DetailCard/Detail/TrackSection/TrackEditRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Move the selected group up"
+icon = ExtResource("6")
+
+[node name="DownButton" type="Button" parent="VBox/Body/DetailCard/Detail/TrackSection/TrackEditRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Move the selected group down"
+icon = ExtResource("7")
+
+[node name="RemoveTrackGroupButton" type="Button" parent="VBox/Body/DetailCard/Detail/TrackSection/TrackEditRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Take the selected group off the track"
+text = "Remove"
+
+[node name="DeleteDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Delete"
+ok_button_text = "Delete"
+dialog_autowrap = true

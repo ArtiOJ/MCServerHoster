@@ -152,15 +152,16 @@ func invite_for(grant: RemoteGrant) -> String:
 	})
 
 
-## Addresses a client can try, nearest first: this computer's LAN address, then the
-## public one (needs the port forwarded in the router).
+## Addresses a client tries in order: the public one first (most people given a code are
+## elsewhere; needs the port forwarded in the router), then this computer's LAN address for
+## people on the same network whose router can't loop back to its own public address.
 func invite_addresses() -> PackedStringArray:
 	var out := PackedStringArray()
-	var route := PlatformBackend.get_current().default_route()
-	if str(route.get("address", "")) != "":
-		out.append(str(route.address))
-	if NetworkService.public_ip != "" and not out.has(NetworkService.public_ip):
+	if NetworkService.public_ip != "":
 		out.append(NetworkService.public_ip)
+	var route := PlatformBackend.get_current().default_route()
+	if str(route.get("address", "")) != "" and not out.has(str(route.address)):
+		out.append(str(route.address))
 	return out
 
 
@@ -235,6 +236,7 @@ func snapshot(inst: ServerInstance) -> Dictionary:
 		"java": inst.java_description(), "cores": OS.get_processor_count(), "motd": inst.motd(),
 		"problem": inst.start_problem() if not inst.is_busy() else "",
 		"wake_error": inst.wake_error(),
+		"wake_block": inst.computer_wake_block(),
 	}
 	data.merge(live_state(inst))
 	data.merge(stats(inst))

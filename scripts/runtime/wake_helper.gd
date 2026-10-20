@@ -171,13 +171,16 @@ static func wake_time(candidates: Array, now: int) -> int:
 	return maxi(best - LEAD_SEC, now + 30)
 
 
-## Wake-on-WLAN pattern for an incoming TCP packet to [param port] (0 = any TCP port) for the
-## interface with MAC [param mac], in iw syntax ("-" = don't care). nl80211 matches patterns
-## against the 802.3 (Ethernet II) form of the frame from offset 0:
+## Wake-on-WLAN pattern for an incoming TCP packet to any of [param ports] for the interface
+## with MAC [param mac], in iw syntax ("-" = don't care). nl80211 matches patterns against
+## the 802.3 (Ethernet II) form of the frame from offset 0:
 ## [0-5] destination MAC, [12-13] 08:00 IPv4, [14] 45 (IPv4, no options), [23] 06 TCP,
-## [36-37] destination port. TCP flags are left out on purpose: ECN-capable clients send
-## SYN with extra flag bits.
-static func tcp_pattern(mac: String, port: int) -> String:
+## [36-37] destination port. Cards take one pattern of exact-or-any bytes, so several ports
+## are matched by their shared high byte (see [method port_bytes]). TCP flags are left out on
+## purpose: ECN-capable clients (e.g. macOS) send SYN with extra flag bits.
+## A [param block] of 0–255 (see AppSettings.wake_port_block) watches that block of 256 ports
+## whatever [param ports] are.
+static func tcp_pattern(mac: String, ports: PackedInt32Array, block := -1) -> String:
 	var parts := PackedStringArray()
 	var mac_bytes := mac.to_lower().split(":")
 	if mac_bytes.size() != 6:
@@ -191,12 +194,43 @@ static func tcp_pattern(mac: String, port: int) -> String:
 	parts.append("06")
 	for i in range(24, 36):
 		parts.append("-")
-	if port > 0:
-		parts.append("%02x" % ((port >> 8) & 0xFF))
-		parts.append("%02x" % (port & 0xFF))
-	else:
-		parts.append_array(["-", "-"])
+	for b in ([block, -1] if block >= 0 else port_bytes(ports)):
+		parts.append("%02x" % b if b >= 0 else "-")
 	return ":".join(parts)
+
+
+## The destination-port bytes a single pattern can match for [param ports] ([high, low], -1 =
+## any): the port itself, the shared high byte (a block of 256 ports, e.g. 2304–2559), or any.
+static func port_bytes(ports: PackedInt32Array) -> Array:
+	if ports.size() == 1:
+		return [(ports[0] >> 8) & 0xFF, ports[0] & 0xFF]
+	var high := (ports[0] >> 8) & 0xFF if not ports.is_empty() else -1
+	for p in ports:
+		if (p >> 8) & 0xFF != high:
+			return [-1, -1]
+	return [high, -1]
+
+
+## "port 2315", "ports 2304–2559" or "any port", for what [method tcp_pattern] watches.
+static func watched_ports_text(ports: PackedInt32Array, block := -1) -> String:
+	if block >= 0:
+		return "ports %s" % block_range_text(block)
+	var b := port_bytes(ports)
+	if b[0] < 0:
+		return "any port"
+	if b[1] >= 0:
+		return "port %d" % ports[0]
+	return "ports %s" % block_range_text(b[0])
+
+
+## "2304–2559" for block 9.
+static func block_range_text(block: int) -> String:
+	return "%d–%d" % [block << 8, (block << 8) + 255]
+
+
+## Whether a connection to [param port] wakes the computer with [param block] chosen.
+static func block_covers(block: int, port: int) -> bool:
+	return block < 0 or (port >> 8) & 0xFF == block
 
 
 ## The network interface that leads to the router and whether it can wake the computer:
@@ -232,16 +266,15 @@ static func flagged_event_times(instances: Array) -> Array:
 	return out
 
 
-## Port to watch for wake-on-connect: the single start-on-connect server's port (or one of
-## [param extra_ports], e.g. remote access), 0 when several ports are wanted (wake on any TCP
-## connection; the card takes only one pattern), -1 when none.
-static func connect_port(instances: Array, extra_ports: Array = []) -> int:
+## Ports to watch for wake-on-connect: the start-on-connect servers' ports plus
+## [param extra_ports] (e.g. remote access), sorted; empty when none.
+static func connect_ports(instances: Array, extra_ports: Array = []) -> PackedInt32Array:
 	var ports := {}
 	for inst: ServerInstance in instances:
 		if inst.config.wake_on_connect:
 			ports[inst.config.port] = true
 	for p in extra_ports:
 		ports[int(p)] = true
-	if ports.is_empty():
-		return -1
-	return ports.keys()[0] if ports.size() == 1 else 0
+	var out := PackedInt32Array(ports.keys())
+	out.sort()
+	return out

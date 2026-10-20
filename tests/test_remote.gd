@@ -112,3 +112,18 @@ func test_profile_paths() -> void:
 	check_eq(AppSettings.profile_path("remote-access.json"), "user://remote-access-test.json", "named profile")
 	check_eq(AppSettings.profile_path("remote-host.key"), "user://remote-host-test.key", "other extensions")
 	AppSettings.settings_path = saved
+
+
+func test_invites_lead_with_the_public_address() -> void:
+	var saved := NetworkService.public_ip
+	NetworkService.public_ip = "203.0.113.7"
+	var addresses := RemoteAccess.invite_addresses()
+	check_eq(addresses[0], "203.0.113.7", "public address first: %s" % addresses)
+	var grant := RemoteGrant.new()
+	grant.id = "testkey1"
+	grant.secret = "s".repeat(40)
+	var invite := RemoteProtocol.parse_invite(RemoteAccess.invite_for(grant))
+	check(invite.ok and invite.addresses[0] == "203.0.113.7", "invite code carries it first")
+	NetworkService.public_ip = ""
+	check(not RemoteAccess.invite_addresses().has("203.0.113.7"), "unknown public address left out")
+	NetworkService.public_ip = saved

@@ -81,6 +81,10 @@ const OPS := {
 	"network_refresh": Role.SERVER_ADMIN,
 	"network_test": Role.SERVER_ADMIN,
 	"port_set": Role.SERVER_ADMIN,
+	"perms_get": Role.SERVER_ADMIN,
+	"perms_apply": Role.SERVER_ADMIN,
+	"perms_install": Role.SERVER_ADMIN,
+	"perms_player": Role.SERVER_ADMIN,
 	# File transfers (any key; only usable by the operations above and below)
 	"upload_begin": Role.SERVER_ADMIN,
 	"upload_chunk": Role.SERVER_ADMIN,

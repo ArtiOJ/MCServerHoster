@@ -187,6 +187,10 @@ func wake_error() -> String:
 	return wake_listener.last_error
 
 
+func computer_wake_block() -> int:
+	return PowerManager.wake_block_for_servers()
+
+
 func call_op(op: String, args := {}, on_progress := Callable()) -> Dictionary:
 	var ctx := ServerOps.LOCAL_CONTEXT.duplicate()
 	ctx["progress"] = on_progress

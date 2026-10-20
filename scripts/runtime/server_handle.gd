@@ -14,7 +14,8 @@ signal config_changed
 signal update_available_changed
 ## A temporary copy stopped for good; the UI asks whether to keep or discard its changes.
 signal temporary_run_ended
-## Something a tab lists changed: &"plugins", &"backups", &"worlds", &"lists" or &"network".
+## Something a tab lists changed: &"plugins", &"backups", &"worlds", &"lists", &"network"
+## or &"permissions".
 signal data_changed(area: StringName)
 ## A backup started, progressed or finished (see [member backup_busy]).
 signal backup_status_changed
@@ -211,6 +212,11 @@ func icon_info() -> Dictionary:
 ## Why start-on-connect can't listen right now ("" when fine).
 func wake_error() -> String:
 	return ""
+
+
+## The computer's wake-port block (see PowerManager.wake_block_for_servers).
+func computer_wake_block() -> int:
+	return -2
 
 
 # --- Operations --------------------------------------------------------------

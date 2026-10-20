@@ -47,6 +47,10 @@ var start_minimized := false
 var wake_for_events := true
 ## Experimental: wake on an incoming connection to a start-on-connect server (Wi-Fi WoWLAN).
 var wake_on_connection := false
+## Ports Wi-Fi wake-up watches: -1 = automatic (the ports in use), otherwise the block of 256
+## ports starting at wake_port_block * 256 (the port's high byte; one block fits in the card's
+## single wake pattern).
+var wake_port_block := -1
 ## LAN address the user confirmed is reserved for this computer in the router.
 var reserved_lan_ip := ""
 ## Show notifications on the desktop (in addition to the in-app toasts).
@@ -82,6 +86,12 @@ func _ready() -> void:
 	var args := OS.get_cmdline_user_args()
 	test_copy = EngineDebugger.is_active()
 	autostart_enabled = not args.has("--no-autostart")
+	# Anything started from tests/ must never act on the real setup (servers, wake-ups, the
+	# instance lock), even when run without --no-autostart or --profile.
+	var testing := Array(OS.get_cmdline_args()).any(func(a: String) -> bool: return a.begins_with("res://tests/"))
+	if testing:
+		autostart_enabled = false
+		settings_path = "user://settings-tests.json"
 	for arg in args:
 		if arg.begins_with("--profile="):
 			settings_path = "user://settings-%s.json" % Fmt.slugify(arg.get_slice("=", 1))
@@ -165,6 +175,7 @@ func load_settings() -> void:
 	reserved_lan_ip = str(data.get("reserved_lan_ip", reserved_lan_ip))
 	wake_for_events = bool(data.get("wake_for_events", wake_for_events))
 	wake_on_connection = bool(data.get("wake_on_connection", wake_on_connection))
+	wake_port_block = clampi(int(data.get("wake_port_block", wake_port_block)), -1, 255)
 	desktop_notifications = bool(data.get("desktop_notifications", desktop_notifications))
 	notify_when = clampi(int(data.get("notify_when", notify_when)), 0, NotifyWhen.size() - 1) as NotifyWhen
 	notify_categories = DEFAULT_NOTIFY_CATEGORIES.duplicate()
@@ -198,6 +209,7 @@ func save_settings() -> void:
 		"reserved_lan_ip": reserved_lan_ip,
 		"wake_for_events": wake_for_events,
 		"wake_on_connection": wake_on_connection,
+		"wake_port_block": wake_port_block,
 		"desktop_notifications": desktop_notifications,
 		"notify_when": notify_when,
 		"notify_categories": notify_categories,
