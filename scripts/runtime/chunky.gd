@@ -7,6 +7,9 @@ extends RefCounted
 ## <r> cps, Current: <x>, <z>"; the "world" pattern visits only chunks that already exist
 ## (scanning region files), which is how a map surrounded by void is loaded without
 ## generating anything new. Worlds are named the Bukkit way (world, world_nether, ...).
+## Chunky skips chunks that already exist unless force-load-existing-chunks is on (read when a
+## task starts or continues); loading them that way also gives chunks saved without light data
+## (WorldPainter exports, for one) their light, which BlueMap needs to render them.
 
 const PLUGIN_NAME := "Chunky"
 const MODRINTH_ID := "fALzjamp"
@@ -16,12 +19,18 @@ const SHAPE_NAMES: PackedStringArray = ["Square", "Circle", "Rectangle", "Ellips
 const TWO_RADII: PackedStringArray = ["rectangle", "ellipse"]
 enum Mode { AREA, BORDER, EXISTING }
 const MODE_NAMES: PackedStringArray = ["Generate an area", "Fill the world border", "Load existing chunks only"]
+const MODE_TIPS: PackedStringArray = [
+	"Generate every chunk in an area, so players don't wait for them. Existing chunks are skipped.",
+	"Generate every chunk inside the world border.",
+	"Load and re-save every chunk that already exists, generating nothing new: for maps surrounded by void. This also lights chunks saved without light data (WorldPainter exports), so BlueMap can render them. Chunks Minecraft left half-generated around the edges are completed too.",
+]
 enum Center { SPAWN, BORDER, COORDINATES }
 const CENTER_NAMES: PackedStringArray = ["World spawn", "World border centre", "Coordinates"]
 ## Chunky's limit (the world's).
 const MAX_RADIUS := 30_000_000
 ## Seconds between progress lines while a task runs.
 const PROGRESS_INTERVAL := 2
+const FORCE_LOAD_KEY := "force-load-existing-chunks"
 
 static var _re_running := RegEx.create_from_string("\\[Chunky\\] Task running for (\\S+)\\. Processed: (\\d+) (chunks|regions) \\(([\\d.]+)%\\)(?:, ETA: ([\\d:]+), Rate: ([\\d.]+) cps, Current: (-?\\d+), (-?\\d+))?")
 static var _re_finished := RegEx.create_from_string("\\[Chunky\\] Task finished for (\\S+)\\. Processed: (\\d+) (chunks|regions) \\(([\\d.]+)%\\), Total time: ([\\d:]+)")
@@ -31,6 +40,37 @@ static var _re_world := RegEx.create_from_string("^[A-Za-z0-9_.\\-]{1,64}$")
 
 static func installed_info(server_dir: String) -> Dictionary:
 	return ServerOps.installed_plugin(server_dir, PLUGIN_NAME)
+
+
+## Sets force-load-existing-chunks in Chunky's config.yml. Returns true when the file changed,
+## after which Chunky needs "chunky reload config".
+static func set_force_load(server_dir: String, on: bool) -> bool:
+	var path := server_dir.path_join("plugins/Chunky/config.yml")
+	var text := FileAccess.get_file_as_string(path)
+	var line := "%s: %s" % [FORCE_LOAD_KEY, "true" if on else "false"]
+	var re := RegEx.create_from_string("(?m)^%s:.*$" % FORCE_LOAD_KEY)
+	var m := re.search(text)
+	if m != null:
+		if m.get_string().strip_edges() == line:
+			return false
+		text = text.substr(0, m.get_start()) + line + text.substr(m.get_end())
+	elif on:
+		text += ("" if text == "" or text.ends_with("\n") else "\n") + line + "\n"
+	else:
+		return false  # Off is Chunky's default.
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	var f := FileAccess.open(path, FileAccess.WRITE)
+	if f == null:
+		return false
+	f.store_string(text)
+	return true
+
+
+## Whether the saved task of [param world] loads existing chunks (Chunky saves the "world"
+## pattern as the list of chunks it found, pattern=csv).
+static func task_loads_existing(server_dir: String, world: String) -> bool:
+	var text := FileAccess.get_file_as_string(server_dir.path_join("plugins/Chunky/tasks/%s.properties" % world))
+	return RegEx.create_from_string("(?m)^pattern=(csv|world)\\s*$").search(text) != null
 
 
 ## The worlds Chunky can work on, from the active world's dimensions: [{name, label}], where

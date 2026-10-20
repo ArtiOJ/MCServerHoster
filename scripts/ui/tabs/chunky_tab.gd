@@ -45,8 +45,9 @@ var _poll: Timer
 
 
 func _ready() -> void:
-	for name in Chunky.MODE_NAMES:
-		_mode_option.add_item(name)
+	for i in Chunky.MODE_NAMES.size():
+		_mode_option.add_item(Chunky.MODE_NAMES[i])
+		_mode_option.set_item_tooltip(i, Chunky.MODE_TIPS[i])
 	for name in Chunky.SHAPE_NAMES:
 		_shape_option.add_item(name)
 	for name in Chunky.CENTER_NAMES:

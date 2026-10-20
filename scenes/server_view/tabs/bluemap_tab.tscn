@@ -1,0 +1,529 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/bluemap_tab.gd" id="1"]
+[ext_resource type="Texture2D" path="res://assets/icons/refresh.svg" id="2"]
+[ext_resource type="Texture2D" path="res://assets/icons/download.svg" id="3"]
+[ext_resource type="Texture2D" path="res://assets/icons/play.svg" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/stop.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/plus.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/save.svg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/icons/external.svg" id="8"]
+[ext_resource type="Texture2D" path="res://assets/icons/map.svg" id="9"]
+[ext_resource type="Texture2D" path="res://assets/icons/sliders.svg" id="10"]
+[ext_resource type="Texture2D" path="res://assets/icons/restart.svg" id="11"]
+[ext_resource type="PackedScene" path="res://scenes/components/bluemap_viewer.tscn" id="12"]
+[ext_resource type="Texture2D" path="res://assets/icons/box.svg" id="13"]
+
+[sub_resource type="ButtonGroup" id="PageGroup"]
+
+[node name="BlueMap" type="MarginContainer"]
+layout_mode = 3
+anchors_preset = 15
+anchor_right = 1.0
+anchor_bottom = 1.0
+grow_horizontal = 2
+grow_vertical = 2
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 20
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 20
+script = ExtResource("1")
+remote_ready = true
+
+[node name="VBox" type="VBoxContainer" parent="."]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="Toolbar" type="HBoxContainer" parent="VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="RefreshButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Refresh"
+icon = ExtResource("2")
+
+[node name="MapPageButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Look at the rendered maps"
+toggle_mode = true
+button_pressed = true
+button_group = SubResource("PageGroup")
+text = "Map"
+icon = ExtResource("9")
+
+[node name="ManagePageButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Render maps, add maps for other dimensions and change BlueMap's settings"
+toggle_mode = true
+button_group = SubResource("PageGroup")
+text = "Renders"
+icon = ExtResource("10")
+
+[node name="MapOption" type="OptionButton" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Which map to show"
+
+[node name="StatusLabel" type="Label" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="BrowserButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+tooltip_text = "Open BlueMap's own web map in the browser (served by the running server)"
+text = "Web map"
+icon = ExtResource("8")
+
+[node name="InstallButton" type="Button" parent="VBox/Toolbar"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"AccentButton"
+tooltip_text = "Install BlueMap from Modrinth (the Paper build for this server's Minecraft version)"
+text = "Install BlueMap"
+icon = ExtResource("3")
+
+[node name="Notice" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="NoticeLabel" type="Label" parent="VBox/Notice"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="ConsentCard" type="PanelContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/ConsentCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="VBox/ConsentCard/VBox"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Minecraft's textures"
+
+[node name="Text" type="Label" parent="VBox/ConsentCard/VBox"]
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+text = "BlueMap draws the map with Minecraft's own block models and textures. To get them it downloads the Minecraft client file from Mojang's servers. By accepting, you confirm that you own Minecraft: Java Edition and accept Mojang's EULA (minecraft.net/eula)."
+autowrap_mode = 3
+
+[node name="AcceptButton" type="Button" parent="VBox/ConsentCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+theme_type_variation = &"AccentButton"
+tooltip_text = "Sets accept-download in BlueMap's core.conf; BlueMap downloads the file and starts rendering"
+text = "Accept and download"
+icon = ExtResource("3")
+
+[node name="MapPage" type="VBoxContainer" parent="VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 3
+
+[node name="Viewer" parent="VBox/MapPage" instance=ExtResource("12")]
+unique_name_in_owner = true
+layout_mode = 2
+
+[node name="ManagePage" type="ScrollContainer" parent="VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_vertical = 3
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="VBox/ManagePage"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 12
+
+[node name="RenderCard" type="PanelContainer" parent="VBox/ManagePage/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/ManagePage/VBox/RenderCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="VBox/ManagePage/VBox/RenderCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="VBox/ManagePage/VBox/RenderCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Rendering"
+
+[node name="ThreadsLabel" type="Label" parent="VBox/ManagePage/VBox/RenderCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"MutedLabel"
+text_overrun_behavior = 3
+
+[node name="StartButton" type="Button" parent="VBox/ManagePage/VBox/RenderCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Start BlueMap's render threads"
+text = "Start"
+icon = ExtResource("4")
+
+[node name="StopButton" type="Button" parent="VBox/ManagePage/VBox/RenderCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Pause rendering (BlueMap continues where it stopped when started again)"
+text = "Stop"
+icon = ExtResource("5")
+
+[node name="ReloadButton" type="Button" parent="VBox/ManagePage/VBox/RenderCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Reload BlueMap: re-reads its configs and resource packs"
+text = "Reload"
+icon = ExtResource("11")
+
+[node name="TaskList" type="VBoxContainer" parent="VBox/ManagePage/VBox/RenderCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="CancelAllButton" type="Button" parent="VBox/ManagePage/VBox/RenderCard/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Cancel every task still waiting (the one running finishes its current region)"
+text = "Cancel waiting tasks"
+
+[node name="MapsCard" type="PanelContainer" parent="VBox/ManagePage/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/ManagePage/VBox/MapsCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="VBox/ManagePage/VBox/MapsCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Icon" type="TextureRect" parent="VBox/ManagePage/VBox/MapsCard/VBox/Header"]
+layout_mode = 2
+size_flags_vertical = 4
+texture = ExtResource("13")
+stretch_mode = 5
+
+[node name="Title" type="Label" parent="VBox/ManagePage/VBox/MapsCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_type_variation = &"SectionHeader"
+text = "Maps"
+
+[node name="AddMapButton" type="MenuButton" parent="VBox/ManagePage/VBox/MapsCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Add a map for another dimension of the active world (imported dimensions too)"
+text = "Add map"
+icon = ExtResource("6")
+flat = false
+
+[node name="MapList" type="VBoxContainer" parent="VBox/ManagePage/VBox/MapsCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="SettingsCard" type="PanelContainer" parent="VBox/ManagePage/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="VBox/ManagePage/VBox/SettingsCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Title" type="Label" parent="VBox/ManagePage/VBox/SettingsCard/VBox"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Settings"
+
+[node name="Grid" type="GridContainer" parent="VBox/ManagePage/VBox/SettingsCard/VBox"]
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="ThreadsTitle" type="Label" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+layout_mode = 2
+tooltip_text = "How many threads render. More renders faster but takes CPU from the server. 0 or less: all cores minus that many."
+mouse_filter = 1
+text = "Render threads"
+
+[node name="ThreadsSpin" type="SpinBox" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "How many threads render. More renders faster but takes CPU from the server. 0 or less: all cores minus that many."
+min_value = -64.0
+max_value = 64.0
+value = 1.0
+
+[node name="CooldownTitle" type="Label" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+layout_mode = 2
+tooltip_text = "After a region changes, BlueMap waits this long before rendering it again."
+mouse_filter = 1
+text = "Update cooldown"
+
+[node name="CooldownSpin" type="SpinBox" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "After a region changes, BlueMap waits this long before rendering it again."
+max_value = 86400.0
+value = 60.0
+suffix = "s"
+
+[node name="FullTitle" type="Label" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+layout_mode = 2
+tooltip_text = "How often BlueMap checks the whole map for changes it missed (not a re-render). 0: never."
+mouse_filter = 1
+text = "Full check every"
+
+[node name="FullSpin" type="SpinBox" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "How often BlueMap checks the whole map for changes it missed (not a re-render). 0: never."
+max_value = 100000.0
+value = 1440.0
+suffix = "min"
+
+[node name="PauseTitle" type="Label" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+layout_mode = 2
+tooltip_text = "Pause rendering while at least this many players are online, to keep the server smooth. 0: never pause."
+mouse_filter = 1
+text = "Pause with players"
+
+[node name="PauseSpin" type="SpinBox" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Pause rendering while at least this many players are online, to keep the server smooth. 0: never pause."
+max_value = 1000.0
+
+[node name="LiveTitle" type="Label" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+layout_mode = 2
+tooltip_text = "Show where online players are on the map"
+mouse_filter = 1
+text = "Live players"
+
+[node name="LiveCheck" type="CheckBox" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show where online players are on the map"
+text = "Show on the map"
+
+[node name="WebTitle" type="Label" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+layout_mode = 2
+tooltip_text = "BlueMap's own web map, served by the server. Anyone who can reach the port can look at the map in a browser."
+mouse_filter = 1
+text = "Web map"
+
+[node name="WebRow" type="HBoxContainer" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="WebCheck" type="CheckBox" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid/WebRow"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "BlueMap's own web map, served by the server. Anyone who can reach the port can look at the map in a browser."
+text = "On, port"
+
+[node name="PortSpin" type="SpinBox" parent="VBox/ManagePage/VBox/SettingsCard/VBox/Grid/WebRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+tooltip_text = "The web map's port. Each server with BlueMap needs its own."
+min_value = 1024.0
+max_value = 65535.0
+value = 8100.0
+
+[node name="SaveSettingsButton" type="Button" parent="VBox/ManagePage/VBox/SettingsCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Save to BlueMap's configs (BlueMap reloads if the server runs)"
+text = "Save settings"
+icon = ExtResource("7")
+
+[node name="MapDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Map settings"
+size = Vector2i(720, 640)
+ok_button_text = "Save"
+
+[node name="Scroll" type="ScrollContainer" parent="MapDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 712.0
+offset_bottom = 591.0
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="MapDialog/Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 10
+
+[node name="MapGrid" type="GridContainer" parent="MapDialog/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="MaskTitle" type="Label" parent="MapDialog/Scroll/VBox"]
+layout_mode = 2
+tooltip_text = "Limit what is rendered to boxes of the world (empty fields: no limit). A subtracting box cuts its part out, e.g. the Nether's roof. Changing the areas re-renders the edges and removes what's outside."
+mouse_filter = 1
+theme_type_variation = &"SectionHeader"
+text = "Render areas"
+
+[node name="MaskNote" type="Label" parent="MapDialog/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "No areas: everything that exists is rendered."
+autowrap_mode = 3
+
+[node name="MaskList" type="VBoxContainer" parent="MapDialog/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="AddMaskButton" type="Button" parent="MapDialog/Scroll/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+text = "Add area"
+icon = ExtResource("6")
+
+[node name="AreaDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Render an area"
+size = Vector2i(420, 200)
+ok_button_text = "Render"
+
+[node name="Grid" type="GridContainer" parent="AreaDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 412.0
+offset_bottom = 151.0
+theme_override_constants/h_separation = 16
+theme_override_constants/v_separation = 8
+columns = 2
+
+[node name="CenterTitle" type="Label" parent="AreaDialog/Grid"]
+layout_mode = 2
+text = "Centre (x, z)"
+
+[node name="CenterRow" type="HBoxContainer" parent="AreaDialog/Grid"]
+layout_mode = 2
+
+[node name="AreaX" type="SpinBox" parent="AreaDialog/Grid/CenterRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+min_value = -30000000.0
+max_value = 30000000.0
+prefix = "x"
+
+[node name="AreaZ" type="SpinBox" parent="AreaDialog/Grid/CenterRow"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+min_value = -30000000.0
+max_value = 30000000.0
+prefix = "z"
+
+[node name="RadiusTitle" type="Label" parent="AreaDialog/Grid"]
+layout_mode = 2
+text = "Radius"
+
+[node name="AreaRadius" type="SpinBox" parent="AreaDialog/Grid"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+size_flags_horizontal = 0
+min_value = 1.0
+max_value = 30000000.0
+value = 200.0
+suffix = "blocks"
+
+[node name="ConfirmDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+size = Vector2i(460, 160)
+dialog_autowrap = true
+
+[node name="TroubleDialog" type="ConfirmationDialog" parent="."]
+unique_name_in_owner = true
+title = "Why isn't it rendered?"
+size = Vector2i(520, 300)
+ok_button_text = "Check"
+
+[node name="VBox" type="VBoxContainer" parent="TroubleDialog"]
+offset_left = 8.0
+offset_top = 8.0
+offset_right = 512.0
+offset_bottom = 251.0
+theme_override_constants/separation = 8
+
+[node name="Hint" type="Label" parent="TroubleDialog/VBox"]
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "BlueMap checks one spot of the map: whether it is inside the render areas, rendered, and whether its chunks have light data."
+autowrap_mode = 3
+
+[node name="Row" type="HBoxContainer" parent="TroubleDialog/VBox"]
+layout_mode = 2
+
+[node name="TroubleX" type="SpinBox" parent="TroubleDialog/VBox/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+min_value = -30000000.0
+max_value = 30000000.0
+prefix = "x"
+
+[node name="TroubleZ" type="SpinBox" parent="TroubleDialog/VBox/Row"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(130, 0)
+layout_mode = 2
+min_value = -30000000.0
+max_value = 30000000.0
+prefix = "z"
+
+[node name="TroubleResult" type="Label" parent="TroubleDialog/VBox"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(200, 0)
+layout_mode = 2
+size_flags_vertical = 3
+autowrap_mode = 3

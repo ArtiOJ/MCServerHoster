@@ -25,6 +25,11 @@ func test_picks_a_build() -> void:
 	check_eq(ModrinthApi.pick_version([versions[0]]).id, "beta2", "a beta when there is no release")
 	check(ModrinthApi.pick_version([{"id": "z", "version_type": "release", "files": [{"filename": "readme.txt", "primary": true}]}]).is_empty(), "no jar, no build")
 	check(ModrinthApi.pick_version([]).is_empty(), "none")
+	var both := [
+		{"id": "spigot", "version_type": "release", "loaders": ["spigot", "bukkit"], "files": [jar.call("b-spigot.jar")], "dependencies": []},
+		{"id": "paper", "version_type": "release", "loaders": ["paper"], "files": [jar.call("b-paper.jar")], "dependencies": []},
+	]
+	check_eq(ModrinthApi.pick_version(both).id, "paper", "the Paper build when a project has both")
 
 
 func test_hashes_files() -> void:

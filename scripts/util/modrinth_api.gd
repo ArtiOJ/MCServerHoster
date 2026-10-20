@@ -22,6 +22,7 @@ const SORT_NAMES: PackedStringArray = ["Relevance", "Downloads", "Recently updat
 const INTEGRATIONS := [
 	{"slug": "luckperms", "plugin_name": "LuckPerms", "feature": "Permissions tab", "install_op": "perms_install"},
 	{"slug": "chunky", "plugin_name": "Chunky", "feature": "Chunky tab"},
+	{"slug": "bluemap", "plugin_name": "BlueMap", "feature": "BlueMap tab"},
 ]
 const TIMEOUT_SEC := 20
 const DOWNLOAD_TIMEOUT_SEC := 300
@@ -88,20 +89,23 @@ static func compatible_version(owner: Node, project_id: String, mc_version: Stri
 	return {"ok": true, "version": pick_version(res.data if res.data is Array else [])}
 
 
-## The best of [param versions] (Modrinth's list, newest first): the newest release, else
-## the newest beta or alpha; {} when none has a usable file.
+## The best of [param versions] (Modrinth's list, newest first): releases before betas and
+## alphas, and within those a Paper build before Spigot or Bukkit ones (projects such as
+## BlueMap publish both, and the Spigot one runs worse on Paper); {} when none has a usable file.
 static func pick_version(versions: Array) -> Dictionary:
 	var best: Dictionary = {}
+	var best_rank := 99
 	for v in versions:
 		if not v is Dictionary:
 			continue
 		var parsed := _version(v)
 		if parsed.is_empty():
 			continue
-		if str(v.get("version_type", "")) == "release":
-			return parsed
-		if best.is_empty():
+		var loaders: Array = v.get("loaders", [])
+		var rank := (0 if str(v.get("version_type", "")) == "release" else 2) + (0 if loaders.has("paper") else 1)
+		if rank < best_rank:
 			best = parsed
+			best_rank = rank
 	return best
 
 

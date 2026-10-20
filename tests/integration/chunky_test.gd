@@ -69,6 +69,9 @@ func _ready() -> void:
 	var level := inst.config.directory.path_join("world")
 	var lone := inst.config.directory.path_join("islands-source")
 	FileOps.copy_tree(level.path_join("dimensions/minecraft/overworld"), lone)
+	# Saved without light data, like a WorldPainter export.
+	var stripped := _strip_light(lone.path_join("region"))
+	_check(stripped > 0 and _lit_chunks(lone.path_join("region")) == 0, "light data stripped from %d chunks" % stripped)
 	var a: Dictionary = await WorldImporter.analyze(self, lone, version)
 	_check(a.ok and not a.dimension_choices.is_empty(), "dimension analysed")
 	if a.ok and not a.dimension_choices.is_empty():
@@ -82,10 +85,97 @@ func _ready() -> void:
 	_check(started.ok, "Chunky accepts the extra dimension's name: %s" % started.get("error", ""))
 	await _wait_task(inst, "world_minecraft_islands", "finished", 60.0)
 	_check(_task(inst, "world_minecraft_islands").get("state") == "finished", "its existing chunks loaded")
+	var config := FileAccess.get_file_as_string(inst.config.directory.path_join("plugins/Chunky/config.yml"))
+	_check(config.contains("force-load-existing-chunks: true"), "Chunky loads existing chunks instead of skipping them")
+	await _stop(inst)
+	var lit := _lit_chunks(level.path_join("dimensions/minecraft/islands/region"))
+	_check(lit >= stripped, "loading gave the chunks their light again: %d of %d" % [lit, stripped])
+	# Generating an area goes back to skipping existing chunks.
+	await _boot(inst)
+	started = await inst.call_op("chunky_start", {"task": {"world": "world", "mode": Chunky.Mode.AREA, "shape": "square", "center": Chunky.Center.SPAWN, "radius": 32}})
+	await _wait_task(inst, "world", "finished", 60.0)
+	config = FileAccess.get_file_as_string(inst.config.directory.path_join("plugins/Chunky/config.yml"))
+	_check(started.ok and config.contains("force-load-existing-chunks: false"), "an area task skips existing chunks again")
 	await _stop(inst)
 	if _failures.is_empty():
 		ServerManager.delete_server(inst.config.id, true, true)
 	_finish()
+
+
+## Renames the light tags of every full chunk in [param region_dir] (same length, so the NBT
+## stays valid), which Minecraft then reads as chunks without light. Returns the number changed.
+func _strip_light(region_dir: String) -> int:
+	var count := 0
+	for name in DirAccess.get_files_at(region_dir):
+		var path := region_dir.path_join(name)
+		var data := FileAccess.get_file_as_bytes(path)
+		for i in 1024:
+			var sector := (data[i * 4] << 16) | (data[i * 4 + 1] << 8) | data[i * 4 + 2]
+			var sectors := data[i * 4 + 3]
+			if sector < 2:
+				continue
+			var at := sector * 4096
+			var length := (data[at] << 24) | (data[at + 1] << 16) | (data[at + 2] << 8) | data[at + 3]
+			var hex := data.slice(at + 5, at + 4 + length).decompress_dynamic(1 << 24, FileAccess.COMPRESSION_DEFLATE).hex_encode()
+			if not _has(hex, "minecraft:full"):
+				continue
+			for tag in ["SkyLight", "BlockLight", "starlight.light_version", "isLightOn"]:
+				var from := 0
+				while true:
+					var k := _find(hex, tag, from)
+					if k < 0:
+						break
+					hex = hex.substr(0, k) + "58" + hex.substr(k + 2)  # First letter -> "X".
+					from = k + 2
+			var packed := hex.hex_decode().compress(FileAccess.COMPRESSION_DEFLATE)
+			var n := packed.size() + 1
+			var payload := PackedByteArray([(n >> 24) & 0xff, (n >> 16) & 0xff, (n >> 8) & 0xff, n & 0xff, 2])
+			payload.append_array(packed)
+			var need := ceili(payload.size() / 4096.0)
+			if need > sectors:
+				sector = data.size() / 4096
+				data.resize(data.size() + need * 4096)
+				data[i * 4] = sector >> 16
+				data[i * 4 + 1] = (sector >> 8) & 0xff
+				data[i * 4 + 2] = sector & 0xff
+				data[i * 4 + 3] = need
+				at = sector * 4096
+			for j in payload.size():
+				data[at + j] = payload[j]
+			count += 1
+		var f := FileAccess.open(path, FileAccess.WRITE)
+		f.store_buffer(data)
+	return count
+
+
+## Full chunks in [param region_dir] that have light data.
+func _lit_chunks(region_dir: String) -> int:
+	var count := 0
+	for name in DirAccess.get_files_at(region_dir):
+		var data := FileAccess.get_file_as_bytes(region_dir.path_join(name))
+		for i in 1024:
+			var sector := (data[i * 4] << 16) | (data[i * 4 + 1] << 8) | data[i * 4 + 2]
+			if sector < 2:
+				continue
+			var at := sector * 4096
+			var length := (data[at] << 24) | (data[at + 1] << 16) | (data[at + 2] << 8) | data[at + 3]
+			var hex := data.slice(at + 5, at + 4 + length).decompress_dynamic(1 << 24, FileAccess.COMPRESSION_DEFLATE).hex_encode()
+			if _has(hex, "minecraft:full") and _has(hex, "SkyLight"):
+				count += 1
+	return count
+
+
+## Byte offset (in hex digits) of [param text] in hex-encoded [param hex] from [param from], or -1.
+func _find(hex: String, text: String, from: int) -> int:
+	var needle := text.to_ascii_buffer().hex_encode()
+	var k := hex.find(needle, from)
+	while k >= 0 and k % 2 == 1:
+		k = hex.find(needle, k + 1)
+	return k
+
+
+func _has(hex: String, text: String) -> bool:
+	return _find(hex, text, 0) >= 0
 
 
 func _task(inst: ServerInstance, world: String) -> Dictionary:

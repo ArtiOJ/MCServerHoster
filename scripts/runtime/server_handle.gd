@@ -15,7 +15,8 @@ signal update_available_changed
 ## A temporary copy stopped for good; the UI asks whether to keep or discard its changes.
 signal temporary_run_ended
 ## Something a tab lists changed: &"plugins", &"backups", &"worlds", &"lists", &"network",
-## &"permissions", &"settings" (server.properties) or &"chunky" (a task started or stopped).
+## &"permissions", &"settings" (server.properties), &"chunky" (a task started or stopped) or &"bluemap"
+## (maps, renders or settings).
 signal data_changed(area: StringName)
 ## A backup started, progressed or finished (see [member backup_busy]).
 signal backup_status_changed

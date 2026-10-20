@@ -198,8 +198,9 @@ func call_op(op: String, args := {}, on_progress := Callable()) -> Dictionary:
 	var ctx := ServerOps.LOCAL_CONTEXT.duplicate()
 	ctx["progress"] = on_progress
 	var result: Dictionary = await ServerOps.run(self, op, args, ctx)
-	# The same JSON shape a remote host sends, so views treat both kinds of server alike.
-	return result if op == "log_read" else JSON.parse_string(JSON.stringify(result))
+	# The same JSON shape a remote host sends, so views treat both kinds of server alike
+	# (big file contents skip the round trip).
+	return result if op in ["log_read", "bluemap_files"] else JSON.parse_string(JSON.stringify(result))
 
 
 func icon_texture() -> Texture2D:

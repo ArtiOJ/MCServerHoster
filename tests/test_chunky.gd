@@ -48,3 +48,22 @@ func test_names_worlds_like_paper() -> void:
 	check_eq(names, ["survival", "survival_nether", "survival_minecraft_islands"], "overworld, nether, extra dimension (no end yet)")
 	FileOps.remove_tree(dir)
 	check_eq(Chunky.worlds(dir, "world").map(func(w: Dictionary) -> String: return w.name), ["world", "world_nether", "world_the_end"], "not generated yet: the usual three")
+
+
+func test_switches_force_load() -> void:
+	var dir := ProjectSettings.globalize_path("user://test-chunky-%d" % Time.get_ticks_usec())
+	check(not Chunky.set_force_load(dir, false), "off without a config: Chunky's default, nothing written")
+	check(Chunky.set_force_load(dir, true), "on: written")
+	var config := dir.path_join("plugins/Chunky/config.yml")
+	_write(config, "version: 2\nforce-load-existing-chunks: false\nsilent: false\n")
+	check(Chunky.set_force_load(dir, true) and not Chunky.set_force_load(dir, true), "changed once, then already on")
+	check_eq(FileAccess.get_file_as_string(config), "version: 2\nforce-load-existing-chunks: true\nsilent: false\n", "only that line changes")
+	_write(dir.path_join("plugins/Chunky/tasks/world.properties"), "world=world\npattern=csv\ncsv=world\n")
+	_write(dir.path_join("plugins/Chunky/tasks/world_nether.properties"), "world=world_nether\npattern=region\n")
+	check(Chunky.task_loads_existing(dir, "world") and not Chunky.task_loads_existing(dir, "world_nether"), "a saved existing-chunks task is recognised")
+	FileOps.remove_tree(dir)
+
+
+func _write(path: String, text: String) -> void:
+	DirAccess.make_dir_recursive_absolute(path.get_base_dir())
+	FileAccess.open(path, FileAccess.WRITE).store_string(text)

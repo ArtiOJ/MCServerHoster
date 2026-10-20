@@ -86,6 +86,17 @@ static func run(inst: ServerInstance, op: String, args: Dictionary, ctx := LOCAL
 		"chunky_start": return await chunky_start(inst, _dict(args.get("task")), ctx)
 		"chunky_control": return await chunky_control(inst, str(args.get("action", "")), str(args.get("world", "")), ctx)
 		"chunky_trim": return await chunky_trim(inst, _dict(args.get("task")), ctx)
+		"bluemap_status": return await bluemap_status(inst)
+		"bluemap_accept": return await bluemap_accept(inst, ctx)
+		"bluemap_action": return await bluemap_action(inst, str(args.get("action", "")), str(args.get("map", "")), _dict(args.get("area")), ctx)
+		"bluemap_control": return await bluemap_control(inst, str(args.get("action", "")), str(args.get("ref", "")), ctx)
+		"bluemap_map_get": return bluemap_map_get(inst, str(args.get("map", "")))
+		"bluemap_map_save": return await bluemap_map_save(inst, str(args.get("map", "")), _dict(args.get("values")), args.get("masks"), str(args.get("dimension", "")), ctx)
+		"bluemap_map_delete": return await bluemap_map_delete(inst, str(args.get("map", "")), ctx)
+		"bluemap_settings_save": return await bluemap_settings_save(inst, _dict(args.get("values")), ctx)
+		"bluemap_troubleshoot": return await bluemap_troubleshoot(inst, str(args.get("map", "")), int(args.get("x", 0)), int(args.get("z", 0)))
+		"bluemap_files": return bluemap_files(inst, str(args.get("map", "")), args.get("items", []) if args.get("items") is Array else [])
+		"bluemap_live": return bluemap_live(inst, str(args.get("map", "")), int(args.get("markers_mtime", -1)))
 	return {"ok": false, "error": "Unknown request \"%s\"." % op}
 
 
@@ -338,7 +349,7 @@ static func _plugins_changed(inst: ServerInstance) -> void:
 ## name) in [param server_dir]'s plugins folder.
 static func installed_plugin(server_dir: String, plugin_name: String) -> Dictionary:
 	var dir := server_dir.path_join("plugins")
-	for file in DirAccess.get_files_at(dir):
+	for file in DirAccess.get_files_at(dir) if DirAccess.dir_exists_absolute(dir) else PackedStringArray():
 		var enabled := file.ends_with(".jar")
 		if not enabled and not file.ends_with(".jar" + DISABLED_SUFFIX):
 			continue
@@ -1044,7 +1055,12 @@ static func chunky_start(inst: ServerInstance, task: Dictionary, ctx: Dictionary
 	var built := Chunky.start_commands(task)
 	if not built.ok:
 		return built
-	var res: Dictionary = await _chunky_run(inst, built.commands)
+	if not inst.is_online() or not inst.rcon.is_ready():
+		return _fail("Start the server to run Chunky.")
+	var commands: Array = built.commands
+	if Chunky.set_force_load(inst.config.directory, int(task.get("mode", Chunky.Mode.AREA)) == Chunky.Mode.EXISTING):
+		commands = ["chunky reload config"] + commands
+	var res: Dictionary = await _chunky_run(inst, commands)
 	if not res.ok:
 		return res
 	if not str(res.reply).contains("Task started"):
@@ -1059,7 +1075,14 @@ static func chunky_control(inst: ServerInstance, action: String, world: String, 
 		return _fail("Unknown action.")
 	if world != "" and not RegEx.create_from_string("^[A-Za-z0-9_.\\-]{1,64}$").search(world):
 		return _fail("Unknown world.")
-	var res: Dictionary = await _chunky_run(inst, ["chunky %s %s" % [action, world]])
+	var commands := ["chunky %s %s" % [action, world]]
+	if action == "continue" and inst.is_online():
+		# The task reads force-load-existing-chunks again when it continues.
+		var worlds: Array = [world] if world != "" else inst.chunky_tasks.keys()
+		var existing := worlds.any(func(w: String) -> bool: return Chunky.task_loads_existing(inst.config.directory, w))
+		if Chunky.set_force_load(inst.config.directory, existing):
+			commands.push_front("chunky reload config")
+	var res: Dictionary = await _chunky_run(inst, commands)
 	if not res.ok:
 		return res
 	# Cancelling asks for confirmation (it deletes the task's saved progress).
@@ -1110,6 +1133,307 @@ static func _chunky_run(inst: ServerInstance, commands: Array) -> Dictionary:
 
 static func _plain_reply(text: String) -> String:
 	return RegEx.create_from_string("§.").sub(text, "", true).strip_edges()
+
+
+# --- BlueMap ----------------------------------------------------------------------------
+
+## Most bytes of map files one bluemap_files answer carries (the rest are asked for again).
+const BLUEMAP_BATCH_BYTES := 4 * 1024 * 1024
+
+## The BlueMap tab's state: {installed, enabled, version, ready, configs, accepted, loaded,
+## loading, threads, thread_count, current, note, maps: [{id, name, dimension, state,
+## progress, pending, frozen, viewable, suffix, error}], tasks, settings, dimensions, port}.
+static func bluemap_status(inst: ServerInstance) -> Dictionary:
+	var dir := inst.config.directory
+	var info := BlueMap.installed_info(dir)
+	var ready: bool = info.installed and info.enabled and inst.is_online() and inst.rcon.is_ready() and not inst.plugins_changed_while_running
+	var configs := BlueMap.has_configs(dir)
+	var accepted := BlueMap.download_accepted(dir)
+	# Accepted outside the app: still let the viewer see players and markers.
+	if accepted and configs and BlueMap.ensure_live_files(dir) and ready:
+		await _bluemap_reload(inst)
+	var live := {"loaded": false, "loading": false, "threads": "", "thread_count": 0, "current": ""}
+	var states := {}
+	var tasks := []
+	if ready:
+		live = BlueMap.parse_status(await inst.rcon.execute("bluemap"))
+		if live.loaded:
+			states = BlueMap.parse_maps(await inst.rcon.execute("bluemap maps"))
+			tasks = BlueMap.parse_tasks(await inst.rcon.execute("bluemap tasks"))
+	var note := ""
+	if not info.installed:
+		note = "BlueMap isn't installed on this server."
+	elif not info.enabled:
+		note = "BlueMap is disabled in Plugins."
+	elif inst.plugins_changed_while_running and inst.is_process_alive():
+		note = "Restart the server to load BlueMap."
+	elif not accepted:
+		note = ""  # The tab asks for the download consent.
+	elif not inst.is_online():
+		note = "BlueMap renders while the server is online. Rendered maps can be viewed any time."
+	elif ready and live.loading:
+		note = "BlueMap is loading…"
+	elif ready and not live.loaded:
+		note = "BlueMap isn't loaded. Check the console for errors, then Reload."
+	var maps := []
+	for id in BlueMap.map_ids(dir):
+		var mc := BlueMap.map_config(dir, id)
+		var storage := BlueMap.map_storage(dir, id)
+		var st: Dictionary = states.get(id, {})
+		maps.append({"id": id, "name": str(mc.values.name), "dimension": mc.dimension, "sorting": int(mc.values.sorting),
+				"state": st.get("state", ""), "progress": st.get("progress", 0.0), "pending": st.get("pending", 0),
+				"frozen": st.get("frozen", false), "viewable": storage.ok and DirAccess.dir_exists_absolute(storage.get("root", "")),
+				"suffix": storage.get("suffix", ""), "error": storage.get("error", "")})
+	maps.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.sorting < b.sorting or (a.sorting == b.sorting and a.id < b.id))
+	var settings := {}
+	for name in BlueMap.SETTINGS:
+		var s: Array = BlueMap.SETTINGS[name]
+		settings[name] = BlueMap.conf_get(BlueMap.read_config(dir, s[0]), s[1], s[3])
+	var port := BlueMap.webserver_port(dir)
+	if port > 0 and accepted:
+		for other in ServerManager.get_instances():
+			if other != inst and BlueMap.installed_info(other.config.directory).installed and BlueMap.webserver_port(other.config.directory) == port:
+				note = "BlueMap on %s also uses web port %d; only one of them can serve its web map. Change the port in Settings below." % [other.config.display_name, port]
+	var level := inst.get_properties().get_value("level-name", "world")
+	return _ok({"installed": info.installed, "enabled": info.enabled, "version": info.version, "ready": ready,
+			"configs": configs, "accepted": accepted, "loaded": live.loaded, "loading": live.loading, "threads": live.threads,
+			"thread_count": live.thread_count, "current": live.current, "note": note, "maps": maps, "tasks": tasks,
+			"settings": settings, "dimensions": BlueMap.dimensions(dir, level), "port": port})
+
+
+## Accepts Mojang's EULA for BlueMap's download of the client jar (core.conf accept-download)
+## and gives its webserver a port no other server's BlueMap uses; reloads BlueMap if running.
+static func bluemap_accept(inst: ServerInstance, ctx: Dictionary) -> Dictionary:
+	var dir := inst.config.directory
+	if not BlueMap.installed_info(dir).installed:
+		return _fail("BlueMap isn't installed on this server.")
+	var err := BlueMap.write_config(dir, "core.conf", BlueMap.conf_set(BlueMap.read_config(dir, "core.conf"), "accept-download", true))
+	if err != "":
+		return _fail(err)
+	var taken := []
+	for other in ServerManager.get_instances():
+		if other != inst:
+			taken.append(BlueMap.webserver_port(other.config.directory))
+	var web := BlueMap.read_config(dir, "webserver.conf")
+	var port := int(BlueMap.conf_get(web, "port", BlueMap.DEFAULT_PORT))
+	var free := BlueMap.free_port(port, taken)
+	if free != port:
+		BlueMap.write_config(dir, "webserver.conf", BlueMap.conf_set(web, "port", free))
+	BlueMap.ensure_live_files(dir)
+	_log(inst, ctx, "BlueMap: accepted the download of Minecraft's textures.")
+	var reloaded := await _bluemap_reload(inst)
+	inst.data_changed.emit(&"bluemap")
+	return _ok({"reloaded": reloaded, "port": free})
+
+
+## A render action on a map (see BlueMap.action_command).
+static func bluemap_action(inst: ServerInstance, action: String, id: String, area: Dictionary, ctx: Dictionary) -> Dictionary:
+	if not BlueMap.map_ids(inst.config.directory).has(id):
+		return _fail("Unknown map.")
+	var built := BlueMap.action_command(action, id, area)
+	if not built.ok:
+		return built
+	var res := await _bluemap_run(inst, built.command)
+	if not res.ok:
+		return res
+	_log(inst, ctx, "BlueMap: %s." % built.text)
+	inst.data_changed.emit(&"bluemap")
+	return _ok({"text": built.text, "reply": res.reply})
+
+
+## start / stop (render threads), reload, cancel (a pending task by [param ref], or all).
+static func bluemap_control(inst: ServerInstance, action: String, ref: String, ctx: Dictionary) -> Dictionary:
+	var command := ""
+	match action:
+		"start", "stop", "reload":
+			command = "bluemap " + action
+		"cancel":
+			if ref != "" and not BlueMap.valid_id(ref):
+				return _fail("Unknown task.")
+			command = "bluemap tasks cancel " + (ref if ref != "" else "all")
+		_:
+			return _fail("Unknown action.")
+	var res := await _bluemap_run(inst, command)
+	if not res.ok:
+		return res
+	_log(inst, ctx, "BlueMap: %s." % {"start": "started rendering", "stop": "stopped rendering", "reload": "reloaded",
+			"cancel": "cancelled " + ("a task" if ref != "" else "all tasks")}[action])
+	inst.data_changed.emit(&"bluemap")
+	return _ok({"reply": res.reply})
+
+
+## One map's settings: {ok, map: {id, world, dimension, values, masks}} (see BlueMap.map_config).
+static func bluemap_map_get(inst: ServerInstance, id: String) -> Dictionary:
+	if not BlueMap.map_ids(inst.config.directory).has(id):
+		return _fail("Unknown map.")
+	return _ok({"map": BlueMap.map_config(inst.config.directory, id)})
+
+
+## Saves a map's settings ([param values]: BlueMap.MAP_FIELDS, [param masks]: render-mask
+## boxes or null to keep them), or creates map [param id] for [param dimension] when it
+## doesn't exist. Reloads BlueMap when it runs. {ok, created, rerender, reloaded}.
+static func bluemap_map_save(inst: ServerInstance, id: String, values: Dictionary, masks: Variant, dimension: String, ctx: Dictionary) -> Dictionary:
+	var dir := inst.config.directory
+	if not BlueMap.valid_id(id):
+		return _fail("Map names may use letters, digits, - and _ only.")
+	var file := "maps/%s.conf" % id
+	var created := not BlueMap.map_ids(dir).has(id)
+	var text := BlueMap.read_config(dir, file)
+	if created:
+		var level := inst.get_properties().get_value("level-name", "world")
+		var known := BlueMap.dimensions(dir, level).map(func(d: Dictionary) -> String: return d.dimension)
+		if not known.has(dimension):
+			return _fail("Choose a dimension of the active world.")
+		text = BlueMap.new_map_text(level, dimension, str(values.get("name", id)), BlueMap.map_ids(dir).size() * 100)
+	var before := BlueMap.map_config(dir, id) if not created else {}
+	if masks != null and not masks is Array:
+		return _fail("Invalid render mask.")
+	if masks != null and not created and not before.masks.ok:
+		return _fail("This map's render mask uses shapes the editor doesn't know; edit plugins/BlueMap/%s instead." % file)
+	text = BlueMap.apply_map_values(text, values, masks)
+	var err := BlueMap.write_config(dir, file, text)
+	if err != "":
+		return _fail(err)
+	var rerender := false
+	if not created:
+		var after := BlueMap.map_config(dir, id)
+		for key in BlueMap.RERENDER_FIELDS:
+			rerender = rerender or str(before.values.get(key)) != str(after.values.get(key))
+	_log(inst, ctx, "BlueMap: %s map %s." % ["added" if created else "changed", id])
+	var reloaded := await _bluemap_reload(inst)
+	inst.data_changed.emit(&"bluemap")
+	return _ok({"created": created, "rerender": rerender, "reloaded": reloaded})
+
+
+## Removes map [param id]: its config and its rendered files.
+static func bluemap_map_delete(inst: ServerInstance, id: String, ctx: Dictionary) -> Dictionary:
+	var dir := inst.config.directory
+	if not BlueMap.map_ids(dir).has(id):
+		return _fail("Unknown map.")
+	var storage := BlueMap.map_storage(dir, id)
+	DirAccess.remove_absolute(BlueMap.config_path(dir, "maps/%s.conf" % id))
+	var reloaded := await _bluemap_reload(inst)
+	if storage.ok and DirAccess.dir_exists_absolute(storage.root):
+		FileOps.remove_tree(storage.root)
+	_log(inst, ctx, "BlueMap: removed map %s." % id)
+	inst.data_changed.emit(&"bluemap")
+	return _ok({"reloaded": reloaded})
+
+
+## Saves BlueMap settings (BlueMap.SETTINGS names -> values); reloads BlueMap when it runs.
+static func bluemap_settings_save(inst: ServerInstance, values: Dictionary, ctx: Dictionary) -> Dictionary:
+	var dir := inst.config.directory
+	var texts := {}
+	for name in values:
+		if not BlueMap.SETTINGS.has(name):
+			continue
+		var s: Array = BlueMap.SETTINGS[name]
+		var v: Variant = values[name]
+		if s[2] == "bool":
+			v = bool(v)
+		else:
+			v = int(v)
+			if name == "webserver-port" and (v < 1024 or v > 65535):
+				return _fail("The web port must be between 1024 and 65535.")
+		if not texts.has(s[0]):
+			texts[s[0]] = BlueMap.read_config(dir, s[0])
+		texts[s[0]] = BlueMap.conf_set(texts[s[0]], s[1], v)
+	for file in texts:
+		var err := BlueMap.write_config(dir, file, texts[file])
+		if err != "":
+			return _fail(err)
+	_log(inst, ctx, "BlueMap: settings changed.")
+	var reloaded := await _bluemap_reload(inst)
+	inst.data_changed.emit(&"bluemap")
+	return _ok({"reloaded": reloaded})
+
+
+## BlueMap's check of why a spot of a map isn't rendered. {ok, text, missing_light}.
+static func bluemap_troubleshoot(inst: ServerInstance, id: String, x: int, z: int) -> Dictionary:
+	if not BlueMap.map_ids(inst.config.directory).has(id):
+		return _fail("Unknown map.")
+	var res := await _bluemap_run(inst, "bluemap troubleshoot %s %d %d" % [id, clampi(x, -30_000_000, 30_000_000), clampi(z, -30_000_000, 30_000_000)])
+	if not res.ok:
+		return res
+	return _ok({"text": res.reply, "missing_light": str(res.reply).contains("missing light-data")})
+
+
+## Files of a rendered map for the viewer. [param items]: [{path (below the map's root),
+## mtime (the copy the viewer has, -1 if none)}]. Returns {ok, suffix, files: {path: {data
+## (base64), mtime}}, missing: [paths], more: [paths left for another request]}; files the
+## viewer already has (same mtime) are left out.
+static func bluemap_files(inst: ServerInstance, id: String, items: Array) -> Dictionary:
+	if not BlueMap.map_ids(inst.config.directory).has(id):
+		return _fail("Unknown map.")
+	var storage := BlueMap.map_storage(inst.config.directory, id)
+	if not storage.ok:
+		return storage
+	var out := {}
+	var missing := []
+	var more := []
+	var budget := BLUEMAP_BATCH_BYTES
+	for f in items.slice(0, 2000):
+		var path := str(f.get("path", "")) if f is Dictionary else ""
+		if not BlueMap.valid_web_path(path):
+			missing.append(path)
+			continue
+		var full: String = storage.root.path_join(path)
+		if not FileAccess.file_exists(full):
+			missing.append(path)
+			continue
+		var mtime := FileAccess.get_modified_time(full)
+		if mtime == int(f.get("mtime", -1)):
+			continue
+		if budget <= 0:
+			more.append(path)
+			continue
+		var bytes := FileAccess.get_file_as_bytes(full)
+		budget -= bytes.size()
+		out[path] = {"data": Marshalls.raw_to_base64(bytes), "mtime": mtime}
+	return _ok({"suffix": storage.suffix, "files": out, "missing": missing, "more": more})
+
+
+## A map's live data: {ok, players: [{uuid, name, foreign, position, rotation}], markers
+## (only when changed since [param markers_mtime]), markers_mtime}.
+static func bluemap_live(inst: ServerInstance, id: String, markers_mtime: int) -> Dictionary:
+	if not BlueMap.map_ids(inst.config.directory).has(id):
+		return _fail("Unknown map.")
+	var storage := BlueMap.map_storage(inst.config.directory, id)
+	if not storage.ok:
+		return storage
+	var players: Variant = JSON.parse_string(FileAccess.get_file_as_string(storage.root.path_join("live/players.json")))
+	var out := _ok({"players": players.get("players", []) if players is Dictionary and inst.is_online() else []})
+	var markers_path: String = storage.root.path_join("live/markers.json")
+	var mtime := FileAccess.get_modified_time(markers_path) if FileAccess.file_exists(markers_path) else 0
+	out.markers_mtime = mtime
+	if mtime != markers_mtime:
+		var markers: Variant = JSON.parse_string(FileAccess.get_file_as_string(markers_path))
+		out.markers = markers if markers is Dictionary else {}
+	return out
+
+
+## Reloads BlueMap if it runs (configs changed). True when it was reloaded.
+static func _bluemap_reload(inst: ServerInstance) -> bool:
+	if not (inst.is_online() and inst.rcon.is_ready() and BlueMap.installed_info(inst.config.directory).enabled) or inst.plugins_changed_while_running:
+		return false
+	var reply := BlueMap.plain(await inst.rcon.execute("bluemap reload"))
+	return not reply.contains("Unknown or incomplete command")
+
+
+## Runs one BlueMap command over RCON. {ok, reply (plain text)} or {ok: false, error}.
+static func _bluemap_run(inst: ServerInstance, command: String) -> Dictionary:
+	if not inst.is_online() or not inst.rcon.is_ready():
+		return _fail("Start the server to use BlueMap.")
+	var reply := BlueMap.plain(await inst.rcon.execute(command))
+	if reply.contains("Unknown or incomplete command"):
+		return _fail("BlueMap isn't loaded on the running server. Restart the server to load it.")
+	if reply.contains("BlueMap is still loading"):
+		return _fail("BlueMap is still loading; try again in a moment.")
+	if reply.contains("BlueMap is not loaded"):
+		return _fail("BlueMap isn't loaded. Check the console for errors, then Reload.")
+	if reply.contains("Incorrect argument") or reply.contains("There was an error"):
+		return _fail("BlueMap: %s" % reply)
+	return _ok({"reply": reply})
 
 
 # --- Resources & automation ------------------------------------------------------------------

@@ -68,3 +68,46 @@ server_next={
 rendering_device/driver.windows="d3d12"
 renderer/rendering_method="gl_compatibility"
 renderer/rendering_method.mobile="gl_compatibility"
+
+[shader_globals]
+
+bm_distance={
+"type": "float",
+"value": 100.0
+}
+bm_sunlight={
+"type": "float",
+"value": 1.0
+}
+bm_ambient={
+"type": "float",
+"value": 0.0
+}
+bm_void_color={
+"type": "vec3",
+"value": Vector3(0, 0, 0)
+}
+bm_hires_mask={
+"type": "sampler2D",
+"value": ""
+}
+bm_hires_origin={
+"type": "vec2",
+"value": Vector2(0, 0)
+}
+bm_hires_mask_size={
+"type": "float",
+"value": 0.0
+}
+bm_hires_translate={
+"type": "vec2",
+"value": Vector2(2, 2)
+}
+bm_hires_tile_size={
+"type": "float",
+"value": 32.0
+}
+bm_flat={
+"type": "bool",
+"value": false
+}

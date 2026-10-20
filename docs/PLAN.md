@@ -398,6 +398,47 @@ an area after a world backup; the server must restart afterwards.
 
 - Worlds use Paper's Bukkit names: `<level>`, `<level>_nether`, `<level>_the_end`, and
   `<level>_<namespace>_<dimension>` for extra dimensions (verified with an imported dimension).
+- Chunky skips chunks that exist unless `force-load-existing-chunks` is on (read when a task
+  starts or continues), so the app turns it on for "load existing chunks" tasks only (and
+  `chunky reload config`). Loading a chunk that way also gives chunks saved without light data
+  (WorldPainter exports) their light, which BlueMap needs; verified by stripping the light of
+  an imported dimension. Loading completes half-generated chunks at the edges too.
 - Commands answer over RCON. Cancel asks for `/chunky confirm`, which the app sends; a cancelled
   task's thread still logs "stopped", which must not bring it back.
 - Verified with Chunky 1.5.3 on Paper 26.3 (`tests/integration/chunky_test.gd`).
+
+## 15. BlueMap (3D map)
+
+A BlueMap tab installs BlueMap (the Paper build from Modrinth), asks for the consent BlueMap
+needs before it downloads Minecraft's client jar from Mojang (`accept-download` in core.conf;
+can be given before the first start), and then has two pages:
+
+- **Map**: the rendered maps drawn natively (`BlueMapViewer`), no browser: BlueMap's lowres
+  levels and hires tiles with its own shading, its perspective, flat and free-flight views,
+  daylight, live players and markers. Works for remote servers (files come through the
+  `bluemap_files` operation, in batches of up to 4 MB, only when changed) and while the server
+  is stopped.
+- **Renders**: render threads (start/stop, reload), tasks (cancel), per map: update, update an
+  area, fix edges, re-render all or an area, freeze/unfreeze, delete the render, "why isn't it
+  rendered?" (BlueMap's troubleshoot, with the Chunky hint for missing light), map settings
+  (BlueMap's map options and render areas as boxes), add a map for any dimension of the active
+  world, remove a map; and BlueMap's settings (threads, update intervals, pause with players,
+  live players, its web map and port). A new install's web port avoids ports other servers'
+  BlueMap use.
+
+Notes:
+- Configs are HOCON; the app edits top-level keys in place, keeping BlueMap's comments.
+- Map data (file storage, gzip/deflate/zstd): `settings.json`, `textures.json<ext>` (block
+  textures as data URIs, by material index), `tiles/0/…prbm<ext>` (hires: PRWM-style
+  non-indexed triangles with position, normal, color, uv, ao, sunlight, blocklight and material
+  groups; 32×32 blocks, offset by `translate`), `tiles/1..n/…png` (lowres: colour on top,
+  height and block light below; 500 × 5^(lod-1) blocks), `live/players.json`,
+  `live/markers.json`; paths split each coordinate digit into a folder (`x-1/2/z3`).
+- The viewer decodes tiles on worker threads without per-vertex loops: positions and UVs become
+  vertex arrays directly, the other attributes data textures read by `VERTEX_ID`, block
+  textures one atlas (a texture array would exceed NVIDIA's 2048 layers). The Compatibility
+  renderer has no linear-to-sRGB step for 3D, and RGB8 textures read black there (RGBA8 works).
+- BlueMap renders only fully generated chunks with light data; a server nobody has visited has
+  almost none (troubleshoot reports "missing light-data" for both).
+- Verified with BlueMap 5.29 on Paper 26.3 (`tests/integration/bluemap_test.gd`,
+  `tests/integration/bluemap_ui_test.gd`).
