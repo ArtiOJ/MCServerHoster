@@ -64,7 +64,7 @@ static func run(inst: ServerInstance, op: String, args: Dictionary, ctx := LOCAL
 		"datapack_toggle": return await datapack_toggle(inst, str(args.get("id", "")), bool(args.get("enable", true)), ctx)
 		"datapack_remove": return datapack_remove(inst, str(args.get("id", "")), ctx)
 		"world_import_analyze": return await world_import_analyze(inst, _paths(args.get("files")))
-		"world_import": return await world_import(inst, str(args.get("token", "")), int(args.get("mode", 0)), bool(args.get("apply", false)), ctx, int(args.get("dimension", 0)))
+		"world_import": return await world_import(inst, str(args.get("token", "")), int(args.get("mode", 0)), bool(args.get("apply", false)), ctx, int(args.get("dimension", 0)), bool(args.get("keep_server_conflicts", true)))
 		"world_import_cancel": return world_import_cancel(str(args.get("token", "")))
 		"resources_info": return resources_info(inst)
 		"port_check": return port_check(inst, int(args.get("port", 0)))
@@ -827,6 +827,7 @@ static func world_import_analyze(inst: ServerInstance, files: PackedStringArray)
 	var analysis: Dictionary = await WorldImporter.analyze(inst, files[0], inst.config.mc_version)
 	var token := Fmt.random_token(16)
 	_imports[token] = {"server": inst.config.id, "analysis": analysis, "msec": Time.get_ticks_msec()}
+	var world_dir := inst.config.directory.path_join(inst.get_properties().get_value("level-name", "world"))
 	return {
 		"ok": true, "token": token, "valid": analysis.ok, "error": analysis.error, "warnings": analysis.warnings,
 		"display_name": WorldImporter.display_name(analysis), "version": analysis.version,
@@ -835,11 +836,16 @@ static func world_import_analyze(inst: ServerInstance, files: PackedStringArray)
 		"size_bytes": analysis.size_bytes, "found": analysis.world_dir != "",
 		"single_dimension": analysis.layout == WorldImporter.Layout.DIMENSION,
 		"dimension_choices": analysis.dimension_choices.map(func(c: Dictionary) -> String: return c.label),
+		# Dimensions added to the server's world, which Replace can keep, and the ones of them
+		# the imported world has too.
+		"added_dimensions": WorldImporter.added_dimensions(world_dir).map(func(d: Dictionary) -> String: return d.key),
+		"conflicts": WorldImporter.dimension_conflicts(world_dir, analysis) if analysis.ok else PackedStringArray(),
 	}
 
 
-## [param dimension] is the index into the analysis' dimension_choices for mode DIMENSION.
-static func world_import(inst: ServerInstance, token: String, mode: int, apply_settings: bool, ctx: Dictionary, dimension := 0) -> Dictionary:
+## [param dimension] is the index into the analysis' dimension_choices for mode DIMENSION;
+## [param keep_server_conflicts] decides same-named dimensions for mode REPLACE_KEEP.
+static func world_import(inst: ServerInstance, token: String, mode: int, apply_settings: bool, ctx: Dictionary, dimension := 0, keep_server_conflicts := true) -> Dictionary:
 	var pending: Dictionary = _imports.get(token, {})
 	if pending.is_empty() or pending.server != inst.config.id:
 		return _fail("Choose the world again; the earlier choice expired.")
@@ -848,12 +854,12 @@ static func world_import(inst: ServerInstance, token: String, mode: int, apply_s
 		_log(inst, ctx, "Is importing the world \"%s\"." % WorldImporter.display_name(analysis))
 	var import_mode: WorldImporter.Mode = mode if mode in WorldImporter.Mode.values() else WorldImporter.Mode.REPLACE
 	var result: Dictionary = await WorldImporter.import_into(inst, analysis, import_mode,
-			apply_settings, func(text: String) -> void: _progress(ctx, text), dimension)
+			apply_settings, func(text: String) -> void: _progress(ctx, text), dimension, keep_server_conflicts)
 	if result.ok:
 		world_import_cancel(token)
 		inst.data_changed.emit(&"worlds")
 		return _ok({"name": WorldImporter.display_name(analysis), "level_name": result.level_name,
-				"dimension": result.get("dimension", ""), "command": result.get("command", "")})
+				"dimension": result.get("dimension", ""), "command": result.get("command", ""), "kept": result.get("kept", [])})
 	return result
 
 

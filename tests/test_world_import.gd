@@ -326,3 +326,52 @@ func test_unique_level_names() -> void:
 	check_eq(WorldImporter.unique_level_name(dir, "Skyblock: Classic!"), "Skyblock_Classic_2", "unique")
 	check_eq(WorldImporter.unique_level_name(dir, "plugins"), "imported_world", "reserved folder avoided")
 	FileOps.remove_tree(dir)
+
+
+func test_keeps_added_dimensions() -> void:
+	var server := _tmp("keep")
+	var world := server.path_join("world")
+	_touch(world.path_join("level.dat"), FIX_263)
+	for d in ["overworld", "the_nether", "the_end", "erebor", "islands"]:
+		_touch(world.path_join("dimensions/minecraft/%s/region/r.0.0.mca" % d))
+	_touch(world.path_join("dimensions/terralith/caves/region/r.0.0.mca"))
+	WorldImporter.write_dimension_pack(world, "erebor", "minecraft:overworld", {})
+	WorldImporter.write_dimension_pack(world, "islands", "minecraft:overworld", {})
+	# A third-party datapack (zipped) defining a dimension in its own namespace.
+	var zip := ZIPPacker.new()
+	zip.open(world.path_join("datapacks/caves.zip"))
+	zip.start_file("data/terralith/dimension/caves.json")
+	zip.write_file("{}".to_utf8_buffer())
+	zip.close_file()
+	zip.close()
+	var added := WorldImporter.added_dimensions(world)
+	check_eq(added.map(func(d: Dictionary) -> String: return d.key), ["minecraft:erebor", "minecraft:islands", "terralith:caves"], "added dimensions, vanilla ones left out")
+	check_eq(added[0].packs, [world.path_join("datapacks/dimension-erebor")], "with the datapack that defines it")
+	check_eq(added[2].packs, [world.path_join("datapacks/caves.zip")], "zipped datapacks too")
+
+	# The new world brings its own islands (a conflict) and nothing else.
+	var incoming := _tmp("keep-in").path_join("Map")
+	_touch(incoming.path_join("level.dat"), FIX_263)
+	for d in ["overworld", "the_nether", "islands"]:
+		_touch(incoming.path_join("dimensions/minecraft/%s/region/r.0.0.mca" % d))
+	_touch(incoming.path_join("dimensions/minecraft/islands/region/incoming.txt"))
+	WorldImporter.write_dimension_pack(incoming, "islands", "minecraft:overworld", {})
+	var analysis := {"world_dir": incoming, "layout": WorldImporter.Layout.DIMENSIONS}
+	check_eq(WorldImporter.incoming_dimensions(analysis), PackedStringArray(["minecraft:islands"]), "incoming extra dimensions")
+	check_eq(WorldImporter.dimension_conflicts(world, analysis), PackedStringArray(["minecraft:islands"]), "conflict found")
+
+	# Set aside, the world replaced, then put back: the server's versions win.
+	var holding := server.path_join(".manager/kept")
+	check_eq(WorldImporter.hold_dimensions(added, world, holding), OK, "held")
+	check(not DirAccess.dir_exists_absolute(world.path_join("dimensions/minecraft/erebor")) and not FileAccess.file_exists(world.path_join("datapacks/caves.zip")), "moved out of the old world")
+	FileOps.remove_tree(world)
+	FileOps.copy_tree(incoming, world)
+	check_eq(WorldImporter.restore_dimensions(added, holding, world), OK, "restored")
+	for key in ["erebor", "islands"]:
+		check(DirAccess.dir_exists_absolute(world.path_join("dimensions/minecraft/%s/region" % key)) and DirAccess.dir_exists_absolute(world.path_join("datapacks/dimension-" + key)), "%s and its datapack in the new world" % key)
+	check(not FileAccess.file_exists(world.path_join("dimensions/minecraft/islands/region/incoming.txt")), "the server's islands replaced the imported one")
+	check(FileAccess.file_exists(world.path_join("datapacks/caves.zip")) and DirAccess.dir_exists_absolute(world.path_join("dimensions/terralith/caves")), "third-party dimension and pack kept")
+	check(DirAccess.dir_exists_absolute(world.path_join("dimensions/minecraft/the_nether")) and not DirAccess.dir_exists_absolute(world.path_join("dimensions/minecraft/the_end")), "the new world's own dimensions")
+	check(not DirAccess.dir_exists_absolute(holding), "holding folder removed")
+	FileOps.remove_tree(server)
+	FileOps.remove_tree(incoming.get_base_dir())

@@ -6,8 +6,12 @@ extends ConfirmationDialog
 
 signal imported(handle: ServerHandle)
 
+## Index of "Replace, keep added dimensions" in the mode list.
+const MODE_KEEP := 1
 ## Index of "Add as dimension of current world" in the mode list.
-const MODE_DIMENSION := 2
+const MODE_DIMENSION := 3
+## The import mode of each entry of the mode list.
+const MODES: Array[WorldImporter.Mode] = [WorldImporter.Mode.REPLACE, WorldImporter.Mode.REPLACE_KEEP, WorldImporter.Mode.ADD, WorldImporter.Mode.DIMENSION]
 
 var _instance: ServerHandle
 ## What the server reported about the chosen world (see ServerOps.world_import_analyze).
@@ -32,6 +36,8 @@ var _serial := 0
 @onready var _warnings_label: Label = %WarningsLabel
 @onready var _options: GridContainer = %Options
 @onready var _mode_option: OptionButton = %ModeOption
+@onready var _conflict_label: Label = %ConflictLabel
+@onready var _conflict_option: OptionButton = %ConflictOption
 @onready var _dimension_label: Label = %DimensionLabel
 @onready var _dimension_option: OptionButton = %DimensionOption
 @onready var _apply_check: CheckButton = %ApplyCheck
@@ -142,7 +148,15 @@ func _show_analysis(a: Dictionary) -> void:
 	for label in choices:
 		_dimension_option.add_item(str(label))
 	_mode_option.set_item_disabled(MODE_DIMENSION, choices.is_empty())
-	_mode_option.select(MODE_DIMENSION if single and not choices.is_empty() else 0)
+	var added: Array = a.get("added_dimensions", [])
+	_mode_option.set_item_disabled(MODE_KEEP, added.is_empty() or single)
+	_mode_option.set_item_tooltip(MODE_KEEP, "Keeps %s" % ", ".join(PackedStringArray(added)) if not added.is_empty() else "The server's world has no added dimensions")
+	var conflicts: Array = a.get("conflicts", [])
+	_conflict_label.tooltip_text = "Both worlds have %s. Keep the server's, or use the imported world's?" % ", ".join(PackedStringArray(conflicts))
+	_conflict_option.tooltip_text = _conflict_label.tooltip_text
+	_conflict_option.select(0)
+	# Replacing a world that has added dimensions keeps them unless asked otherwise.
+	_mode_option.select(MODE_DIMENSION if single and not choices.is_empty() else (MODE_KEEP if not added.is_empty() and not single else 0))
 	_apply_check.button_pressed = not single and (a.game_mode in ["adventure", "creative"] or a.hardcore)
 	_on_mode_selected(_mode_option.selected)
 	_update_ok()
@@ -150,6 +164,9 @@ func _show_analysis(a: Dictionary) -> void:
 
 ## Map settings belong to a whole world; an added dimension keeps the current world's.
 func _on_mode_selected(index: int) -> void:
+	var conflicts: Array = _analysis.get("conflicts", [])
+	_conflict_label.visible = index == MODE_KEEP and not conflicts.is_empty()
+	_conflict_option.visible = _conflict_label.visible
 	_dimension_label.visible = index == MODE_DIMENSION
 	_dimension_option.visible = index == MODE_DIMENSION
 	_apply_check.disabled = _busy or index == MODE_DIMENSION
@@ -167,9 +184,9 @@ func _on_confirmed() -> void:
 	_set_buttons_enabled(false)
 	_progress.visible = true
 	_progress.value = 0.0
-	var mode: WorldImporter.Mode = [WorldImporter.Mode.REPLACE, WorldImporter.Mode.ADD, WorldImporter.Mode.DIMENSION][_mode_option.selected]
+	var mode: WorldImporter.Mode = MODES[_mode_option.selected]
 	var result: Dictionary = await _instance.call_op("world_import", {"token": _analysis.token, "mode": mode, "apply": _apply_check.button_pressed,
-			"dimension": maxi(_dimension_option.selected, 0)},
+			"dimension": maxi(_dimension_option.selected, 0), "keep_server_conflicts": _conflict_option.selected == 0},
 			func(text: String, _f: float) -> void: _status.text = text)
 	_busy = false
 	_progress.visible = false
@@ -181,7 +198,9 @@ func _on_confirmed() -> void:
 		imported.emit(_instance)
 		hide()
 	elif result.ok:
-		Notifier.success("Imported \"%s\" into %s." % [_analysis.display_name, _instance.config.display_name])
+		var kept: Array = result.get("kept", [])
+		Notifier.success("Imported \"%s\" into %s%s." % [_analysis.display_name, _instance.config.display_name,
+				(", keeping %s" % ", ".join(PackedStringArray(kept))) if not kept.is_empty() else ""])
 		_analysis = {}
 		imported.emit(_instance)
 		hide()
@@ -224,6 +243,7 @@ func _set_buttons_enabled(enabled: bool) -> void:
 	_folder_button.disabled = not enabled
 	_mode_option.disabled = not enabled
 	_dimension_option.disabled = not enabled
+	_conflict_option.disabled = not enabled
 	_apply_check.disabled = not enabled or _mode_option.selected == MODE_DIMENSION
 	get_cancel_button().disabled = not enabled
 	_update_ok()

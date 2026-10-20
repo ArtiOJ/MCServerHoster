@@ -21,7 +21,9 @@ extends RefCounted
 ## DIMENSIONS worlds are copied as they are.
 
 enum Layout { SINGLEPLAYER, SPLIT, DIMENSIONS, DIMENSION }
-enum Mode { REPLACE, ADD, DIMENSION }
+## REPLACE_KEEP replaces the world but carries the dimensions added to it (anything besides
+## the overworld, Nether and End, with the datapacks defining them) into the new one.
+enum Mode { REPLACE, ADD, DIMENSION, REPLACE_KEEP }
 
 const LAYOUT_NAMES: PackedStringArray = ["Singleplayer save", "Bukkit/Paper (separate nether and end folders)", "Minecraft 26+ (dimensions folder)", "Minecraft 26+ (single dimension)"]
 const GAME_MODES: PackedStringArray = ["survival", "creative", "adventure", "spectator"]
@@ -171,7 +173,9 @@ static func analyze(owner: Node, source: String, server_version := "") -> Dictio
 ## Imports an analysed world into [param inst] (which must be stopped).
 ## [param on_status] receives progress text. Returns {ok, error, level_name}.
 ## [param dimension_index] picks the entry of dimension_choices that Mode.DIMENSION adds.
-static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, apply_settings: bool, on_status := Callable(), dimension_index := 0) -> Dictionary:
+## [param keep_server_conflicts]: with Mode.REPLACE_KEEP, an added dimension whose name the
+## imported world also has keeps the server's version (else the imported one is used).
+static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, apply_settings: bool, on_status := Callable(), dimension_index := 0, keep_server_conflicts := true) -> Dictionary:
 	var report := func(text: String) -> void:
 		inst.log_system(text)
 		if on_status.is_valid():
@@ -200,7 +204,21 @@ static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, 
 			if await inst.backups.create_backup(false, dir, "pre-import") == "":
 				return {"ok": false, "error": "The safety backup failed, so the current world was left untouched."}
 	inst.mark_installing(true)
-	if mode == Mode.REPLACE:
+	# Added dimensions wait outside the world folder while it is replaced.
+	var kept := []
+	var holding := ""
+	if mode == Mode.REPLACE_KEEP:
+		var conflicts := dimension_conflicts(dir.path_join(level), analysis)
+		kept = added_dimensions(dir.path_join(level)).filter(func(d: Dictionary) -> bool:
+			return keep_server_conflicts or not conflicts.has(d.key))
+		if not kept.is_empty():
+			holding = dir.path_join(".manager").path_join("kept-dimensions-" + Fmt.file_stamp(int(Time.get_unix_time_from_system())))
+			report.call("Keeping %s…" % ", ".join(kept.map(func(d: Dictionary) -> String: return d.key)))
+			var held: Error = await FileOps.run_async(inst, func() -> Error: return hold_dimensions(kept, dir.path_join(level), holding))
+			if held != OK:
+				inst.mark_installing(false)
+				return {"ok": false, "error": "Setting the added dimensions aside failed (%s); nothing was replaced. Anything already moved is in %s." % [error_string(held), holding]}
+	if mode == Mode.REPLACE or mode == Mode.REPLACE_KEEP:
 		# Permanently remove the old world folders (the safety backup above keeps a copy).
 		for w in inst.backups.world_dirs(dir):
 			var path := dir.path_join(w)
@@ -208,9 +226,16 @@ static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, 
 	report.call("Importing \"%s\" as world folder \"%s\"…" % [display_name(analysis), level])
 	var version := inst.config.mc_version
 	var err: Error = await FileOps.run_async(inst, func() -> Error: return place_world(analysis, dir, level, version))
+	if err == OK and holding != "":
+		report.call("Putting the kept dimensions into the new world…")
+		var target := dir.path_join(level)
+		err = await FileOps.run_async(inst, func() -> Error: return restore_dimensions(kept, holding, target))
+		if err != OK:
+			inst.mark_installing(false)
+			return {"ok": false, "error": "The world was imported, but putting the kept dimensions back failed (%s). They are in %s." % [error_string(err), holding]}
 	inst.mark_installing(false)
 	if err != OK:
-		return {"ok": false, "error": "Copying the world failed: %s" % error_string(err)}
+		return {"ok": false, "error": "Copying the world failed: %s%s" % [error_string(err), (". The kept dimensions are in %s." % holding) if holding != "" else ""]}
 
 	props = ServerProperties.load_file(inst.config.properties_path())
 	props.set_value("level-name", level)
@@ -224,8 +249,152 @@ static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, 
 	# Game rule values the manager knew belong to the old world.
 	inst.config.known_gamerules.clear()
 	inst.save_config()
-	report.call("World \"%s\" imported. It will be prepared on the next start." % display_name(analysis))
-	return {"ok": true, "level_name": level}
+	report.call("World \"%s\" imported%s. It will be prepared on the next start." % [display_name(analysis),
+			(", keeping %s" % ", ".join(kept.map(func(d: Dictionary) -> String: return d.key))) if not kept.is_empty() else ""])
+	return {"ok": true, "level_name": level, "kept": kept.map(func(d: Dictionary) -> String: return d.key)}
+
+
+# --- Keeping added dimensions (Mode.REPLACE_KEEP) ---------------------------------------
+
+## The dimensions added to the world in [param world_dir] (Minecraft 26+ layout): every
+## dimensions/<namespace>/<name> besides the overworld, Nether and End, with the datapacks
+## (folders or zips in datapacks/) that define it. [{key, path, packs: [pack paths]}].
+static func added_dimensions(world_dir: String) -> Array:
+	var out := []
+	var root := world_dir.path_join("dimensions")
+	if not DirAccess.dir_exists_absolute(root):
+		return out
+	var defined := pack_dimensions(world_dir.path_join("datapacks"))
+	for ns in DirAccess.get_directories_at(root):
+		for id in DirAccess.get_directories_at(root.path_join(ns)):
+			var key := "%s:%s" % [ns, id]
+			if ns == "minecraft" and VANILLA_DIMENSIONS.has(id):
+				continue
+			var packs := []
+			for pack in defined:
+				if (defined[pack] as Array).has(key):
+					packs.append(pack)
+			out.append({"key": key, "path": root.path_join(ns).path_join(id), "packs": packs})
+	out.sort_custom(func(a: Dictionary, b: Dictionary) -> bool: return a.key < b.key)
+	return out
+
+
+## The dimensions each datapack in [param datapacks_dir] defines: {pack path: [keys]}
+## (from data/<namespace>/dimension/<name>.json, in pack folders and zips).
+static func pack_dimensions(datapacks_dir: String) -> Dictionary:
+	var out := {}
+	if not DirAccess.dir_exists_absolute(datapacks_dir):
+		return out
+	var re := RegEx.create_from_string("^(?:[^/]+/)?data/([^/]+)/dimension/(.+)\\.json$")
+	for name in DirAccess.get_directories_at(datapacks_dir):
+		var keys := []
+		var data := datapacks_dir.path_join(name).path_join("data")
+		for ns in DirAccess.get_directories_at(data) if DirAccess.dir_exists_absolute(data) else PackedStringArray():
+			var defs := data.path_join(ns).path_join("dimension")
+			for f in DirAccess.get_files_at(defs) if DirAccess.dir_exists_absolute(defs) else PackedStringArray():
+				if f.ends_with(".json"):
+					keys.append("%s:%s" % [ns, f.get_basename()])
+		if not keys.is_empty():
+			out[datapacks_dir.path_join(name)] = keys
+	for name in DirAccess.get_files_at(datapacks_dir):
+		if not name.to_lower().ends_with(".zip"):
+			continue
+		var zip := ZIPReader.new()
+		if zip.open(datapacks_dir.path_join(name)) != OK:
+			continue
+		var keys := []
+		for entry in zip.get_files():
+			var m := re.search(entry)
+			if m != null:
+				keys.append("%s:%s" % [m.get_string(1), m.get_string(2)])
+		zip.close()
+		if not keys.is_empty():
+			out[datapacks_dir.path_join(name)] = keys
+	return out
+
+
+## The dimensions an analysed world brings besides its overworld, Nether and End (folders
+## under dimensions/ and ones its datapacks define), as keys.
+static func incoming_dimensions(analysis: Dictionary) -> PackedStringArray:
+	var out := PackedStringArray()
+	var world_dir: String = analysis.get("world_dir", "")
+	if world_dir == "" or analysis.get("layout") == Layout.DIMENSION:
+		return out
+	for d in added_dimensions(world_dir):
+		out.append(d.key)
+	for keys in pack_dimensions(world_dir.path_join("datapacks")).values():
+		for key in keys:
+			if not out.has(key) and not (str(key).begins_with("minecraft:") and VANILLA_DIMENSIONS.has(str(key).get_slice(":", 1))):
+				out.append(key)
+	return out
+
+
+## Added dimensions of [param world_dir] that the analysed world has too (by key, or by the
+## name of a datapack defining them).
+static func dimension_conflicts(world_dir: String, analysis: Dictionary) -> PackedStringArray:
+	var incoming := incoming_dimensions(analysis)
+	var incoming_packs := []
+	var src: String = analysis.get("world_dir", "")
+	if src != "" and analysis.get("layout") != Layout.DIMENSION and DirAccess.dir_exists_absolute(src.path_join("datapacks")):
+		incoming_packs = Array(DirAccess.get_directories_at(src.path_join("datapacks"))) + Array(DirAccess.get_files_at(src.path_join("datapacks")))
+	var out := PackedStringArray()
+	for d in added_dimensions(world_dir):
+		if incoming.has(d.key) or d.packs.any(func(p: String) -> bool: return incoming_packs.has(p.get_file())):
+			out.append(d.key)
+	return out
+
+
+## Moves [param kept] (see added_dimensions) from [param world_dir] into [param holding].
+## Thread-safe.
+static func hold_dimensions(kept: Array, world_dir: String, holding: String) -> Error:
+	for d in kept:
+		var rel: String = (d.path as String).trim_prefix(world_dir + "/")
+		var err := _move(d.path, holding.path_join(rel))
+		if err != OK:
+			return err
+		for pack in d.packs:
+			if FileAccess.file_exists(pack) or DirAccess.dir_exists_absolute(pack):
+				err = _move(pack, holding.path_join("datapacks").path_join((pack as String).get_file()))
+				if err != OK:
+					return err
+	return OK
+
+
+## Moves the held dimensions and their datapacks into the new world [param world_dir],
+## replacing what it has under the same names. Removes [param holding]. Thread-safe.
+static func restore_dimensions(kept: Array, holding: String, world_dir: String) -> Error:
+	for d in kept:
+		var rel: String = d.path.substr(d.path.find("/dimensions/") + 1)
+		var src := holding.path_join(rel)
+		var dst := world_dir.path_join(rel)
+		if DirAccess.dir_exists_absolute(dst):
+			FileOps.remove_tree(dst)
+		var err := _move(src, dst)
+		if err != OK:
+			return err
+		for pack in d.packs:
+			var held := holding.path_join("datapacks").path_join((pack as String).get_file())
+			if not (FileAccess.file_exists(held) or DirAccess.dir_exists_absolute(held)):
+				continue  # Shared with another kept dimension and already moved.
+			var target := world_dir.path_join("datapacks").path_join((pack as String).get_file())
+			FileOps.remove_path(target)
+			err = _move(held, target)
+			if err != OK:
+				return err
+	FileOps.remove_tree(holding)
+	return OK
+
+
+static func _move(src: String, dst: String) -> Error:
+	DirAccess.make_dir_recursive_absolute(dst.get_base_dir())
+	var err := DirAccess.rename_absolute(src, dst)
+	if err == OK:
+		return OK
+	# Another file system: copy, then remove.
+	err = FileOps.copy_tree(src, dst) if DirAccess.dir_exists_absolute(src) else DirAccess.copy_absolute(src, dst)
+	if err == OK:
+		FileOps.remove_path(src)
+	return err
 
 
 ## Adds dimension [param index] of [member dimension_choices] to the world in [param world_dir]

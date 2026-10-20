@@ -152,6 +152,29 @@ func _ready() -> void:
 		await _stop(target)
 		FileOps.remove_tree(lone)
 
+		# Replacing that world while keeping its added dimensions (with an older map when given:
+		# Minecraft converts it on first start, next to the kept dimensions).
+		var new_map := legacy_zip if legacy_zip != "" else zip_path
+		var k: Dictionary = await WorldImporter.analyze(self, new_map, version)
+		var level_dir := target.config.directory.path_join(target.get_properties().get_value("level-name", "world"))
+		var kept_keys: Array = WorldImporter.added_dimensions(level_dir).map(func(d: Dictionary) -> String: return d.key)
+		_check(kept_keys == ["minecraft:islands", "minecraft:tall"], "added dimensions found: %s" % [kept_keys])
+		_check(WorldImporter.dimension_conflicts(level_dir, k).is_empty(), "no conflicts with %s" % new_map.get_file())
+		var r8: Dictionary = await WorldImporter.import_into(target, k, WorldImporter.Mode.REPLACE_KEEP, false)
+		WorldImporter.cleanup(k)
+		_check(r8.ok and r8.get("kept", []) == kept_keys, "replaced, keeping %s: %s" % [r8.get("kept", []), r8.get("error", "")])
+		_check(not DirAccess.dir_exists_absolute(target.config.directory.path_join(".manager")) or not Array(DirAccess.get_directories_at(target.config.directory.path_join(".manager"))).any(func(d: String) -> bool: return d.begins_with("kept-dimensions")), "nothing left in the holding folder")
+		await _boot(target, "target boots the new world with the kept dimensions")
+		await _check_markers(target, "replaced, kept")
+		await target.rcon.execute("execute in minecraft:islands run forceload add 0 0")
+		await target.rcon.execute("execute in minecraft:tall run forceload add 0 0")
+		await get_tree().create_timer(1.0).timeout
+		reply = await target.rcon.execute("execute in minecraft:islands if block %s minecraft:%s" % [MARKERS[0][1], MARKERS[0][2]])
+		_check(reply.contains("passed"), "kept dimension islands: marker preserved (%s)" % reply.strip_edges())
+		reply = await target.rcon.execute("execute in minecraft:tall if block 0 -120 0 minecraft:stone")
+		_check(reply.contains("passed"), "kept taller dimension: still taller, block below the normal floor (%s)" % reply.strip_edges())
+		await _stop(target)
+
 	if dimension != "":
 		var f: Dictionary = await WorldImporter.analyze(self, dimension, version)
 		_check(f.ok, "real dimension analysed: %s %s" % [f.error, f.warnings])
