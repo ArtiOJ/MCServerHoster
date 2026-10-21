@@ -287,7 +287,8 @@ func _watch_wifi(device: Dictionary) -> void:
 	if watch != _wifi_watch or asleep:
 		return
 	if _network_ok(device.interface):
-		Notifier.success("Wi-Fi is back after restarting the card.", Notifier.Category.POWER)
+		var step := str(result.get("detail", ""))
+		Notifier.success("Wi-Fi is back after restarting the card%s." % (" (%s)" % step if step != "" else ""), Notifier.Category.POWER)
 	else:
 		Notifier.error("Wi-Fi is still down after restarting the card%s. Restart the computer to bring it back." % (
 				"" if result.get("ok", false) else " (%s)" % result.get("message", "")), Notifier.Category.POWER)

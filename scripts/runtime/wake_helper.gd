@@ -52,23 +52,56 @@ case "${1:-}" in
     sys="/sys/bus/pci/devices/$dev"
     if [ ! -e "$sys/class" ]; then echo "no such device" >&2; exit 2; fi
     case "$(cat "$sys/class")" in 0x0280*) ;; *) echo "not a wireless network card" >&2; exit 2 ;; esac
-    # Reload the driver first; a card whose firmware stays stuck is removed and found again.
+    # Each step runs only when the one before didn't bring the card back; prints which one did.
     drv=""
     if [ -L "$sys/driver" ]; then drv=$(basename "$(readlink "$sys/driver")"); fi
     case "$drv" in ''|*[!a-z0-9_]*) drv="" ;; esac
-    if [ -n "$drv" ] && modprobe -r "$drv" 2>/dev/null; then
-      sleep 2
-      modprobe "$drv" || true
+    port=$(dirname "$(readlink -f "$sys")")
+    case "$(basename "$port")" in [0-9a-f][0-9a-f][0-9a-f][0-9a-f]:[0-9a-f][0-9a-f]:[0-9a-f][0-9a-f].[0-7]) ;; *) port="" ;; esac
+    back() {
       i=0
-      while [ "$i" -lt 15 ]; do
-        if [ -n "$(ls "$sys/net" 2>/dev/null || true)" ]; then exit 0; fi
+      while [ "$i" -lt 20 ]; do
+        if [ -n "$(ls "$sys/net" 2>/dev/null || true)" ]; then return 0; fi
         sleep 1
         i=$((i + 1))
       done
+      return 1
+    }
+    unbind() {
+      if [ -L "$sys/driver" ]; then echo "$dev" > "$sys/driver/unbind" 2>/dev/null || true; fi
+    }
+    # 1. Reload the driver (it loads the card's firmware again).
+    if [ -n "$drv" ] && timeout 60 modprobe -r "$drv" 2>/dev/null; then
+      sleep 2
+      modprobe "$drv" || true
+      if back; then echo "driver reloaded"; exit 0; fi
     fi
+    # 2. Reset the whole chip over the PCIe link.
+    if [ -e "$sys/reset" ]; then
+      unbind
+      echo 1 > "$sys/reset" 2>/dev/null || true
+      echo "$dev" > /sys/bus/pci/drivers_probe 2>/dev/null || true
+      if back; then echo "card reset"; exit 0; fi
+    fi
+    # 3. Power it off: with the card removed, the port above it goes idle and powers down
+    # (cutting the card's power where the board allows), and the card is found again on power-up.
+    unbind
     if [ -e "$sys/remove" ]; then echo 1 > "$sys/remove"; fi
-    sleep 2
-    echo 1 > /sys/bus/pci/rescan ;;
+    state=""
+    if [ -n "$port" ]; then
+      echo auto > "$port/power/control" 2>/dev/null || true
+      i=0
+      while [ "$i" -lt 10 ] && [ "$(cat "$port/power/runtime_status" 2>/dev/null || true)" != suspended ]; do
+        sleep 1
+        i=$((i + 1))
+      done
+      state=$(cat "$port/firmware_node/real_power_state" 2>/dev/null || cat "$port/power_state" 2>/dev/null || true)
+    fi
+    sleep 3
+    echo 1 > /sys/bus/pci/rescan
+    if back; then echo "card power-cycled (port ${state:-state unknown})"; exit 0; fi
+    echo "card still not answering after a driver reload, a reset and a power cycle (port ${state:-state unknown})" >&2
+    exit 1 ;;
   *) echo "usage: alarm <epoch>|clear | wowlan <phy> on <pattern>|off | wifi-reset <pci address>" >&2; exit 2 ;;
 esac
 """
@@ -113,8 +146,10 @@ static func is_current() -> bool:
 	return is_installed() and FileAccess.get_file_as_string(HELPER_PATH) == HELPER_SCRIPT
 
 
-## Restarts the Wi-Fi card at PCI address [param pci] (reload its driver, else remove and
-## rescan it). Blocking: run on a worker thread. Returns {ok, message}.
+## Restarts the Wi-Fi card at PCI address [param pci], escalating until it answers: reload its
+## driver, reset the chip over PCIe, then power-cycle it through the port above it. Blocking
+## (up to a few minutes): run on a worker thread. Returns {ok, message, detail} (detail names
+## the step that worked).
 static func reset_wifi(pci: String) -> Dictionary:
 	if not is_current():
 		return {"ok": false, "message": "The wake-up helper needs an update to restart the Wi-Fi card."}
@@ -196,7 +231,7 @@ static func _run(args: Array) -> Dictionary:
 	var output: Array = []
 	var code := PlatformBackend.execute("pkexec", PackedStringArray([HELPER_PATH] + args), output, true)
 	var text := str(output[0]).strip_edges() if not output.is_empty() else ""
-	return {"ok": code == 0, "message": text if code != 0 else "ok", "code": code}
+	return {"ok": code == 0, "message": text if code != 0 else "ok", "detail": text, "code": code}
 
 
 static func _result(code: int, success: String, confirmed: bool) -> Dictionary:
