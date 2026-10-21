@@ -17,6 +17,7 @@ run/main_scene="res://scenes/main/main.tscn"
 config/quit_on_go_back=false
 config/features=PackedStringArray("4.7", "GL Compatibility")
 run/low_processor_mode=true
+run/low_processor_mode.ios=false
 config/icon="res://icon.svg"
 run/main_scene.mobile="res://scenes/phone/phone_main.tscn"
 
