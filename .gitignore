@@ -9,3 +9,7 @@
 /packaging/arch/pkg/
 /packaging/arch/*.pkg.tar.*
 /packaging/arch/*.tar.gz
+
+# Signing credentials (packaging/ios/)
+/.env
+/secrets/
