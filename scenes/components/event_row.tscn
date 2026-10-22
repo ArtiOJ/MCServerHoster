@@ -298,7 +298,7 @@ text = "Warn players"
 unique_name_in_owner = true
 visible = false
 layout_mode = 2
-tooltip_text = "If the computer is asleep, wake it shortly before this event runs (needs “Wake for events” and the one-time setup in Preferences → Power)."
+tooltip_text = "If the computer is asleep, wake it shortly before this event runs (needs “Wake for events” and the one-time setup in Preferences → Power & background)."
 text = "Wake computer"
 
 [node name="WakeSetupButton" type="Button" parent="VBox/Editor/Grid/DoRow"]

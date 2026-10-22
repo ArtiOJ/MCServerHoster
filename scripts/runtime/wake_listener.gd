@@ -10,7 +10,7 @@ signal wake_requested(reason: String)
 
 const CLIENT_TIMEOUT_MS := 5000
 const DEFAULT_MOTD := "§7Asleep §8— §ajoin to start the server"
-const KICK_MESSAGE := "The server is starting up. Reconnect in about %d seconds."
+const KICK_MESSAGE := "The server is starting up. Reconnect in a moment."
 
 var instance: ServerInstance
 ## Last problem binding the port, shown in the UI ("" when fine).
@@ -146,7 +146,7 @@ func _handle_packets(c: Dictionary) -> bool:
 					var name_info := McProtocol.read_string(pkt.payload, 0)
 					if not name_info.is_empty():
 						player = name_info[0]
-				_send(c, McProtocol.login_disconnect(KICK_MESSAGE % _expected_startup_seconds()))
+				_send(c, McProtocol.login_disconnect(KICK_MESSAGE))
 				_wake("%s tried to join from %s" % [player if player != "" else "a player", _ip(c)])
 				return false
 			_:
@@ -190,8 +190,3 @@ func _drop(c: Dictionary) -> void:
 
 func _ip(c: Dictionary) -> String:
 	return (c.peer as StreamPeerTCP).get_connected_host()
-
-
-func _expected_startup_seconds() -> int:
-	var last := instance.startup_seconds
-	return clampi(int(ceil(last + 5.0)) if last > 0.0 else 30, 10, 120)

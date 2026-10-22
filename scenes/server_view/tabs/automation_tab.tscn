@@ -268,7 +268,7 @@ theme_type_variation = &"NoticePanel"
 
 [node name="Label" type="Label" parent="VBox/Scroll/Content/EventsCard/VBox/SleepNotice"]
 layout_mode = 2
-text = "Sleep/wake events depend on Preferences → Power."
+text = "Sleep/wake events depend on Preferences → Power & background."
 autowrap_mode = 3
 
 [node name="EventList" type="VBoxContainer" parent="VBox/Scroll/Content/EventsCard/VBox"]

@@ -224,7 +224,7 @@ func _before_sleep() -> void:
 	await _wait_until_stopped(max_delay_sec - 0.5)
 	if ServerManager.any_running():
 		# Shown after wake-up: the server finishes saving once the computer runs again.
-		Notifier.warn("A server was still stopping when the computer went to sleep (logind allows %s). Consider raising the limit in Preferences → Power." % Fmt.duration(int(max_delay_sec)),
+		Notifier.warn("A server was still stopping when the computer went to sleep (logind allows %s). Consider raising the limit in Preferences → Power & background." % Fmt.duration(int(max_delay_sec)),
 				Notifier.Category.POWER)
 	await _arm_wake()
 	_release(_delay_lock)
@@ -277,7 +277,7 @@ func _watch_wifi(device: Dictionary) -> void:
 		return
 	if not wifi_runner.is_valid() and not (WakeHelper.is_current() and AppSettings.autostart_enabled):
 		Notifier.warn("Wi-Fi hasn't reconnected since the computer woke up. If it stays down, restart the computer%s." % (
-				" (or update the wake-up helper in Preferences → Power, so Server Manager can restart the Wi-Fi card itself)" if WakeHelper.is_installed() else ""),
+				" (or update the wake-up helper in Preferences → Power & background, so Server Manager can restart the Wi-Fi card itself)" if WakeHelper.is_installed() else ""),
 				Notifier.Category.POWER)
 		return
 	Notifier.warn("Wi-Fi didn't reconnect after sleep; restarting the Wi-Fi card…", Notifier.Category.POWER)

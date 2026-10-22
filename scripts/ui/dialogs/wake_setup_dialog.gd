@@ -26,7 +26,7 @@ static func prompt(context: Node) -> bool:
 
 
 func _ready() -> void:
-	_message.text = "Waking this computer from sleep needs its wake-up alarm, which only root can set. This installs:\n\n%s\n\nYour password is asked once now. Nothing else on the system changes; Preferences → Power → Remove uninstalls both files." % WakeHelper.install_summary()
+	_message.text = "Waking this computer from sleep needs its wake-up alarm, which only root can set. This installs:\n\n%s\n\nYour password is asked once now. Nothing else on the system changes; Preferences → Power & background → Remove uninstalls both files." % WakeHelper.install_summary()
 	_status.text = ""
 	confirmed.connect(_install)
 	canceled.connect(func() -> void:
