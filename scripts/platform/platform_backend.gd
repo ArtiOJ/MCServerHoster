@@ -105,6 +105,43 @@ func default_route() -> Dictionary:
 	return {}
 
 
+# --- Network measurements (Lag tab). Called from a worker thread. ---------------------
+
+## True when [method tcp_connections] can report per-connection statistics.
+func supports_tcp_stats() -> bool:
+	return false
+
+
+## Established TCP connections to local [param port] with the kernel's statistics for each
+## (see LagAnalysis.parse_ss). Empty when unavailable.
+func tcp_connections(_port: int) -> Array:
+	return []
+
+
+## Round trip to [param host] (an IP address) by one ICMP echo in ms; -1 when no reply
+## came within a second, -2 when pinging is not possible here.
+func ping_ms(host: String) -> float:
+	var ping := PlatformBackend.find_in_path("ping")
+	if ping == "" or not host.is_valid_ip_address():
+		return -2.0
+	var out: Array = []
+	var args := ["-n", "1", "-w", "1000", host] if OS.get_name() == "Windows" else ["-n", "-c", "1", "-W", "1", host]
+	if PlatformBackend.execute(ping, args, out) != 0 or out.is_empty():
+		return -1.0
+	return LagAnalysis.parse_ping(str(out[0]))
+
+
+## {rx, tx: bytes received and sent so far, rx_drop: packets dropped} for network
+## interface [param iface], or {} when unknown.
+func interface_counters(_iface: String) -> Dictionary:
+	return {}
+
+
+## Wi-Fi signal strength of [param iface] in dBm, or 0 for a wired (or unknown) connection.
+func wifi_signal(_iface: String) -> int:
+	return 0
+
+
 ## True while [param pid] is still the server running in [param dir] (not a reused PID).
 func is_server_process(pid: int, dir: String) -> bool:
 	var cwd := process_cwd(pid)

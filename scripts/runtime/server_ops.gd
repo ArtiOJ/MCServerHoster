@@ -71,6 +71,7 @@ static func run(inst: ServerInstance, op: String, args: Dictionary, ctx := LOCAL
 		"launch_preview": return launch_preview(inst, _dict(args.get("config")))
 		"config_save": return config_save(inst, _dict(args.get("changes")), ctx)
 		"network_info": return network_info(inst, ctx)
+		"lag_snapshot": return _ok(inst.lag.snapshot(int(args.get("range", 600))))
 		"network_refresh": return network_refresh()
 		"network_test": return await network_test(inst)
 		"port_set": return port_set(inst, int(args.get("port", 0)), ctx)

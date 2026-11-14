@@ -30,6 +30,7 @@ var _crash_times: Array[int] = []
 @onready var process: ServerProcess = %ServerProcess
 @onready var monitor: ResourceMonitor = %ResourceMonitor
 @onready var rcon: RconClient = %RconClient
+@onready var lag: LagMonitor = %LagMonitor
 @onready var scheduler: TaskScheduler = %TaskScheduler
 @onready var backups: BackupService = %BackupService
 @onready var wake_listener: WakeListener = %WakeListener
@@ -48,6 +49,7 @@ func _ready() -> void:
 	process.line_received.connect(_on_line)
 	process.exited.connect(_on_process_exited)
 	monitor.sampled.connect(func(_c: float, _r: int) -> void: stats_updated.emit())
+	lag.setup(config.meta_dir())
 	rcon.authenticated.connect(_query_status)
 	rcon.authenticated.connect(refresh_gamerules)
 	# Re-attached servers can only take commands once RCON is up; let the UI know.
@@ -697,6 +699,7 @@ func _on_line(text: String, is_stderr: bool) -> void:
 	backups.on_console_line(plain)
 	if Chunky.track(chunky_tasks, plain):
 		data_changed.emit(&"chunky")
+	lag.on_line(plain, Time.get_ticks_msec() >= _replay_until_msec)
 
 	if state == State.STARTING:
 		var secs := LogParser.startup_seconds(plain)
@@ -742,8 +745,14 @@ func _on_started() -> void:
 	max_players = get_properties().get_int("max-players", max_players)
 	_connect_rcon()
 	_query_timer.start()
+	_track_lag()
 	apply_pending_gamerules()
 	scheduler.fire(EventRule.Trigger.SERVER_ONLINE)
+
+
+## Starts the lag monitor on the port the running server actually loaded.
+func _track_lag() -> void:
+	lag.track(get_properties().get_int("server-port", config.port), working_directory().path_join("logs/latest.log"))
 
 
 ## Connects RCON with the settings the running server actually loaded.
@@ -759,6 +768,7 @@ func _on_process_exited(code: int) -> void:
 	_stop_timeout.stop()
 	_query_timer.stop()
 	monitor.untrack()
+	lag.untrack()
 	rcon.close()
 	_remove_pid_file()
 	last_exit_code = code
@@ -829,6 +839,11 @@ func _query_status() -> void:
 	var parsed_tps := LogParser.parse_tps(tps_text)
 	if parsed_tps >= 0.0:
 		tps = parsed_tps
+	# Paper runs RCON commands on the main thread, so the reply time doubles as a freeze check.
+	var asked := Time.get_ticks_msec()
+	var mspt_text := await rcon.execute("mspt")
+	if state == State.RUNNING and rcon.is_ready():
+		lag.add_tick(LagAnalysis.parse_mspt(mspt_text), Time.get_ticks_msec() - asked if mspt_text != "" else -1)
 	var list := LogParser.parse_list(await rcon.execute("list"))
 	if not list.is_empty():
 		max_players = list.max
@@ -935,6 +950,7 @@ func attach_running(pid: int) -> Error:
 		max_players = get_properties().get_int("max-players", max_players)
 		_connect_rcon()
 		_query_timer.start()
+		_track_lag()
 	Notifier.info("Re-attached to %s, which was still running." % config.display_name, Notifier.Category.SERVER_STATE, config.display_name)
 	return OK
 

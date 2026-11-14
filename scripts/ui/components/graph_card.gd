@@ -28,3 +28,8 @@ func set_data(values: PackedFloat32Array, current_text: String, max_value := 0.0
 	_graph.max_value = max_value
 	_graph.set_values(values)
 	_value_label.text = current_text
+
+
+## The underlying graph (limit line, marks, hover text, capacity).
+func graph() -> LineGraph:
+	return _graph

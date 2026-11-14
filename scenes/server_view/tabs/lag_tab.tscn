@@ -1,0 +1,233 @@
+[gd_scene format=3]
+
+[ext_resource type="Script" path="res://scripts/ui/tabs/lag_tab.gd" id="1"]
+[ext_resource type="PackedScene" path="res://scenes/components/stat_card.tscn" id="2"]
+[ext_resource type="PackedScene" path="res://scenes/components/graph_card.tscn" id="3"]
+[ext_resource type="PackedScene" path="res://scenes/components/status_dot.tscn" id="4"]
+[ext_resource type="Texture2D" path="res://assets/icons/activity.svg" id="5"]
+[ext_resource type="Texture2D" path="res://assets/icons/server.svg" id="6"]
+[ext_resource type="Texture2D" path="res://assets/icons/globe.svg" id="7"]
+[ext_resource type="Texture2D" path="res://assets/icons/upload.svg" id="8"]
+[ext_resource type="Texture2D" path="res://assets/icons/copy.svg" id="9"]
+[ext_resource type="Texture2D" path="res://assets/icons/search.svg" id="10"]
+
+[node name="Lag" type="MarginContainer"]
+theme_override_constants/margin_left = 20
+theme_override_constants/margin_top = 18
+theme_override_constants/margin_right = 20
+theme_override_constants/margin_bottom = 18
+script = ExtResource("1")
+remote_ready = true
+
+[node name="Scroll" type="ScrollContainer" parent="."]
+layout_mode = 2
+horizontal_scroll_mode = 0
+
+[node name="VBox" type="VBoxContainer" parent="Scroll"]
+layout_mode = 2
+size_flags_horizontal = 3
+theme_override_constants/separation = 16
+
+[node name="StatusCard" type="PanelContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="Row" type="HBoxContainer" parent="Scroll/VBox/StatusCard"]
+layout_mode = 2
+theme_override_constants/separation = 12
+
+[node name="StatusDot" parent="Scroll/VBox/StatusCard/Row" instance=ExtResource("4")]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(12, 12)
+layout_mode = 2
+size_flags_vertical = 4
+
+[node name="StatusLabel" type="Label" parent="Scroll/VBox/StatusCard/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Judged from the last minute: the server's tick times, this computer's pings to its router and the internet, and every player's connection as the operating system sees it."
+text = "Measuring…"
+autowrap_mode = 3
+
+[node name="RangeOption" type="OptionButton" parent="Scroll/VBox/StatusCard/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Time span of the graphs."
+
+[node name="CopyReportButton" type="Button" parent="Scroll/VBox/StatusCard/Row"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_vertical = 4
+tooltip_text = "Copy a plain-text report of the current measurements and the incidents listed below, to send to players."
+text = "Copy report"
+icon = ExtResource("9")
+
+[node name="SupportNotice" type="PanelContainer" parent="Scroll/VBox"]
+unique_name_in_owner = true
+visible = false
+layout_mode = 2
+theme_type_variation = &"NoticePanel"
+
+[node name="SupportLabel" type="Label" parent="Scroll/VBox/SupportNotice"]
+unique_name_in_owner = true
+layout_mode = 2
+autowrap_mode = 3
+
+[node name="Cards" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TickCard" parent="Scroll/VBox/Cards" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Time Paper needs for one game tick, averaged over 5 s. Up to 50 ms keeps 20 TPS. Worst: the slowest single tick in the last minute; 250 ms or more is a stutter players can see."
+title = "Tick"
+icon = ExtResource("5")
+
+[node name="RouterCard" parent="Scroll/VBox/Cards" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+title = "Router"
+icon = ExtResource("6")
+
+[node name="InternetCard" parent="Scroll/VBox/Cards" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Ping from this computer to 1.1.1.1 over the last minute. Trouble here while the router is fine means the internet connection itself."
+title = "Internet"
+icon = ExtResource("7")
+
+[node name="UploadCard" parent="Scroll/VBox/Cards" instance=ExtResource("2")]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Everything this computer is sending right now, and the part that is this server's game traffic to players. If it sits at the upload limit of the internet plan, the connection is the bottleneck."
+title = "Upload"
+icon = ExtResource("8")
+
+[node name="Graphs" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="TickGraph" parent="Scroll/VBox/Graphs" instance=ExtResource("3")]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Slowest tick in each moment. The dashed line is the 50 ms limit."
+title = "Worst tick (ms)"
+
+[node name="RouterGraph" parent="Scroll/VBox/Graphs" instance=ExtResource("3")]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Ping to the router. Red marks: pings lost."
+title = "Router ping (ms)"
+line_color = Color(0.545, 0.486, 0.965, 1)
+
+[node name="Graphs2" type="HBoxContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 14
+
+[node name="InternetGraph" parent="Scroll/VBox/Graphs2" instance=ExtResource("3")]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Ping to the internet (1.1.1.1). Red marks: pings lost."
+title = "Internet ping (ms)"
+line_color = Color(0.353, 0.663, 0.949, 1)
+
+[node name="UploadGraph" parent="Scroll/VBox/Graphs2" instance=ExtResource("3")]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Everything this computer sends, highest in each moment."
+title = "Upload (Mbit/s)"
+line_color = Color(0.949, 0.722, 0.294, 1)
+
+[node name="PlayersCard" type="PanelContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/VBox/PlayersCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Scroll/VBox/PlayersCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Scroll/VBox/PlayersCard/VBox/Header"]
+layout_mode = 2
+theme_type_variation = &"SectionHeader"
+text = "Connections"
+
+[node name="Subtitle" type="Label" parent="Scroll/VBox/PlayersCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+mouse_filter = 0
+tooltip_text = "Read from this computer's own network stack for each player's connection, so it does not depend on the server or on plugins. Ping: round trip to the player's computer. Jitter: how much it varies. Quiet: time since anything arrived from their game (normally well under a second). Resent: data that had to be sent again (packet loss). Queued: data still waiting to reach them."
+theme_type_variation = &"SubtitleLabel"
+text = "— as this computer sees each player"
+
+[node name="PlayersList" type="VBoxContainer" parent="Scroll/VBox/PlayersCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 6
+
+[node name="PlayersEmpty" type="Label" parent="Scroll/VBox/PlayersCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "Nobody is online."
+autowrap_mode = 3
+
+[node name="IncidentsCard" type="PanelContainer" parent="Scroll/VBox"]
+layout_mode = 2
+theme_type_variation = &"CardPanel"
+
+[node name="VBox" type="VBoxContainer" parent="Scroll/VBox/IncidentsCard"]
+layout_mode = 2
+theme_override_constants/separation = 10
+
+[node name="Header" type="HBoxContainer" parent="Scroll/VBox/IncidentsCard/VBox"]
+layout_mode = 2
+theme_override_constants/separation = 8
+
+[node name="Title" type="Label" parent="Scroll/VBox/IncidentsCard/VBox/Header"]
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Timeouts, broken connections, stalls and ping spikes, judged when they happen from the measurements around them. Kept for 14 days."
+theme_type_variation = &"SectionHeader"
+text = "Incidents"
+
+[node name="Spacer" type="Control" parent="Scroll/VBox/IncidentsCard/VBox/Header"]
+layout_mode = 2
+size_flags_horizontal = 3
+
+[node name="VerdictFilter" type="OptionButton" parent="Scroll/VBox/IncidentsCard/VBox/Header"]
+unique_name_in_owner = true
+layout_mode = 2
+tooltip_text = "Show only incidents with this verdict."
+
+[node name="PlayerFilter" type="LineEdit" parent="Scroll/VBox/IncidentsCard/VBox/Header"]
+unique_name_in_owner = true
+custom_minimum_size = Vector2(170, 0)
+layout_mode = 2
+tooltip_text = "Show only incidents involving this player (or the whole server)."
+placeholder_text = "Player"
+clear_button_enabled = true
+right_icon = ExtResource("10")
+
+[node name="IncidentsList" type="VBoxContainer" parent="Scroll/VBox/IncidentsCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_override_constants/separation = 4
+
+[node name="IncidentsEmpty" type="Label" parent="Scroll/VBox/IncidentsCard/VBox"]
+unique_name_in_owner = true
+layout_mode = 2
+theme_type_variation = &"MutedLabel"
+text = "No incidents recorded."
+autowrap_mode = 3
+
+[node name="PollTimer" type="Timer" parent="."]
+unique_name_in_owner = true
+wait_time = 2.0

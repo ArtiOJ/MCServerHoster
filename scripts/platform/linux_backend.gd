@@ -13,6 +13,8 @@ var _systemd_run := ""
 var _taskset := ""
 var _nice := ""
 var _cgroup_v2 := false
+var _ss := ""
+var _ping := ""
 
 
 func _init() -> void:
@@ -21,6 +23,59 @@ func _init() -> void:
 	_taskset = PlatformBackend.find_in_path("taskset")
 	_nice = PlatformBackend.find_in_path("nice")
 	_cgroup_v2 = FileAccess.file_exists("/sys/fs/cgroup/cgroup.controllers")
+	_ss = PlatformBackend.find_in_path("ss")
+	_ping = PlatformBackend.find_in_path("ping")
+
+
+func supports_tcp_stats() -> bool:
+	return _ss != ""
+
+
+## `ss` reads the kernel's own per-connection statistics (no root needed): smoothed round
+## trip, retransmits, queued bytes and how long ago the peer last sent anything.
+func tcp_connections(port: int) -> Array:
+	if _ss == "" or port <= 0:
+		return []
+	var out: Array = []
+	if PlatformBackend.execute(_ss, ["-tinH", "state", "established", "( sport = :%d )" % port], out) != 0 or out.is_empty():
+		return []
+	return LagAnalysis.parse_ss(str(out[0]))
+
+
+func ping_ms(host: String) -> float:
+	if _ping == "" or not host.is_valid_ip_address():
+		return -2.0
+	var out: Array = []
+	if PlatformBackend.execute(_ping, ["-n", "-c", "1", "-W", "1", host], out) != 0 or out.is_empty():
+		return -1.0
+	return LagAnalysis.parse_ping(str(out[0]))
+
+
+func interface_counters(iface: String) -> Dictionary:
+	if iface == "":
+		return {}
+	for line in PlatformBackend.read_text("/proc/net/dev").split("\n"):
+		var colon := line.find(":")
+		if colon < 0 or line.substr(0, colon).strip_edges() != iface:
+			continue
+		var f := line.substr(colon + 1).split(" ", false)
+		if f.size() >= 9:
+			return {"rx": f[0].to_int(), "rx_drop": f[3].to_int(), "tx": f[8].to_int()}
+	return {}
+
+
+func wifi_signal(iface: String) -> int:
+	if iface == "":
+		return 0
+	for line in PlatformBackend.read_text("/proc/net/wireless").split("\n"):
+		var colon := line.find(":")
+		if colon < 0 or line.substr(0, colon).strip_edges() != iface:
+			continue
+		# "wlan0: 0000   53.  -57.  -256 …": status, link quality, signal level (dBm), noise.
+		var f := line.substr(colon + 1).split(" ", false)
+		if f.size() >= 3:
+			return int(f[2].trim_suffix(".").to_float())
+	return 0
 
 
 func build_launch_command(config: ServerConfig, java_executable: String, working_dir := "") -> Dictionary:

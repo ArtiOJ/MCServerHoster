@@ -13,6 +13,7 @@
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/network_tab.tscn" id="11"]
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/logs_tab.tscn" id="12"]
 [ext_resource type="PackedScene" path="res://scenes/server_view/tabs/worlds_tab.tscn" id="13"]
+[ext_resource type="PackedScene" path="res://scenes/server_view/tabs/lag_tab.tscn" id="lag_tab"]
 
 [node name="ServerView" type="VBoxContainer"]
 anchors_preset = 15
@@ -75,5 +76,9 @@ visible = false
 layout_mode = 2
 
 [node name="Network" parent="Tabs" instance=ExtResource("11")]
+visible = false
+layout_mode = 2
+
+[node name="Lag" parent="Tabs" instance=ExtResource("lag_tab")]
 visible = false
 layout_mode = 2

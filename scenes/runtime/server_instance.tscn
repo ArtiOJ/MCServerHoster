@@ -7,6 +7,7 @@
 [ext_resource type="Script" path="res://scripts/runtime/task_scheduler.gd" id="5"]
 [ext_resource type="Script" path="res://scripts/runtime/backup_service.gd" id="6"]
 [ext_resource type="Script" path="res://scripts/runtime/wake_listener.gd" id="7"]
+[ext_resource type="Script" path="res://scripts/runtime/lag_monitor.gd" id="8"]
 
 [node name="ServerInstance" type="Node"]
 script = ExtResource("1")
@@ -22,6 +23,11 @@ wait_time = 0.05
 [node name="ResourceMonitor" type="Timer" parent="."]
 unique_name_in_owner = true
 script = ExtResource("3")
+
+[node name="LagMonitor" type="Timer" parent="."]
+unique_name_in_owner = true
+wait_time = 2.0
+script = ExtResource("8")
 
 [node name="RconClient" type="Node" parent="."]
 unique_name_in_owner = true

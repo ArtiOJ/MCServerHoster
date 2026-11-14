@@ -23,6 +23,7 @@ const TAB_ICONS := {
 	"Worlds": preload("res://assets/icons/map.svg"),
 	"Backups": preload("res://assets/icons/archive.svg"),
 	"Network": preload("res://assets/icons/globe.svg"),
+	"Lag": preload("res://assets/icons/flask.svg"),
 }
 
 var instance: ServerHandle

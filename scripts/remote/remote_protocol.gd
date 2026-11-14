@@ -79,6 +79,7 @@ const OPS := {
 	"launch_preview": Role.SERVER_ADMIN,
 	"config_save": Role.SERVER_ADMIN,
 	"network_info": Role.SERVER_ADMIN,
+	"lag_snapshot": Role.SERVER_ADMIN,
 	"network_refresh": Role.SERVER_ADMIN,
 	"network_test": Role.SERVER_ADMIN,
 	"port_set": Role.SERVER_ADMIN,
