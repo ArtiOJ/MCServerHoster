@@ -41,6 +41,8 @@ var _serial := 0
 @onready var _dimension_label: Label = %DimensionLabel
 @onready var _dimension_option: OptionButton = %DimensionOption
 @onready var _apply_check: CheckButton = %ApplyCheck
+@onready var _backup_label: Label = %BackupLabel
+@onready var _backup_check: CheckButton = %BackupCheck
 @onready var _progress: ProgressBar = %Progress
 @onready var _status: Label = %StatusLabel
 @onready var _zip_dialog: FileDialog = %ZipDialog
@@ -170,6 +172,8 @@ func _on_mode_selected(index: int) -> void:
 	_dimension_label.visible = index == MODE_DIMENSION
 	_dimension_option.visible = index == MODE_DIMENSION
 	_apply_check.disabled = _busy or index == MODE_DIMENSION
+	_backup_label.visible = MODES[index] in [WorldImporter.Mode.REPLACE, WorldImporter.Mode.REPLACE_KEEP]
+	_backup_check.visible = _backup_label.visible
 	if index == MODE_DIMENSION:
 		_apply_check.button_pressed = false
 
@@ -186,7 +190,7 @@ func _on_confirmed() -> void:
 	_progress.value = 0.0
 	var mode: WorldImporter.Mode = MODES[_mode_option.selected]
 	var result: Dictionary = await _instance.call_op("world_import", {"token": _analysis.token, "mode": mode, "apply": _apply_check.button_pressed,
-			"dimension": maxi(_dimension_option.selected, 0), "keep_server_conflicts": _conflict_option.selected == 0},
+			"dimension": maxi(_dimension_option.selected, 0), "keep_server_conflicts": _conflict_option.selected == 0, "backup": _backup_check.button_pressed},
 			func(text: String, _f: float) -> void: _status.text = text)
 	_busy = false
 	_progress.visible = false
@@ -245,5 +249,6 @@ func _set_buttons_enabled(enabled: bool) -> void:
 	_dimension_option.disabled = not enabled
 	_conflict_option.disabled = not enabled
 	_apply_check.disabled = not enabled or _mode_option.selected == MODE_DIMENSION
+	_backup_check.disabled = not enabled
 	get_cancel_button().disabled = not enabled
 	_update_ok()

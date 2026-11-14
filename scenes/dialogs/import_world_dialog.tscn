@@ -172,7 +172,7 @@ columns = 2
 [node name="ModeLabel" type="Label" parent="VBox/Options"]
 layout_mode = 2
 mouse_filter = 0
-tooltip_text = "Replace: the current world is backed up to this server's Backups, then deleted and replaced.
+tooltip_text = "Replace: the current world is deleted and replaced (backed up to this server's Backups first if Back up first is on).
 Add: the world is added next to the current one and the server switches to it (the old world stays on disk).
 Dimension (Minecraft 26+ only): one dimension of it is added to the current world as an extra dimension; players reach it with /execute in minecraft:<name> run tp @s <x y z>."
 text = "Import as"
@@ -181,7 +181,7 @@ text = "Import as"
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 3
-tooltip_text = "Replace: the current world is backed up to this server's Backups, then deleted and replaced.
+tooltip_text = "Replace: the current world is deleted and replaced (backed up to this server's Backups first if Back up first is on).
 Replace, keep added dimensions: the same, but the dimensions added to the current world (besides its overworld, Nether and End) move into the new world, with their datapacks.
 Add: the world is added next to the current one and the server switches to it (the old world stays on disk).
 Dimension (Minecraft 26+ only): one dimension of it is added to the current world as an extra dimension; players reach it with /execute in minecraft:<name> run tp @s <x y z>."
@@ -234,14 +234,28 @@ tooltip_text = "Which of the world's dimensions to add. \"Older save\" ones come
 [node name="ApplyLabel" type="Label" parent="VBox/Options"]
 layout_mode = 2
 mouse_filter = 0
-tooltip_text = "Set the server's game mode, difficulty and hardcore setting to the ones saved in the map (useful for adventure maps)."
+tooltip_text = "Set the server's game mode, difficulty and hardcore setting to the ones saved in the map, and keep the map's game rules (useful for adventure maps). Off: the server's game rules are set again in the new world."
 text = "Use map settings"
 
 [node name="ApplyCheck" type="CheckButton" parent="VBox/Options"]
 unique_name_in_owner = true
 layout_mode = 2
 size_flags_horizontal = 0
-tooltip_text = "Set the server's game mode, difficulty and hardcore setting to the ones saved in the map (useful for adventure maps)."
+tooltip_text = "Set the server's game mode, difficulty and hardcore setting to the ones saved in the map, and keep the map's game rules (useful for adventure maps). Off: the server's game rules are set again in the new world."
+
+[node name="BackupLabel" type="Label" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+mouse_filter = 0
+tooltip_text = "Save a backup of the current world to this server's Backups before it is deleted. Large worlds take a while; turn off to replace right away (the current world is then lost)."
+text = "Back up first"
+
+[node name="BackupCheck" type="CheckButton" parent="VBox/Options"]
+unique_name_in_owner = true
+layout_mode = 2
+size_flags_horizontal = 0
+tooltip_text = "Save a backup of the current world to this server's Backups before it is deleted. Large worlds take a while; turn off to replace right away (the current world is then lost)."
+button_pressed = true
 
 [node name="Progress" type="ProgressBar" parent="VBox"]
 unique_name_in_owner = true

@@ -64,7 +64,7 @@ static func run(inst: ServerInstance, op: String, args: Dictionary, ctx := LOCAL
 		"datapack_toggle": return await datapack_toggle(inst, str(args.get("id", "")), bool(args.get("enable", true)), ctx)
 		"datapack_remove": return datapack_remove(inst, str(args.get("id", "")), ctx)
 		"world_import_analyze": return await world_import_analyze(inst, _paths(args.get("files")))
-		"world_import": return await world_import(inst, str(args.get("token", "")), int(args.get("mode", 0)), bool(args.get("apply", false)), ctx, int(args.get("dimension", 0)), bool(args.get("keep_server_conflicts", true)))
+		"world_import": return await world_import(inst, str(args.get("token", "")), int(args.get("mode", 0)), bool(args.get("apply", false)), ctx, int(args.get("dimension", 0)), bool(args.get("keep_server_conflicts", true)), bool(args.get("backup", true)))
 		"world_import_cancel": return world_import_cancel(str(args.get("token", "")))
 		"resources_info": return resources_info(inst)
 		"port_check": return port_check(inst, int(args.get("port", 0)))
@@ -844,8 +844,9 @@ static func world_import_analyze(inst: ServerInstance, files: PackedStringArray)
 
 
 ## [param dimension] is the index into the analysis' dimension_choices for mode DIMENSION;
-## [param keep_server_conflicts] decides same-named dimensions for mode REPLACE_KEEP.
-static func world_import(inst: ServerInstance, token: String, mode: int, apply_settings: bool, ctx: Dictionary, dimension := 0, keep_server_conflicts := true) -> Dictionary:
+## [param keep_server_conflicts] decides same-named dimensions for mode REPLACE_KEEP;
+## [param backup] saves a safety backup before replacing.
+static func world_import(inst: ServerInstance, token: String, mode: int, apply_settings: bool, ctx: Dictionary, dimension := 0, keep_server_conflicts := true, backup := true) -> Dictionary:
 	var pending: Dictionary = _imports.get(token, {})
 	if pending.is_empty() or pending.server != inst.config.id:
 		return _fail("Choose the world again; the earlier choice expired.")
@@ -854,7 +855,7 @@ static func world_import(inst: ServerInstance, token: String, mode: int, apply_s
 		_log(inst, ctx, "Is importing the world \"%s\"." % WorldImporter.display_name(analysis))
 	var import_mode: WorldImporter.Mode = mode if mode in WorldImporter.Mode.values() else WorldImporter.Mode.REPLACE
 	var result: Dictionary = await WorldImporter.import_into(inst, analysis, import_mode,
-			apply_settings, func(text: String) -> void: _progress(ctx, text), dimension, keep_server_conflicts)
+			apply_settings, func(text: String) -> void: _progress(ctx, text), dimension, keep_server_conflicts, backup)
 	if result.ok:
 		world_import_cancel(token)
 		inst.data_changed.emit(&"worlds")

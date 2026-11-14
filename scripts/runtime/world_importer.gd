@@ -175,7 +175,8 @@ static func analyze(owner: Node, source: String, server_version := "") -> Dictio
 ## [param dimension_index] picks the entry of dimension_choices that Mode.DIMENSION adds.
 ## [param keep_server_conflicts]: with Mode.REPLACE_KEEP, an added dimension whose name the
 ## imported world also has keeps the server's version (else the imported one is used).
-static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, apply_settings: bool, on_status := Callable(), dimension_index := 0, keep_server_conflicts := true) -> Dictionary:
+## [param backup]: replacing saves a safety backup of the current world first.
+static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, apply_settings: bool, on_status := Callable(), dimension_index := 0, keep_server_conflicts := true, backup := true) -> Dictionary:
 	var report := func(text: String) -> void:
 		inst.log_system(text)
 		if on_status.is_valid():
@@ -197,7 +198,7 @@ static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, 
 			return custom
 	if mode == Mode.ADD:
 		level = unique_level_name(dir, display_name(analysis))
-	else:
+	elif backup:
 		var existing := inst.backups.world_dirs(dir)
 		if not existing.is_empty():
 			report.call("Saving a safety backup of the current world before replacing it…")
@@ -219,7 +220,7 @@ static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, 
 				inst.mark_installing(false)
 				return {"ok": false, "error": "Setting the added dimensions aside failed (%s); nothing was replaced. Anything already moved is in %s." % [error_string(held), holding]}
 	if mode == Mode.REPLACE or mode == Mode.REPLACE_KEEP:
-		# Permanently remove the old world folders (the safety backup above keeps a copy).
+		# Permanently remove the old world folders (the safety backup above, if any, keeps a copy).
 		for w in inst.backups.world_dirs(dir):
 			var path := dir.path_join(w)
 			await FileOps.run_async(inst, func() -> Error: return FileOps.remove_tree(path))
@@ -246,8 +247,11 @@ static func import_into(inst: ServerInstance, analysis: Dictionary, mode: Mode, 
 			props.set_value("difficulty", analysis.difficulty)
 		props.set_value("hardcore", bool(analysis.hardcore))
 	props.save_file(inst.config.properties_path())
-	# Game rule values the manager knew belong to the old world.
-	inst.config.known_gamerules.clear()
+	# Game rules live in the world: keep the server's, unless the map's settings are wanted.
+	if apply_settings:
+		inst.config.known_gamerules.clear()
+	else:
+		inst.config.carry_gamerules_over()
 	inst.save_config()
 	report.call("World \"%s\" imported%s. It will be prepared on the next start." % [display_name(analysis),
 			(", keeping %s" % ", ".join(kept.map(func(d: Dictionary) -> String: return d.key))) if not kept.is_empty() else ""])

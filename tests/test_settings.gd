@@ -110,3 +110,14 @@ func test_port_field_never_rewrites_typing() -> void:
 	field._on_text_changed("80")
 	check(not field.is_valid() and field.error_text().contains("administrator"), "privileged port explained")
 	field.free()
+
+
+func test_gamerules_carried_to_new_world() -> void:
+	var cfg := ServerConfig.new()
+	cfg.known_gamerules = {"gamerule.advance_time": "false", "gamerule.mob_griefing": "true", "gamerule.advance_weather": "false"}
+	cfg.pending_gamerules = {"gamerule.advance_weather": "true"}
+	cfg.carry_gamerules_over()
+	check_eq(cfg.pending_gamerules.get("gamerule.advance_time"), "false", "changed rule queued again")
+	check(not cfg.pending_gamerules.has("gamerule.mob_griefing"), "default value not queued")
+	check_eq(cfg.pending_gamerules.get("gamerule.advance_weather"), "true", "pending change wins")
+	check(cfg.known_gamerules.is_empty(), "old world's values forgotten")

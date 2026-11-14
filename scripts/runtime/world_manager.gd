@@ -193,7 +193,7 @@ static func reset_world(inst: ServerInstance, world: Dictionary, new_seed: Strin
 	var props := ServerProperties.load_file(inst.config.properties_path())
 	props.set_value("level-seed", new_seed.strip_edges())
 	props.save_file(inst.config.properties_path())
-	inst.config.known_gamerules.clear()
+	inst.config.carry_gamerules_over()
 	inst.save_config()
 	inst.log_system("World \"%s\" reset (%s). A new world is generated on the next start." % [world.folder,
 			"seed " + new_seed.strip_edges() if new_seed.strip_edges() != "" else "random seed"])

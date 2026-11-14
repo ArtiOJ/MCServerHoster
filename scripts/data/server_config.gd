@@ -246,6 +246,16 @@ static func _string_dict(value: Variant) -> Dictionary:
 	return out
 
 
+## For a new world: queues the game rules this server changed from the defaults so they
+## are set again on the next start, and forgets the old world's values.
+func carry_gamerules_over() -> void:
+	for id in known_gamerules:
+		var entry := SettingsCatalog.get_entry(id)
+		if not entry.is_empty() and known_gamerules[id] != str(entry.default) and not pending_gamerules.has(id):
+			pending_gamerules[id] = known_gamerules[id]
+	known_gamerules.clear()
+
+
 ## Writes the keys the manager owns (ports, RCON) into server.properties in [param dir]
 ## (defaults to the server folder).
 func write_managed_properties(dir := "") -> Error:
